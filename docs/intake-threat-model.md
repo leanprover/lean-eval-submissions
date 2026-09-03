@@ -115,6 +115,6 @@ final operation deploys the same reviewed code in durable mode without lease
 bindings. The separate recovery workflow is disable-only cleanup, not the
 lease safety boundary.
 
-Issue intake remains available throughout the shadow period. Enabling the
-Worker does not authorize closing the issue form; the four-week and adoption
-gates are independent.
+Issue intake remained available throughout the shadow period. Enabling the
+Worker did not authorize closing the issue form; the four-week, notice,
+adoption, final-delta, and retirement-readiness gates were independent.

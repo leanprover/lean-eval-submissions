@@ -19,8 +19,8 @@ This document explains why we believe the lean-eval submission pipeline
 is resistant to adversarial submissions, what assumptions it depends on,
 and where a future red-teamer should look first.
 
-It covers the **submission pipeline** — issue intake, fetching submission
-source, the evaluation workflow, and recording results. The
+It covers the **submission pipeline** — authenticated server dispatch,
+fetching submission source, the evaluation workflow, and recording results. The
 **comparator / landrun sandbox** that actually bounds untrusted Lean —
 the Challenge/Submission/Solution architecture, where untrusted code
 runs, the trust model for the comparator, the pinned-dependency policy,
@@ -37,14 +37,12 @@ strong as the sandbox guarantees there.
 
 The attacker controls:
 
-- One submission they file as a GitHub issue: a public/private GitHub
-  repo (or public gist) containing `Submission.lean` and any number of
+- One exact commit in a public/private GitHub repository containing
+  `Submission.lean` and any number of
   files under `Submission/**/*.lean`. Nothing else from the submission
   source is consumed.
-- The freeform `model` and `production_description` fields in the issue
-  body.
-- Whether they submit through the web Issue Form or the GitHub API. A
-  well-formed submission can trigger evaluation through either path.
+- The declared model, production description, publication choice, and other
+  bounded fields accepted by the submission service.
 
 The attacker does not control:
 
@@ -62,18 +60,16 @@ The attacker does not control:
 The goal we resist: **a submitter receiving credit on the leaderboard
 for a theorem they have not actually proved.**
 
-The `submission` label is a routing signal, not an authorization boundary.
-The web Issue Form applies it directly. For API-created issues, the `intake`
-job validates the current form shape, required publication declaration,
-supported source URL, and three checked acknowledgements before applying the
-label and allowing evaluation. Malformed API issues stay unlabeled. The
-security boundary remains the pristine benchmark overlay and comparator's
-landrun sandbox, not the intake label.
+The submission service validates the authenticated owner, exact commit,
+catalog identity, publication choice, and bounded metadata before dispatching
+the immutable workflow tag. The workflow repeats the exact-ref and input
+checks. The proof boundary remains the pristine benchmark overlay and
+comparator's landrun sandbox, not the intake service.
 
 ## 2. Submission confidentiality
 
 **Submission confidentiality is best-effort, not a guarantee.** Private
-submissions (those filed against a private GitHub repo readable only via
+submissions (those stored in a private GitHub repo readable only via
 the `lean-eval-bot` App) are evaluated without uploading their source as
 a workflow artifact, so the source is not exposed to anyone authenticated
 against the GitHub Actions API. Confidentiality of the source — and of
@@ -111,35 +107,33 @@ are partially mitigated by Ubuntu's `kernel.yama.ptrace_scope=1` but are
 not something we actively probe. Submitters who require confidentiality
 should audit the workflow themselves before relying on this.
 
-**Audit retention.** Every successfully fetched submission has its
-compressed source tarball (≤ 10 MiB) `age`-encrypted to the recipient
-list in `.audit/recipients.txt` and pushed to the private
-`leanprover/lean-eval-audit` repo for indefinite retention. The
-ciphertext is decryptable only by holders of the matching SSH/age
-private keys; the unencrypted sidecar JSON records issue, submitter,
-repo+ref, model, provenance, and integrity digests. Older sidecars may also
-carry the evaluator verdict; current archives are durably committed before an
-evaluation verdict exists. This is disclosed to
-submitters via the third acknowledgement on the submission Issue Form
-and the "Audit archive" section of the README. See
+**Audit retention.** Every successfully fetched submission has its compressed
+source tarball (≤ 10 MiB) encrypted to one fresh age identity and pushed to
+the private `leanprover/lean-eval-audit` repo for indefinite retention. The
+identity is wrapped into a provider-neutral, submission-bound envelope through
+the production KMS adapter; it is never persisted in plaintext. The unencrypted
+sidecar JSON records the UUID, submitter, repo+ref, model, provenance, envelope,
+and integrity digests. Historical issue-intake archives retain their earlier
+shared-recipient format. Current archives are durably committed before an
+evaluation verdict exists. This is disclosed by the submission service and the
+"Audit archive" section of the README. See
 [`docs/audit-archive.md`](docs/audit-archive.md) for the threat model
 and key custody story. The `record` job is gated on the `archive` job
 succeeding, so a recorded leaderboard entry always implies a durable
 encrypted archive of the source.
 
-Server intake uses the same encryption boundary but keys the
-archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
+Server intake keys the archive by its canonical UUIDv7 under
+`archives/<prefix>/<uuid>.tar.age`.
 Before State may receive `archive.completed`, the archiver emits an immutable
 repository/commit/path/ciphertext-digest locator and verifies the encrypted
-bytes at that exact commit. Issue-based intake retains its existing archive
-layout and behavior.
+bytes at that exact commit.
 
 The trusted archive job now independently fetches the exact source commit and
 persists the encrypted archive before evaluation starts. The evaluation job
 then performs its own exact-commit fetch and verifies the archive job's frozen
 metadata digest before keeping fetch and evaluation co-located. No plaintext
-or ciphertext transport artifact crosses jobs. When per-submission KMS
-wrapping is enabled, only the archive job may gain the Encrypt-only OIDC role;
+or ciphertext transport artifact crosses jobs. Only the archive job may gain
+the Encrypt-only OIDC role;
 the evaluation job must never gain `id-token: write`, AWS credentials, a
 wrapped identity, or KMS/DynamoDB/Lambda authority.
 
@@ -214,10 +208,10 @@ when public intake is disabled.
   `docs/results-schema-v2.md`; do not replace it with a static record-job
   Actions concurrency group, which cancels older pending jobs rather than
   queueing all of them.
-- **Leaderboard redeploy.** After a successful results push the job fires
+- **Leaderboard redeploy.** After a successful production results push the job fires
   a `results-advanced` `repository_dispatch` at
   `leanprover/lean-eval-leaderboard`. Dispatch failure after a successful
-  push is surfaced as an operator-actionable issue comment, not a job
+  push is surfaced as an operator-actionable workflow warning, not a job
   failure — the data advanced even if the site did not.
 
 ## 5. Soft spots — where to look first
@@ -226,18 +220,17 @@ Submission-pipeline soft spots. Comparator/sandbox soft spots are in
 `leanprover/lean-eval`'s `SECURITY.md` §7.
 
 1. **HTML escaping of freeform fields on the leaderboard.** The `model`
-   and `production_description` fields are unbounded freeform text from
-   the issue body, propagated into the results store and rendered by the
+   and `production_description` fields are submitter-controlled text,
+   propagated into the results store and rendered by the
    leaderboard site. The renderer should escape, but this has not been
    explicitly probed.
 2. **Freeform `model` length.** `update_leaderboard.py` validates
    `production_description` length but not `model`. A pathological
    `model` value cannot grant credit, but can pollute the results JSON.
-3. **Public intake can consume CI capacity.** Anyone can submit a
-   well-formed issue through the web form or API and trigger evaluation.
-   Intake validation rejects malformed API issues but is not an
-   authorization or anti-abuse boundary; repository Actions limits and
-   operator moderation remain the resource-abuse controls.
+3. **Public intake can consume CI capacity.** An authenticated user can submit
+   a well-formed request through the service and trigger evaluation. Intake
+   rate limits, repository Actions limits, and operator moderation remain the
+   resource-abuse controls.
 4. **Cross-repo benchmark drift.** The pipeline scores against
    `leanprover/lean-eval@main` HEAD while the leaderboard site renders a
    catalog pinned by its own `benchmark-snapshot/`. A result can be
@@ -258,9 +251,8 @@ Submission-pipeline soft spots. Comparator/sandbox soft spots are in
 - [`leanprover/lean-eval` SECURITY.md](https://github.com/leanprover/lean-eval/blob/main/SECURITY.md)
   — the comparator/sandbox security model this pipeline depends on.
 - [`leanprover/comparator`](https://github.com/leanprover/comparator) — the verifier.
-- `scripts/fetch_submission.py`, `scripts/evaluate_submission.py`,
-  `scripts/update_leaderboard.py`, `scripts/reconcile_orphan_submissions.py`
-  — the pipeline scripts.
-- `.github/workflows/submission.yml`, `.github/workflows/submission-reconciler.yml`
+- `scripts/fetch_submission.py`, `scripts/evaluate_submission.py`, and
+  `scripts/update_leaderboard.py` — the pipeline scripts.
+- `.github/workflows/submission.yml` and `.github/workflows/server-archive.yml`
   — the pipeline workflows.
 - `docs/ci-secrets.md` — the credentials and branch protection this pipeline depends on.

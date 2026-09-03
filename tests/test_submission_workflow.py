@@ -1,16 +1,4 @@
-"""Structural guard for `.github/workflows/submission.yml`.
-
-The submission workflow's security and correctness rest on a handful of
-structural invariants that a well-meaning refactor can silently break.
-Unit-testing the Python scripts does not cover the workflow YAML, so this
-test asserts those invariants directly against the file text.
-
-It deliberately uses plain text/line assertions rather than a YAML parser
-so it needs no third-party dependency and so a reviewer can map each
-assertion to a literal line of the workflow.
-
-See SECURITY.md for why each invariant matters.
-"""
+"""Structural guards for the server-only submission workflow."""
 
 from __future__ import annotations
 
@@ -20,183 +8,136 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "submission.yml"
+SERVER_ARCHIVE = REPO_ROOT / ".github" / "workflows" / "server-archive.yml"
+ISSUE_CONFIG = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml"
 ISSUE_FORM = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "submit.yml"
+ISSUE_RECONCILER = REPO_ROOT / ".github" / "workflows" / "submission-reconciler.yml"
 ISSUE_CUTOFF_GUARD = REPO_ROOT / "scripts" / "issue_intake_cutoff_guard.sh"
 
 
 class SubmissionWorkflowStructureTests(unittest.TestCase):
-    def test_server_dispatch_is_strict_exact_ref_uuid_archive_lane(self) -> None:
-        for field in (
-            "workflow_commit:", "submission_id:", "submitted_by:", "source_repository:",
-            "source_commit:", "source_visibility:", "problem_id:",
-            "problem_group:", "statement_revision:", "declared_model:",
-            "publication_choice:", "production_metadata_json:",
-            "archive_locator_required:", "archive_sidecar_schema:",
-            "archive_state_callback_required:", "callback_environment:",
-        ):
-            self.assertIn(field, self.text)
-        self.assertIn("--server-dispatch", self.text)
-        self.assertIn('--locator-output /tmp/archive-locator.json', self.text)
-        self.assertIn('--completion-output /tmp/archive-completion.json', self.text)
-        self.assertIn("name: submission-archive-locator", self.text)
-        self.assertIn("name: submission-archive-completion", self.text)
-        self.assertIn("/internal/v1/archive-completed", self.text)
-        self.assertIn("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}", self.text)
-        self.assertIn('--submission-id "$SUBMISSION_ID"', self.text)
-        self.assertIn('--expected-problem-id "$PROBLEM_ID"', self.text)
-        self.assertIn("github.event_name == 'workflow_dispatch'", self.text)
-        self.assertIn('EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}', self.text)
-        self.assertIn('if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then', self.text)
-        self.assertIn(
-            "group: submission-${{ github.event_name == 'workflow_dispatch' && inputs.submission_id || github.event.issue.number }}",
-            self.text,
-        )
-        self.assertIn("cancel-in-progress: false", self.text)
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = WORKFLOW.read_text(encoding="utf-8")
+        cls.archive_text = SERVER_ARCHIVE.read_text(encoding="utf-8")
+        cls.lines = cls.text.splitlines()
+
+    def test_server_dispatch_is_the_only_trigger(self) -> None:
+        trigger = self.text.split("\non:", 1)[1].split("\nconcurrency:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertNotIn("issues:", trigger)
+        self.assertNotIn("issue_comment:", trigger)
+        self.assertNotIn("pull_request:", trigger)
+        self.assertNotIn("schedule:", trigger)
+        self.assertNotIn("github.event.issue", self.text)
+        self.assertNotIn("github.event.label", self.text)
+        self.assertNotIn("github.event_name", self.text)
+
+    def test_server_dispatch_contract_is_exact_and_complete(self) -> None:
         for field in (
             "workflow_commit", "submission_id", "submitted_by",
             "source_repository", "source_commit", "source_visibility",
             "problem_id", "problem_group", "statement_revision",
-            "declared_model", "publication_choice",
-            "production_metadata_json", "archive_locator_required",
-            "archive_sidecar_schema", "archive_state_callback_required",
+            "declared_model", "publication_choice", "production_metadata_json",
+            "archive_locator_required", "archive_sidecar_schema",
+            "archive_state_callback_required",
         ):
             self.assertRegex(
                 self.text,
                 rf"(?m)^      {field}: \{{description: .+, required: true, type: string\}}$",
             )
         self.assertRegex(self.text, r"(?m)^      callback_environment:$")
+        self.assertIn("group: submission-${{ inputs.submission_id }}", self.text)
+        self.assertIn("cancel-in-progress: false", self.text)
+        self.assertIn('EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}', self.text)
+        self.assertIn('if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then', self.text)
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.text = WORKFLOW.read_text(encoding="utf-8")
-        cls.lines = cls.text.splitlines()
-        cls.cutoff_guard = ISSUE_CUTOFF_GUARD.read_text(encoding="utf-8")
-
-    def test_workflow_file_exists(self) -> None:
-        self.assertTrue(WORKFLOW.is_file(), f"missing {WORKFLOW}")
-
-    def test_archive_precedes_independent_evaluation_without_plaintext_transport(self) -> None:
-        # Archive and evaluation deliberately fetch independently. The archive
-        # must persist first; evaluation must refetch the frozen identity on
-        # its own runner, never receive source through a workflow artifact.
-        # One local metadata-only validation plus the two independent source
-        # fetches. The validation mode performs no source-host request.
-        self.assertEqual(self.text.count("python scripts/fetch_submission.py"), 3)
-        self.assertEqual(self.text.count("--validate-issue-metadata-only"), 1)
-        self.assertEqual(self.text.count("python scripts/evaluate_submission.py"), 1)
-        # Job headers are the 2-space-indented keys after the top-level
-        # `jobs:` line. Slice from there so `on:`/`concurrency:` sub-keys
-        # (also 2-indented) are not mistaken for jobs.
+    def test_only_reviewed_server_jobs_remain(self) -> None:
         jobs_idx = self.lines.index("jobs:")
         job_headers = [
-            ln
-            for ln in self.lines[jobs_idx + 1 :]
-            if re.match(r"^  \w[\w-]*:$", ln)
+            line
+            for line in self.lines[jobs_idx + 1 :]
+            if re.match(r"^  \w[\w-]*:$", line)
         ]
         self.assertEqual(
             job_headers,
             [
-                "  issue_intake_admission:", "  intake:", "  evaluate:", "  archive_issue:",
-                "  archive_server:", "  archive:",
-                "  archive_failure_state:", "  archive_state:",
-                "  evaluation_state:", "  record:", "  result_state:", "  notify:",
+                "  evaluate:",
+                "  archive_server:",
+                "  archive:",
+                "  archive_failure_state:",
+                "  archive_state:",
+                "  evaluation_state:",
+                "  record:",
+                "  result_state:",
             ],
-            "expected exactly the reviewed submission jobs",
         )
-        self.assertNotIn(
-            "name: submission-source",
-            self.text,
-            "the submission source must never be uploaded as an artifact",
-        )
-        self.assertNotIn("name: submission-audit-ciphertext", self.text)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
-        archive = self.text.split("\n  archive_issue:", 1)[1].split(
+        for retired in (
+            "issue_intake_admission", "archive_issue", "notify:",
+            "validate_submission_intake", "classify_evaluate_failure",
+            "issue_intake_cutoff_guard",
+        ):
+            self.assertNotIn(retired, self.text)
+        self.assertNotIn("issues: write", self.text)
+        self.assertNotIn("secrets.GITHUB_TOKEN", self.text)
+
+    def test_archive_precedes_independent_evaluation(self) -> None:
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split(
             "\n  archive_server:", 1
         )[0]
-        self.assertIn("needs: [intake, archive, archive_state]", evaluate)
+        self.assertIn("needs: [archive, archive_state]", evaluate)
         self.assertIn("needs.archive.result == 'success'", evaluate)
         self.assertIn("needs.archive_state.result == 'success'", evaluate)
         self.assertIn("python scripts/fetch_submission.py", evaluate)
+        self.assertIn("--server-dispatch", evaluate)
         self.assertIn("python scripts/evaluate_submission.py", evaluate)
         self.assertIn("EXPECTED_METADATA_SHA256", evaluate)
         self.assertIn("ref: ${{ needs.archive.outputs.benchmark_commit }}", evaluate)
-        self.assertIn("needs: [issue_intake_admission, intake]", archive)
-        self.assertNotIn("needs: evaluate", archive)
-        self.assertIn("python scripts/fetch_submission.py", archive)
-        self.assertIn("python scripts/archive_submission.py encrypt", archive)
-        self.assertIn("python scripts/archive_submission.py push", archive)
-        self.assertNotIn("evaluate_submission.py", archive)
-        server = self.text.split("\n  archive_server:", 1)[1].split(
+        self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
+        self.assertNotIn("name: submission-source", self.text)
+        self.assertNotIn("name: submission-audit-ciphertext", self.text)
+
+    def test_kms_archive_lane_is_the_only_archive_authority(self) -> None:
+        archive_server = self.text.split("\n  archive_server:", 1)[1].split(
             "\n  archive:", 1
         )[0]
-        self.assertIn("uses: ./.github/workflows/server-archive.yml", server)
-        self.assertIn("id-token: write", server)
+        self.assertIn("uses: ./.github/workflows/server-archive.yml", archive_server)
+        self.assertIn("id-token: write", archive_server)
+        self.assertNotIn("if:", archive_server)
+
         normalized = self.text.split("\n  archive:", 1)[1].split(
             "\n  archive_failure_state:", 1
         )[0]
-        self.assertIn(
-            "needs: [issue_intake_admission, intake, archive_issue, archive_server]",
-            normalized,
-        )
-        self.assertIn("Require selected archive lane success", normalized)
+        self.assertIn("needs: archive_server", normalized)
+        self.assertIn("if: always()", normalized)
+        self.assertIn("SERVER_RESULT: ${{ needs.archive_server.result }}", normalized)
+        self.assertIn('test "$SERVER_RESULT" = success', normalized)
+        self.assertNotIn("ISSUE_", normalized)
 
-    def test_both_checkouts_disable_persisted_credentials(self) -> None:
-        # The submissions checkout and the lean-eval checkout share the
-        # runner with the untrusted build; neither may leave an
-        # authenticated remote in .git/config.
-        checkout_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-        checkout_shas = set(
-            re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
+        self.assertIn("environment: archive-${{ inputs.callback_environment }}", self.archive_text)
+        self.assertIn("AWS_WRAP_ROLE_ARN", self.archive_text)
+        self.assertIn("archive_envelope.py", self.archive_text)
+        self.assertIn("prepare-envelope-sidecar", self.archive_text)
+        self.assertIn("--locator-output /tmp/archive-locator.json", self.archive_text)
+        self.assertIn("--completion-output /tmp/archive-completion.json", self.archive_text)
+        self.assertIn("10 * 1024 * 1024", self.archive_text)
+
+    def test_untrusted_evaluation_credentials_are_minimal(self) -> None:
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split(
+            "\n  archive_server:", 1
+        )[0]
+        match = re.search(
+            r"^    permissions:\n((?:^      [^\n]+\n?)+)", evaluate, re.MULTILINE
         )
-        self.assertEqual(checkout_shas, {checkout_sha})
-        # 10: issue admission and intake; two each in archive and evaluate; one
-        # trusted evaluation callback; record's two; and notify's classifier
-        # checkout.
+        self.assertIsNotNone(match)
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 10, "expected 10 checkout steps"
+            [line.strip() for line in match.group(1).splitlines()],
+            ["contents: read"],
         )
-        # The two evaluate-job checkouts must each set persist-credentials:false.
-        self.assertGreaterEqual(
-            self.text.count("persist-credentials: false"),
-            2,
-            "both evaluate-job checkouts must set persist-credentials: false",
-        )
-        self.assertIn(
-            "persist-credentials: true",
-            self.text,
-            "results-store checkout must retain the App token for its push-retry loop",
-        )
-
-    def test_idempotent_lifecycle_callbacks_survive_bounded_state_throttling(self) -> None:
-        self.assertEqual(self.text.count("curl --fail-with-body"), 4)
-        for option in (
-            "--connect-timeout 10",
-            "--max-time 30",
-            "--retry 15",
-            "--retry-delay 60",
-            "--retry-max-time 900",
-            "--retry-connrefused",
-        ):
-            self.assertEqual(self.text.count(option), 4)
-        self.assertNotIn("--retry-all-errors", self.text)
-        self.assertEqual(self.text.count('--output "$response_file"'), 4)
-        self.assertNotIn('cat "$response_file"', self.text)
-        for job, following_marker in (
-            ("archive_failure_state", "archive_state:"),
-            ("archive_state", "evaluation_state:"),
-            ("evaluation_state", "record:"),
-            ("result_state", "# Catches"),
-        ):
-            section = self.text.split(f"\n  {job}:", 1)[1].split(
-                f"\n  {following_marker}", 1
-            )[0]
-            self.assertIn("timeout-minutes: 20", section)
-
-    def test_evaluate_disables_unwritable_github_cache(self) -> None:
-        # lean-action still fetches Mathlib's independent cache, but must not
-        # attempt a GitHub cache save in the untrusted-execution job.
+        self.assertEqual(evaluate.count("APP_INSTALLATION_TOKEN:"), 1)
+        self.assertIn("rm -rf .git lean-eval/.git", evaluate)
         self.assertRegex(
-            self.text,
+            evaluate,
             re.compile(
                 r"^      - uses: leanprover/lean-action@[0-9a-f]{40}\n"
                 r"        with:\n"
@@ -208,403 +149,104 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             ),
         )
 
-    def test_notify_does_not_assert_a_compile_error(self) -> None:
-        # A submission whose proof does not compile exits 0 with
-        # `succeeded: false` and is reported by `record`. So a failing
-        # `evaluate` job is never that, and saying so sent submitters to
-        # debug proofs that had built fine (issue #1078).
-        self.assertNotIn("failed to compile", self.text)
-        self.assertIn("classify_evaluate_failure.py", self.text)
-
-    def test_notify_fetches_the_log_in_a_way_that_survives_escape_sequences(self) -> None:
-        # `gh api .../actions/jobs/<id>/logs` refuses to print a log
-        # containing terminal escape sequences, which every log with Lean's
-        # coloured build output has, and leaves an empty file. That silently
-        # loses the death-by-signal evidence, which lives only in the log.
-        notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn("gh run view --repo", notify)
-        self.assertNotIn("/logs\"", notify)
-
-    def test_notify_closes_the_issue_only_when_the_submitter_must_act(self) -> None:
-        # Closing an infrastructure failure as "not planned" reads as a
-        # verdict on the submission and hides the failure from operators.
-        notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn('CLOSE="$BLAMES_SUBMISSION"', notify)
-        self.assertIn('if [ "$CLOSE" = "true" ]; then', notify)
-
-    def test_notify_ignores_non_processing_opened_event(self) -> None:
-        # Issue Forms can emit both `opened` and `labeled`. If the label is
-        # already visible to the opened-event run, intake and all processing
-        # jobs intentionally skip; that run must not report an infrastructure
-        # failure while the labeled-event run performs the submission.
-        notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn(
-            "needs: [issue_intake_admission, intake, evaluate, archive, record]",
-            notify,
-        )
-        self.assertIn("github.event.action == 'labeled'", notify)
-        self.assertIn("github.event.label.name == 'submission'", notify)
-        self.assertIn("github.event.action == 'opened'", notify)
-        self.assertIn("needs.intake.outputs.evaluate == 'true'", notify)
-
-    def test_invalid_metadata_is_reported_before_source_fetch(self) -> None:
-        archive = self.text.split("\n  archive_issue:", 1)[1].split(
-            "\n  archive_server:", 1
-        )[0]
-        self.assertLess(
-            archive.index("Validate submitted metadata"),
-            archive.index("Mint lean-eval-bot installation token for archival fetch"),
-        )
-        self.assertIn("--validate-issue-metadata-only", archive)
-        self.assertIn("Comment on invalid submitted metadata", archive)
-        self.assertIn("the submitted metadata is invalid", archive)
-        notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn(
-            "needs.archive.outputs.submission_metadata_valid != 'false'", notify
-        )
-
-    def test_evaluate_job_permissions_stay_minimal(self) -> None:
-        # An explicit permissions block sets every unlisted scope, including
-        # Actions cache writes, to none. Keep the untrusted-execution job at
-        # exactly the three scopes it needs. `actions: read` is consumed only
-        # by the pre-evaluation cutoff guard and is not placed in the
-        # untrusted execution environment.
-        evaluate_block = self.text.split("\n  evaluate:", 1)[1].split(
-            "\n  archive:", 1
-        )[0]
-        match = re.search(
-            r"^    permissions:\n((?:^      [^\n]+\n?)+)",
-            evaluate_block,
-            re.MULTILINE,
-        )
-        self.assertIsNotNone(match)
-        permissions = [
-            line.strip() for line in match.group(1).splitlines()
-        ]
+    def test_checkouts_and_app_tokens_remain_scoped(self) -> None:
+        checkout_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+        combined = self.text + self.archive_text
         self.assertEqual(
-            permissions,
-            ["actions: read", "contents: read", "issues: write"],
+            set(re.findall(r"uses: actions/checkout@([0-9a-f]{40})", combined)),
+            {checkout_sha},
         )
+        self.assertGreaterEqual(combined.count("persist-credentials: false"), 4)
+        self.assertIn("persist-credentials: true", self.text)
+        self.assertEqual(self.archive_text.count("ARCHIVER_TOKEN:"), 1)
+        self.assertRegex(self.archive_text, r"repositories:\s*lean-eval-audit\b")
+        self.assertNotRegex(combined, re.compile(r"^\s+app-id:", re.MULTILINE))
 
-    def test_api_intake_validates_then_labels_and_evaluates_same_run(self) -> None:
-        self.assertIn("types: [opened, labeled]", self.text)
-        intake_block = self.text.split("\n  intake:", 1)[1].split(
-            "\n  evaluate:", 1
-        )[0]
-        self.assertIn("python scripts/validate_submission_intake.py", intake_block)
-        self.assertIn("--add-label submission", intake_block)
-        self.assertIn(
-            "!contains(github.event.issue.labels.*.name, 'submission')",
-            intake_block,
-        )
-        self.assertLess(
-            intake_block.index("python scripts/validate_submission_intake.py"),
-            intake_block.index("--add-label submission"),
-        )
-        self.assertIn("issues: write", intake_block)
-        evaluate_header = self.text.split("\n  evaluate:", 1)[1].split(
-            "\n    # Default:", 1
-        )[0]
-        self.assertIn("needs: [intake, archive, archive_state]", evaluate_header)
-        self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
-        self.assertIn("github.event.label.name == 'submission'", evaluate_header)
-
-    def test_issue_cutoff_routes_before_intake_and_cannot_gate_server_dispatch(self) -> None:
-        admission = self.text.split("\n  issue_intake_admission:", 1)[1].split(
-            "\n  intake:", 1
-        )[0]
-        self.assertIn("if: github.event_name == 'issues'", admission)
-        self.assertIn("ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}", admission)
-        self.assertIn("RUN_ATTEMPT: ${{ github.run_attempt }}", admission)
-        self.assertIn("bash scripts/issue_intake_cutoff_guard.sh", admission)
-        self.assertIn('repos/$REPOSITORY/actions/runs/$RUN_ID', self.cutoff_guard)
-        self.assertIn('.event == "issues"', self.cutoff_guard)
-        self.assertIn('.run_attempt == $run_attempt', self.cutoff_guard)
-        self.assertIn('.run_started_at | type == "string"', self.cutoff_guard)
-        self.assertIn('--run-attempt "$RUN_ATTEMPT"', self.cutoff_guard)
-        self.assertIn('--run-started-at "$run_started_at"', self.cutoff_guard)
-        self.assertIn("classify_issue_intake_cutoff.py", self.cutoff_guard)
-        self.assertNotIn("issues: write", admission)
-        self.assertIn("Explain frozen issue intake", admission)
-        self.assertIn("Explain fail-closed admission error", admission)
-
-        intake = self.text.split("\n  intake:", 1)[1].split("\n  evaluate:", 1)[0]
-        archive_issue = self.text.split("\n  archive_issue:", 1)[1].split(
-            "\n  archive_server:", 1
-        )[0]
-        archive_server = self.text.split("\n  archive_server:", 1)[1].split(
-            "\n  archive:", 1
-        )[0]
-        archive = self.text.split("\n  archive:", 1)[1].split(
-            "\n  archive_failure_state:", 1
-        )[0]
-        notify = self.text.split("\n  notify:", 1)[1]
-        gate = "needs.issue_intake_admission.outputs.allowed == 'true'"
-        self.assertIn(gate, intake)
-        self.assertIn(gate, archive_issue)
-        self.assertIn(gate, archive)
-        self.assertIn(gate, notify)
-        self.assertNotIn("ISSUE_INTAKE_CUTOFF", archive_server)
-        self.assertNotIn("issue_intake_admission", archive_server)
-        self.assertNotIn("needs:", archive_server)
-        self.assertIn(
-            "if: always() && github.event_name == 'workflow_dispatch'",
-            archive_server,
-        )
-        self.assertIn("github.event_name == 'workflow_dispatch'", archive)
-
-        form = ISSUE_FORM.read_text(encoding="utf-8")
-        self.assertIn("this form remains visible", form)
-        self.assertIn("new issue submissions are not processed", form)
-
-    def test_every_issue_processing_job_rechecks_cutoff_before_effects(self) -> None:
-        boundaries = {
-            "intake": ("evaluate", "Recheck issue-intake cutoff before intake", "Check current submission label"),
-            "evaluate": ("archive_issue", "Recheck issue-intake cutoff before evaluation", "repository: leanprover/lean-eval"),
-            "archive_issue": ("archive_server", "Recheck issue-intake cutoff before archival", "repository: leanprover/lean-eval"),
-            "record": ("result_state", "Recheck issue-intake cutoff before recording", "actions/download-artifact@"),
-            "notify": (None, "Recheck issue-intake cutoff before notification", "Explain the evaluate failure"),
-        }
-        for job, (next_job, guard, first_effect) in boundaries.items():
-            with self.subTest(job=job):
-                block = self.text.split(f"\n  {job}:", 1)[1]
-                if next_job is not None:
-                    block = block.split(f"\n  {next_job}:", 1)[0]
-                self.assertIn("actions: read", block)
-                self.assertIn("ISSUE_INTAKE_CUTOFF", block)
-                self.assertIn("RUN_ATTEMPT: ${{ github.run_attempt }}", block)
-                self.assertLess(block.index(guard), block.index(first_effect))
-
+    def test_lifecycle_callbacks_are_source_free_and_bounded(self) -> None:
         self.assertEqual(
-            self.text.count("issue_intake_cutoff_guard.sh"),
-            6,
-            "admission plus five effectful issue jobs must invoke the guard",
-        )
-        server = self.text.split("\n  archive_server:", 1)[1].split(
-            "\n  archive:", 1
-        )[0]
-        self.assertNotIn("issue_intake_cutoff_guard", server)
-        self.assertNotIn("ISSUE_INTAKE_CUTOFF", server)
-
-    def test_git_state_stripped_from_both_checkouts(self) -> None:
-        self.assertIn(
-            "rm -rf .git lean-eval/.git",
-            self.text,
-            "must strip .git from BOTH the submissions and lean-eval checkouts",
-        )
-
-    def test_benchmark_commit_comes_from_lean_eval_head(self) -> None:
-        self.assertIn(
-            'echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"',
-            self.text,
-            "benchmark_commit must be the resolved leanprover/lean-eval@main HEAD",
-        )
-        self.assertNotRegex(
-            self.text,
-            r"--benchmark-commit\s+.*github\.sha",
-            "benchmark_commit must NOT be github.sha (that is the submissions repo)",
-        )
-
-    def test_lean_eval_checked_out_at_main(self) -> None:
-        self.assertIn("repository: leanprover/lean-eval", self.text)
-        self.assertIn("path: lean-eval", self.text)
-
-    def test_probes_run_from_the_lean_eval_checkout(self) -> None:
-        self.assertIn(
-            "python lean-eval/scripts/sandbox_engaged_probe.py", self.text
-        )
-        self.assertIn(
-            "python lean-eval/scripts/security_probes/env_dump_probe.py", self.text
-        )
-
-    def test_app_token_is_step_scoped(self) -> None:
-        # Each independent fetch gets a token only in that fetch step's env,
-        # never in a job-level env/secrets block.
-        self.assertEqual(
-            self.text.count("APP_INSTALLATION_TOKEN:"),
-            2,
-            "both app tokens must be confined to their fetch steps",
-        )
-
-    def test_record_uses_a_separate_results_store_checkout(self) -> None:
-        # The push-retry loop resets origin/main; it must operate on a
-        # checkout (`results-store/`) distinct from the one holding
-        # update_leaderboard.py (`code/`), so the loop cannot reset the
-        # running script out from under itself.
-        self.assertIn("path: code", self.text)
-        self.assertIn("path: results-store", self.text)
-        self.assertIn(
-            "python code/scripts/update_leaderboard.py", self.text
-        )
-        self.assertIn("--leaderboard-dir results-store", self.text)
-        self.assertRegex(
-            self.text,
-            r'git -C results-store reset --hard "origin/\$RESULTS_BRANCH"',
-            "the reset/push loop must target the results-store checkout",
-        )
-
-    def test_record_dispatches_leaderboard_redeploy(self) -> None:
-        self.assertIn("event_type=results-advanced", self.text)
-        self.assertIn(
-            "repos/leanprover/lean-eval-leaderboard/dispatches", self.text
-        )
-
-    def test_archive_token_is_step_scoped(self) -> None:
-        # Mirrors the APP_INSTALLATION_TOKEN invariant: the
-        # lean-eval-archiver installation token (write access to
-        # leanprover/lean-eval-audit) must appear in exactly one
-        # step-scoped env block, never at job level.
-        self.assertEqual(
-            self.text.count("ARCHIVER_TOKEN:"),
-            1,
-            "the archiver token must be set in exactly one (step-scoped) env block",
-        )
-
-    def test_archive_state_callback_is_source_free_and_step_scoped(self) -> None:
-        self.assertEqual(
-            self.text.count("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"),
+            self.text.count(
+                "LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"
+            ),
             4,
         )
-        failure_callback = self.text.split("\n  archive_failure_state:", 1)[1].split("\n  archive_state:", 1)[0]
-        self.assertIn("/internal/v1/archive-failed", failure_callback)
-        self.assertNotIn("actions/checkout", failure_callback)
-        self.assertNotIn("submission-audit-ciphertext", failure_callback)
-        archive_callback = self.text.split("\n  archive_state:", 1)[1].split("\n  evaluation_state:", 1)[0]
-        self.assertIn("needs: archive", archive_callback)
-        self.assertIn("name: submission-archive-completion", archive_callback)
-        self.assertNotIn("submission-audit-ciphertext", archive_callback)
-        self.assertNotIn("submission-results", archive_callback)
-        self.assertNotIn("actions/checkout", archive_callback)
-        evaluation_callback = self.text.split("\n  evaluation_state:", 1)[1].split("\n  record:", 1)[0]
-        self.assertIn("scripts/build_evaluation_completion.py", evaluation_callback)
-        self.assertIn("/internal/v1/evaluation-completed", evaluation_callback)
-        self.assertNotIn("submission-audit-ciphertext", evaluation_callback)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
-        self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
-        result_callback = self.text.split("\n  result_state:", 1)[1].split("\n  # Catches", 1)[0]
-        self.assertIn("/internal/v1/result-completed", result_callback)
-        self.assertIn("name: submission-result-completion", result_callback)
-        self.assertIn('"result_identity_conflicted"', result_callback)
-        self.assertIn('"already_result_identity_conflicted"', result_callback)
-        self.assertNotIn("submission-results", result_callback)
-        self.assertNotIn("actions/checkout", result_callback)
+        self.assertEqual(self.text.count("curl --fail-with-body"), 4)
+        for option in (
+            "--connect-timeout 10", "--max-time 30", "--retry 15",
+            "--retry-delay 60", "--retry-max-time 900", "--retry-connrefused",
+        ):
+            self.assertEqual(self.text.count(option), 4)
+        self.assertEqual(self.text.count('--output "$response_file"'), 4)
+        self.assertNotIn('cat "$response_file"', self.text)
+        self.assertNotIn("--retry-all-errors", self.text)
+        for job, following in (
+            ("archive_failure_state", "archive_state:"),
+            ("archive_state", "evaluation_state:"),
+            ("evaluation_state", "record:"),
+            ("result_state", None),
+        ):
+            section = self.text.split(f"\n  {job}:", 1)[1]
+            if following is not None:
+                section = section.split(f"\n  {following}", 1)[0]
+            self.assertIn("timeout-minutes: 20", section)
 
-    def test_staging_results_are_isolated_and_receipted(self) -> None:
-        record = self.text.split("\n  record:", 1)[1].split("\n  result_state:", 1)[0]
-        self.assertIn("'staging-results' || 'main'", record)
+    def test_record_requires_terminal_server_state_and_receipts(self) -> None:
+        record = self.text.split("\n  record:", 1)[1].split(
+            "\n  result_state:", 1)[0]
+        self.assertIn(
+            "needs: [evaluate, archive, archive_state, evaluation_state]", record
+        )
+        self.assertIn("needs.evaluate.result == 'success'", record)
+        self.assertIn("needs.archive.result == 'success'", record)
+        self.assertIn("needs.evaluation_state.result == 'success'", record)
+        self.assertIn("inputs.callback_environment == 'staging'", record)
         self.assertIn('push origin "HEAD:$RESULTS_BRANCH"', record)
         self.assertIn("scripts/build_result_receipt.py", record)
         self.assertIn("name: submission-result-completion", record)
-        self.assertIn(
-            "if: github.event_name == 'issues' || inputs.callback_environment == 'production'",
-            record,
-        )
+        self.assertIn("if: inputs.callback_environment == 'production'", record)
+        self.assertIn("event_type=results-advanced", record)
+        self.assertIn("client_payload[submission_id]", record)
+        self.assertNotIn("client_payload[issue]", record)
 
-    def test_record_waits_on_archive(self) -> None:
-        # Policy: a recorded leaderboard entry implies a durable
-        # archived copy of the source. The `record` job therefore has
-        # to depend on `archive`, so that an archive failure suppresses
-        # the leaderboard write.
-        self.assertIn(
-            "needs: [evaluate, archive, archive_state, evaluation_state]",
-            self.text,
-            "record must depend on evaluation, archive, and server State handoff",
-        )
-
-    def test_record_overrides_skipped_intake_without_weakening_gates(self) -> None:
-        # Ordinary Issue Form submissions evaluate from the `labeled` event,
-        # where `intake` is intentionally skipped. GitHub's implicit
-        # `success()` otherwise propagates that skipped ancestor through
-        # `evaluate` and `archive` and silently skips `record`. The explicit
-        # condition must bypass only that implicit guard: both direct jobs
-        # still have to succeed before any leaderboard write can run.
-        record_header = self.text.split("\n  record:", 1)[1].split(
-            "\n    runs-on:", 1
-        )[0]
-        self.assertIn("always()", record_header)
-        self.assertIn("needs.evaluate.result == 'success'", record_header)
-        self.assertIn("needs.archive.result == 'success'", record_header)
-        self.assertIn("needs.evaluation_state.result == 'success'", record_header)
-
-    def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
-        self.assertIn("LEAN_EVAL_ARCHIVER_CLIENT_ID", self.text)
-        self.assertIn("LEAN_EVAL_ARCHIVER_PRIVATE_KEY", self.text)
-        # The installation token must be scoped to the audit repo only,
-        # not to the entire org. `actions/create-github-app-token`
-        # honours `repositories:` to narrow the scope.
-        self.assertRegex(
-            self.text,
-            r"repositories:\s*lean-eval-audit\b",
-            "the archiver token must be scoped to lean-eval-audit only",
-        )
-
-    def test_app_tokens_use_client_ids(self) -> None:
-        # create-github-app-token v3 deprecates app-id. Bind each Client
-        # ID to the matching private key so a secret-name swap cannot
-        # produce an invalid JWT in production.
-        pairs = re.findall(
-            r"^\s+client-id: \$\{\{ secrets\.(LEAN_EVAL_\w+)_CLIENT_ID \}\}\n"
-            r"\s+private-key: \$\{\{ secrets\.(LEAN_EVAL_\w+)_PRIVATE_KEY \}\}$",
-            self.text,
-            re.MULTILINE,
-        )
-        self.assertEqual(
-            pairs,
-            [
-                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
-                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
-                ("LEAN_EVAL_ARCHIVER", "LEAN_EVAL_ARCHIVER"),
-                ("LEAN_EVAL_RECORDER", "LEAN_EVAL_RECORDER"),
-            ],
-        )
-        self.assertNotRegex(
-            self.text,
-            re.compile(r"^\s+app-id:", re.MULTILINE),
-        )
-
-    def test_size_cap_is_ten_mib(self) -> None:
-        # Surface the cap as a literal so a silent change has to update
-        # this test alongside the workflow.
-        self.assertIn("10 * 1024 * 1024", self.text)
-
-    def test_evaluation_is_gated_on_durable_archive(self) -> None:
-        # Encryption and persistence happen inside archive; only a successful
-        # archive (plus server State acknowledgement) may unlock evaluation.
-        self.assertIn(
-            "audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}",
-            self.text,
-            "archive must classify encryption failures for callbacks and notification",
-        )
-        self.assertIn(
-            "needs.archive.result == 'success'",
-            self.text,
-            "evaluation must require successful durable archival",
-        )
-        self.assertIn(
-            "needs.archive.outputs.audit_ciphertext_ready",
-            self.text,
-            "callbacks and notify must use archive's classified output",
-        )
-        self.assertNotIn("submission-audit-ciphertext", self.text)
-
-    def test_pre_evaluation_archive_does_not_claim_an_evaluator_verdict(self) -> None:
-        archive = self.text.split("\n  archive_issue:", 1)[1].split(
-            "\n  archive_server:", 1
-        )[0]
-        self.assertNotIn("submission-results", archive)
-        self.assertNotIn("--summary", archive)
-        self.assertNotIn("--results", archive)
+        result_state = self.text.split("\n  result_state:", 1)[1]
+        self.assertIn("/internal/v1/result-completed", result_state)
+        self.assertIn('"result_identity_conflicted"', result_state)
+        self.assertIn('"already_result_identity_conflicted"', result_state)
+        self.assertNotIn("submission-results", result_state)
+        self.assertNotIn("actions/checkout", result_state)
 
 
-class SubmissionIssueFormTests(unittest.TestCase):
-    def test_publication_tradeoff_and_snapshot_fields_are_present(self) -> None:
-        text = ISSUE_FORM.read_text(encoding="utf-8")
-        self.assertIn("LeanEval supports open science", text)
-        self.assertIn("id: solution_publication_status", text)
-        self.assertIn("id: publication_date", text)
-        self.assertIn("id: intended_publication_date", text)
-        self.assertIn("YYYY-MM-DD", text)
-        self.assertIn("There is no required embargo", text)
+class IssueIntakeRetirementTests(unittest.TestCase):
+    def test_issue_form_and_reconciler_are_retired(self) -> None:
+        self.assertFalse(ISSUE_FORM.exists())
+        self.assertFalse(ISSUE_RECONCILER.exists())
+        for path in (
+            REPO_ROOT / "scripts" / "reconcile_orphan_submissions.py",
+            REPO_ROOT / "scripts" / "validate_submission_intake.py",
+            REPO_ROOT / "scripts" / "classify_evaluate_failure.py",
+            REPO_ROOT / "tests" / "test_validate_submission_intake.py",
+            REPO_ROOT / "tests" / "test_classify_evaluate_failure.py",
+        ):
+            self.assertFalse(path.exists(), str(path))
+
+    def test_issue_picker_links_directly_to_submission_service(self) -> None:
+        config = ISSUE_CONFIG.read_text(encoding="utf-8")
+        self.assertIn("name: Submit a LeanEval solution", config)
+        self.assertIn("url: https://lean-lang.org/eval/submit/", config)
+        self.assertNotIn("template=submit.yml", config)
+
+    def test_readme_is_server_only(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("https://lean-lang.org/eval/submit/", readme)
+        self.assertIn("GitHub Issues are no longer a submission path", readme)
+        self.assertNotIn("Issue Form", readme)
+        self.assertNotIn("submission-reconciler", readme)
+        self.assertNotIn("template=submit.yml", readme)
+
+    def test_cutoff_guard_remains_for_final_delta_verification(self) -> None:
+        self.assertTrue(ISSUE_CUTOFF_GUARD.is_file())
+        self.assertTrue((REPO_ROOT / "tests" / "test_issue_intake_cutoff_guard.py").is_file())
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("issue_intake_cutoff_guard", workflow)
 
 
 if __name__ == "__main__":

@@ -89,10 +89,13 @@ Ready-to-edit closure announcement:
 > unaffected; this changes only how new submissions enter the system.
 
 After the cutoff freeze, final delta, and retirement gates have passed, retire
-issue intake through a reviewed pull request that replaces the submission issue
-form with a server link. Do not delete historical issues, rewrite Results or
-State, enable another feature, or shorten the published notice as part of that
-change.
+issue intake through a reviewed pull request that removes the issue trigger,
+replaces the submission Issue Form with a server contact link, and removes the
+issue-only reconciler. Do not remove the cutoff classifier or its tests before
+the final delta has been promoted and verified; leaving that code inert for a
+later cleanup is safe. Do not delete historical issues, rewrite Results or
+State, enable another feature, or shorten the published notice as part of
+retirement.
 
 ## Cutoff freeze mechanism
 
@@ -127,7 +130,11 @@ Before the selected cutoff, correct a wrong value by replacing it with the
 reviewed future timestamp and reading it back exactly. Deleting only
 `ISSUE_INTAKE_CUTOFF` and verifying absence fully reverses the mechanism, but
 also returns issue intake to the open state. Once a selected cutoff has passed,
-deleting the variable reopens issue intake and is an incident-recovery action,
-not ordinary rollback. Do not delete the variable merely to retry a post-cutoff
-submission. Final retirement replaces the form with the server link only after
-the final delta and readiness packet have passed.
+deleting the variable reopens issue intake and is an incident-recovery action
+until the protected retirement commit has removed the `issues:` workflow
+trigger. Do not delete the variable merely to retry a post-cutoff submission.
+After that retirement commit and its protected-main checks are verified, delete
+`ISSUE_INTAKE_CUTOFF` and read back its absence; the variable is then inert and
+removing it cannot restore the retired trigger. Final retirement replaces the
+form with the server link only after the final delta and readiness packet have
+passed.

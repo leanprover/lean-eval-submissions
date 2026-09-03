@@ -5,10 +5,10 @@ The submission pipeline and the stored results for the
 
 This repository owns two things:
 
-- **The submission process** — the issue intake, the `submission`
-  workflow that fetches a submission, evaluates it with
-  [comparator](https://github.com/leanprover/comparator), and records the
-  outcome, and the reconciler that catches stranded submission issues.
+- **The submission process** — the server-dispatched `submission` workflow
+  that archives exact source, evaluates it with
+  [comparator](https://github.com/leanprover/comparator), records lifecycle
+  state, and stores the outcome.
 - **The results store** — `results/<github-login>.json`, the append-only
   public log of solved problems.
 
@@ -20,46 +20,16 @@ The public leaderboard that renders these results is
 
 ## Submitting a solution
 
-The preferred submission path is the
-[**LeanEval submission service**](https://lean-lang.org/eval/submit/).
-
-GitHub issue intake remains available during the transition and is
-provisionally scheduled to close no earlier than `2026-09-30T06:57:10Z`.
-Closure is not automatic: issue intake will remain open if a severity-high
-incident is unresolved or the adoption, service-stability, or final historical
-cutoff and append-only delta gates have not passed. Any closure will be
-confirmed separately.
-
-While issue intake remains open, you can use the
-[**Submit benchmark solution**](https://github.com/leanprover/lean-eval-submissions/issues/new?template=submit.yml)
-form. Point it at any content that contains at least one
-`lakefile.toml` whose `name` matches a benchmark problem id with a
-`Submission.lean` alongside it — a generated workspace, a fork of
-`leanprover/lean-eval` with changes under `generated/`, a repo with
-several workspaces, or a public gist. The CI walks the content and tries
-every match.
-
-Only `Submission.lean` and files under `Submission/` are read. Nothing
-else from your submission is inspected or published — only the set of
-solved problem ids plus the metadata you enter on the form.
+Submit through the
+[**LeanEval submission service**](https://lean-lang.org/eval/submit/). It
+authenticates with GitHub and records an exact repository commit, benchmark
+problem, declared model, and publication choice before dispatching evaluation.
+GitHub Issues are no longer a submission path; existing issues and historical
+results remain unchanged.
 
 If your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
-
-### Submitting through the GitHub API
-
-API-created issues are supported. Create an issue whose title starts with
-`[submission] ` and whose body uses the same rendered Markdown sections as
-the [submission Issue Form](.github/ISSUE_TEMPLATE/submit.yml). For example,
-`gh issue create --repo leanprover/lean-eval-submissions --title
-'[submission] my proof' --body-file submission.md` uses the GitHub API.
-
-The body must include the required `Submission URL`, `Model`, exact-solution
-publication fields, and all three checked acknowledgements. Do not depend on
-the API request's `labels` field: GitHub drops labels requested by issue
-authors without triage permission. The intake workflow validates a complete
-submission body, applies the `submission` label, and starts evaluation.
 
 ### Publishing exact solutions
 
@@ -69,30 +39,24 @@ study and build on the work. They can also be copied directly or enter
 future model-training data, reducing our ability to treat those problems
 as unseen evaluation data.
 
-The submission form asks you to choose one of three statuses:
-
-- **Public**, with the actual publication date in `YYYY-MM-DD` format.
-- **Private, but publication is planned**, with your current best estimate
-  of the intended publication date in `YYYY-MM-DD` format. This is a
-  submission-time snapshot, not a commitment.
-- **Private, with no current publication plan**.
-
-There is no required embargo. Please consider the tradeoffs when deciding
-whether and when to publish. Methods, tooling, prompts, aggregate results,
-and reusable library contributions can be published without publishing the
-exact benchmark solutions.
+The service asks whether accepted source should be scheduled for automatic
+release under Apache-2.0 two UTC calendar months after acceptance or withheld.
+Scheduled release is the recommended choice. A submitter who initially chooses
+`withheld` may later make the one-way change to `scheduled`; a scheduled release
+cannot be changed back to withheld. Methods, tooling, prompts, aggregate
+results, and reusable library contributions can be published without
+publishing the exact benchmark solutions.
 
 ### Audit archive
 
 Every evaluated submission's compressed source tarball is retained
-indefinitely, `age`-encrypted, in the private
+indefinitely in encrypted form in the private
 [`leanprover/lean-eval-audit`](https://github.com/leanprover/lean-eval-audit)
 repository so that the exact bytes evaluated for any past submission
 remain recoverable if a comparator regression, soundness incident, or
-research question requires re-examining them. Decryption keys are
-held only by the small set of maintainers listed in
-[`.audit/recipients.txt`](.audit/recipients.txt); submitting agrees
-to this retention (see the submission form's third acknowledgement).
+research question requires re-examining them. New server submissions use a
+provider-neutral per-submission key envelope backed by the production KMS
+adapter; retained legacy archives keep their original encryption contract.
 
 The compressed source tarball is capped at **10 MiB**; submissions
 above the cap are rejected before evaluation. See
@@ -131,7 +95,10 @@ the same user no longer proves it.
       "declared_model": "Claude Opus 4.7",
       "accepted_at": "2026-05-01T03:16:18Z",
       "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-      "intake": {"kind": "issue", "issue_number": 45},
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0603c-6189-7751-9c43-c904b50b477a"
+      },
       "submission": {
         "kind": "gist",
         "repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39",
@@ -169,16 +136,13 @@ file whose `schema_version` they do not know.
 ## How the pipeline fits together
 
 ```
-submission issue on lean-eval-submissions
-  → submission.yml: validate/label API intake if needed
+LeanEval submission service
+  → immutable workflow_dispatch to submission.yml
+  → archive exact source and record lifecycle State
   → checkout leanprover/lean-eval (problem set + probes), evaluate
-  → write results/<login>.json here, push
+  → write results/<login>.json here and record terminal State
   → repository_dispatch results-advanced → lean-eval-leaderboard redeploys
 ```
-
-`submission-reconciler.yml` is an hourly safety net: it closes submission
-issues that never received a bot comment (workflow disabled, runner died,
-etc.).
 
 ## Operator notes
 
