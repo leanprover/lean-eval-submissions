@@ -2144,7 +2144,7 @@ def main() -> int:
             _write_bytes(args.output, unwrap_identity(request, response, metadata))
         elif args.command == "validate-response":
             plan, _ = _load_canonical(args.plan, "historical private plan")
-            response, _ = _load_canonical(args.response, "private executor response")
+            response = _load_provider_json(args.response, "private executor response")
             _write(args.verdict_output, validate_executor_response(response, plan))
         elif args.command == "render-executor-config":
             plan, _ = _load_canonical(args.plan, "historical private plan")
