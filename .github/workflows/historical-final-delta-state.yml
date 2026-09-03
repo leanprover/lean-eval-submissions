@@ -1,0 +1,255 @@
+name: Review and promote final historical delta State
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Stage, promote, or discard the final-delta review branch
+        required: true
+        type: choice
+        options: [stage, promote, discard-stale]
+      authority_commit: {description: Stage only - exact commit containing plans and expectation, required: false, type: string}
+      public_plan_sha256: {description: Stage only - exact public plan digest, required: false, type: string}
+      private_plan_sha256: {description: Stage only - exact private plan digest, required: false, type: string}
+      expectation_sha256: {description: Stage only - exact dynamic expectation digest, required: false, type: string}
+      expected_state_head: {description: Stage only - current production State parent, required: false, type: string}
+      expected_audit_head: {description: Stage only - post-migration audit head, required: false, type: string}
+      expected_audit_tree: {description: Stage only - post-migration audit tree, required: false, type: string}
+      expected_staged_state_commit: {description: Promote/discard only - reviewed staged commit, required: false, type: string}
+      expected_binding_sha256: {description: Promote/discard only - committed promotion binding digest, required: false, type: string}
+      confirmation: {description: Exact operation-specific final-delta confirmation, required: true, type: string}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-historical-final-delta-state-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    environment: replay-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Require exact protected caller and closed operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          AUTHORITY_COMMIT: ${{ inputs.authority_commit }}
+          PUBLIC_PLAN: ${{ inputs.public_plan_sha256 }}
+          PRIVATE_PLAN: ${{ inputs.private_plan_sha256 }}
+          EXPECTATION: ${{ inputs.expectation_sha256 }}
+          STATE_HEAD: ${{ inputs.expected_state_head }}
+          AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          AUDIT_TREE: ${{ inputs.expected_audit_tree }}
+          STAGED: ${{ inputs.expected_staged_state_commit }}
+          BINDING: ${{ inputs.expected_binding_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .commit.sha)" = "$GITHUB_SHA"
+          case "$OPERATION" in
+            stage)
+              test "$CONFIRMATION" = stage-reviewed-final-delta
+              for value in "$AUTHORITY_COMMIT" "$STATE_HEAD" "$AUDIT_HEAD" "$AUDIT_TREE"; do [[ "$value" =~ ^[0-9a-f]{40}$ ]]; done
+              for value in "$PUBLIC_PLAN" "$PRIVATE_PLAN" "$EXPECTATION"; do [[ "$value" =~ ^[0-9a-f]{64}$ ]]; done
+              test -z "$STAGED$BINDING"
+              ;;
+            promote)
+              test "$CONFIRMATION" = promote-reviewed-final-delta
+              [[ "$STAGED" =~ ^[0-9a-f]{40}$ ]]; [[ "$BINDING" =~ ^[0-9a-f]{64}$ ]]
+              test -z "$AUTHORITY_COMMIT$PUBLIC_PLAN$PRIVATE_PLAN$EXPECTATION$STATE_HEAD$AUDIT_HEAD$AUDIT_TREE"
+              ;;
+            discard-stale)
+              test "$CONFIRMATION" = discard-stale-final-delta
+              [[ "$STAGED" =~ ^[0-9a-f]{40}$ ]]; [[ "$BINDING" =~ ^[0-9a-f]{64}$ ]]
+              test -z "$AUTHORITY_COMMIT$PUBLIC_PLAN$PRIVATE_PLAN$EXPECTATION$STATE_HEAD$AUDIT_HEAD$AUDIT_TREE"
+              ;;
+            *) exit 1 ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 0, persist-credentials: false}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with: {python-version: '3.11.10'}
+
+      - name: Install exact State validation dependency
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Bind committed final-delta inputs
+        if: inputs.operation == 'stage'
+        env:
+          AUTHORITY_COMMIT: ${{ inputs.authority_commit }}
+          PUBLIC_PLAN: ${{ inputs.public_plan_sha256 }}
+          PRIVATE_PLAN: ${{ inputs.private_plan_sha256 }}
+          EXPECTATION: ${{ inputs.expectation_sha256 }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$AUTHORITY_COMMIT" "$GITHUB_SHA"
+          paths=("evidence/public-replay/plans/$PUBLIC_PLAN.json" "evidence/private-replay/plans/$PRIVATE_PLAN.json" configuration/historical-final-delta-state-batch-v1.json)
+          for path in "${paths[@]}"; do
+            test "$(git ls-files --error-unmatch -- "$path")" = "$path"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$AUTHORITY_COMMIT:$path")"
+          done
+          test "$(sha256sum configuration/historical-final-delta-state-batch-v1.json | cut -d' ' -f1)" = "$EXPECTATION"
+
+      - name: Bind committed review summary
+        if: inputs.operation != 'stage'
+        env:
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          EXPECTED_BINDING_SHA256: ${{ inputs.expected_binding_sha256 }}
+        run: |
+          set -euo pipefail
+          binding=configuration/historical-final-delta-state-promotion-v1.json
+          test "$(git ls-files --error-unmatch -- "$binding")" = "$binding"
+          test "$(git hash-object "$binding")" = "$(git rev-parse "$GITHUB_SHA:$binding")"
+          test "$(sha256sum "$binding" | cut -d' ' -f1)" = "$EXPECTED_BINDING_SHA256"
+          test "$(jq -er .kind "$binding")" = historical_final_delta_state_promotion_binding
+          test "$(jq -er .review_branch "$binding")" = historical-final-delta-state-v1
+          test "$(jq -er .state.candidate_commit "$binding")" = "$EXPECTED_STAGED_STATE_COMMIT"
+
+      - name: Check out exact State authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: ${{ inputs.operation == 'stage' && inputs.expected_state_head || inputs.expected_staged_state_commit }}
+          path: state
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - name: Check out exact audit authority
+        if: inputs.operation != 'discard-stale'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.operation == 'stage' && inputs.expected_audit_head || 'main' }}
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - name: Require absent review branch and exact parents
+        if: inputs.operation == 'stage'
+        env:
+          STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          EXPECTED_AUDIT_TREE: ${{ inputs.expected_audit_tree }}
+        run: |
+          set -euo pipefail
+          test "$(git -C state rev-parse HEAD)" = "$EXPECTED_STATE_HEAD"
+          test "$(git -C audit rev-parse HEAD)" = "$EXPECTED_AUDIT_HEAD"
+          test "$(git -C audit rev-parse 'HEAD^{tree}')" = "$EXPECTED_AUDIT_TREE"
+          key=$(mktemp /dev/shm/final-delta-state-reader.XXXXXX); hosts=$(mktemp /dev/shm/final-delta-hosts.XXXXXX)
+          trap 'rm -f "$key" "$hosts"' EXIT; chmod 0600 "$key" "$hosts"
+          printf '%s\n' "$STATE_READ_KEY" > "$key"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$hosts"
+          ssh="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+          test -z "$(GIT_SSH_COMMAND="$ssh" git -C state ls-remote origin refs/heads/historical-final-delta-state-v1)"
+
+      - name: Build and close the exact two-lane candidate
+        if: inputs.operation == 'stage'
+        env:
+          AUTHORITY_COMMIT: ${{ inputs.authority_commit }}
+          PUBLIC_PLAN: ${{ inputs.public_plan_sha256 }}
+          PRIVATE_PLAN: ${{ inputs.private_plan_sha256 }}
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          EXPECTED_AUDIT_TREE: ${{ inputs.expected_audit_tree }}
+        run: |
+          set -euo pipefail
+          first=$(python - <<'PY'
+          import datetime as dt, json, pathlib
+          latest=max(json.loads(path.read_text())["occurred_at"] for path in pathlib.Path("state/events").glob("*/*.json"))
+          value=max(dt.datetime.now(dt.timezone.utc),dt.datetime.fromisoformat(latest.replace("Z","+00:00"))+dt.timedelta(milliseconds=1))
+          print(value.isoformat(timespec="milliseconds").replace("+00:00","Z"))
+          PY
+          )
+          public_plan="evidence/public-replay/plans/$PUBLIC_PLAN.json"
+          private_plan="evidence/private-replay/plans/$PRIVATE_PLAN.json"
+          python scripts/prepare_historical_final_delta_state.py public-events --plan "$public_plan" --authority-commit "$AUTHORITY_COMMIT" --state-root state --state-commit "$EXPECTED_STATE_HEAD" --first-occurred-at "$first" --output-directory "$RUNNER_TEMP/public-candidate"
+          public_count=$(jq -er .lanes.public.event_count configuration/historical-final-delta-state-batch-v1.json)
+          private_first=$(python - "$first" "$public_count" <<'PY'
+          import datetime as dt, sys
+          value=dt.datetime.fromisoformat(sys.argv[1].replace("Z","+00:00"))+dt.timedelta(milliseconds=int(sys.argv[2]))
+          print(value.isoformat(timespec="milliseconds").replace("+00:00","Z"))
+          PY
+          )
+          python scripts/prepare_historical_final_delta_state.py private-events --plan "$private_plan" --authority-commit "$AUTHORITY_COMMIT" --audit-root audit --audit-commit "$EXPECTED_AUDIT_HEAD" --state-root state --state-commit "$EXPECTED_STATE_HEAD" --first-occurred-at "$private_first" --output-directory "$RUNNER_TEMP/private-candidate"
+          python scripts/prepare_historical_final_delta_state.py combine --state-root state --state-head "$EXPECTED_STATE_HEAD" --audit-head "$EXPECTED_AUDIT_HEAD" --audit-tree "$EXPECTED_AUDIT_TREE" --expectation configuration/historical-final-delta-state-batch-v1.json --public-candidate-root "$RUNNER_TEMP/public-candidate" --private-candidate-root "$RUNNER_TEMP/private-candidate" --output-directory "$RUNNER_TEMP/combined-candidate"
+          python scripts/review_historical_final_delta_state.py stage --submissions-root . --state-root state --state-parent "$EXPECTED_STATE_HEAD" --audit-head "$EXPECTED_AUDIT_HEAD" --audit-tree "$EXPECTED_AUDIT_TREE" --implementation-commit "$GITHUB_SHA" --expectation configuration/historical-final-delta-state-batch-v1.json --candidate-root "$RUNNER_TEMP/combined-candidate" --manifest "$RUNNER_TEMP/combined-candidate/historical-final-delta-state-append-candidate.json" --output "$RUNNER_TEMP/historical-final-delta-state-promotion-v1.json"
+          python scripts/review_historical_final_delta_state.py verify --submissions-root . --state-root state --binding "$RUNNER_TEMP/historical-final-delta-state-promotion-v1.json"
+
+      - name: Verify committed promotion binding
+        if: inputs.operation != 'stage'
+        run: python scripts/review_historical_final_delta_state.py verify --submissions-root . --state-root state --binding configuration/historical-final-delta-state-promotion-v1.json
+
+      - name: Recheck audit authority before promotion
+        if: inputs.operation == 'promote'
+        run: |
+          set -euo pipefail
+          binding=configuration/historical-final-delta-state-promotion-v1.json
+          audit_head=$(jq -er .audit.head "$binding")
+          audit_tree=$(jq -er .audit.tree "$binding")
+          git -C audit merge-base --is-ancestor "$audit_head" HEAD
+          test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
+
+      - name: Write or delete only the final-delta review ref
+        env:
+          OPERATION: ${{ inputs.operation }}
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STAGED: ${{ inputs.expected_staged_state_commit }}
+        run: |
+          set -euo pipefail
+          key=$(mktemp /dev/shm/final-delta-state-writer.XXXXXX); hosts=$(mktemp /dev/shm/final-delta-hosts.XXXXXX)
+          trap 'rm -f "$key" "$hosts"' EXIT; chmod 0600 "$key" "$hosts"
+          printf '%s\n' "$STATE_WRITE_KEY" > "$key"; unset STATE_WRITE_KEY
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+          remote=git@github.com:leanprover/lean-eval-state.git
+          branch=refs/heads/historical-final-delta-state-v1
+          case "$OPERATION" in
+            stage)
+              candidate=$(git -C state rev-parse HEAD)
+              git -C state push "$remote" "HEAD:$branch" "--force-with-lease=$branch:"
+              test "$(git -C state ls-remote --exit-code "$remote" "$branch" | cut -f1)" = "$candidate"
+              ;;
+            promote)
+              binding=configuration/historical-final-delta-state-promotion-v1.json
+              parent=$(jq -er .state.parent "$binding")
+              remote_main=$(git -C state ls-remote --exit-code "$remote" refs/heads/main | cut -f1)
+              test "$(git -C state ls-remote --exit-code "$remote" "$branch" | cut -f1)" = "$EXPECTED_STAGED"
+              if [ "$remote_main" = "$parent" ]; then git -C state push "$remote" "$EXPECTED_STAGED:refs/heads/main"; else git -C state merge-base --is-ancestor "$EXPECTED_STAGED" "$remote_main"; fi
+              git -C state push "$remote" ":$branch" "--force-with-lease=$branch:$EXPECTED_STAGED"
+              ;;
+            discard-stale)
+              parent=$(jq -er .state.parent configuration/historical-final-delta-state-promotion-v1.json)
+              remote_main=$(git -C state ls-remote --exit-code "$remote" refs/heads/main | cut -f1)
+              test "$remote_main" != "$parent"
+              test "$(git -C state ls-remote --exit-code "$remote" "$branch" | cut -f1)" = "$EXPECTED_STAGED"
+              git -C state push "$remote" ":$branch" "--force-with-lease=$branch:$EXPECTED_STAGED"
+              ;;
+          esac
+
+      - name: Upload the source-free review binding
+        if: inputs.operation == 'stage'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-final-delta-state-promotion-v1
+          path: ${{ runner.temp }}/historical-final-delta-state-promotion-v1.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Remove review scratch
+        if: always()
+        run: |
+          rm -rf -- state audit "$RUNNER_TEMP/public-candidate" "$RUNNER_TEMP/private-candidate" "$RUNNER_TEMP/combined-candidate"
+          rm -f -- /dev/shm/final-delta-state-{reader,writer}.* /dev/shm/final-delta-hosts.* "$RUNNER_TEMP/historical-final-delta-state-promotion-v1.json"

@@ -1,0 +1,280 @@
+name: Stage final-delta archive migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id: {description: Unique final-delta-migration- plus 32 lowercase hex, required: true, type: string}
+      preparation_commit: {description: Exact commit containing the reviewed preparation, required: true, type: string}
+      preparation_sha256: {description: Reviewed preparation digest, required: true, type: string}
+      crosswalk_sha256: {description: Exact final-corpus crosswalk digest, required: true, type: string}
+      audit_commit: {description: Exact pre-migration audit commit, required: true, type: string}
+      audit_tree: {description: Exact pre-migration audit tree, required: true, type: string}
+      migration_plan_sha256: {description: Exact selected final-delta plan digest, required: true, type: string}
+      migration_binding_sha256: {description: Exact final-delta selection binding digest, required: true, type: string}
+      expected_inventory_digest: {description: Exact selected inventory digest, required: true, type: string}
+      expected_migration_count: {description: Exact positive final-delta archive count, required: true, type: string}
+      apply: {description: Push the isolated final-delta review branch, required: true, type: boolean, default: false}
+      confirmation: {description: For apply enter stage-final-delta-envelope-migration, required: false, type: string}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lean-eval-historical-final-delta-archive-migration
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    environment: archive-migration-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Require an exact protected-main dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          [[ "$OPERATION_ID" =~ ^final-delta-migration-[0-9a-f]{32}$ ]]
+          test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .commit.sha)" = "$GITHUB_SHA"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Check out the exact audit source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.audit_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+
+      - name: Rederive the exact final-delta selection twice
+        env:
+          PREPARATION_COMMIT: ${{ inputs.preparation_commit }}
+          PREPARATION_SHA256: ${{ inputs.preparation_sha256 }}
+          CROSSWALK_SHA256: ${{ inputs.crosswalk_sha256 }}
+          AUDIT_COMMIT: ${{ inputs.audit_commit }}
+          AUDIT_TREE: ${{ inputs.audit_tree }}
+          PLAN_SHA256: ${{ inputs.migration_plan_sha256 }}
+          BINDING_SHA256: ${{ inputs.migration_binding_sha256 }}
+          EXPECTED_INVENTORY: ${{ inputs.expected_inventory_digest }}
+          EXPECTED_COUNT: ${{ inputs.expected_migration_count }}
+        run: |
+          set -euo pipefail
+          for value in "$PREPARATION_COMMIT" "$AUDIT_COMMIT" "$AUDIT_TREE"; do [[ "$value" =~ ^[0-9a-f]{40}$ ]]; done
+          for value in "$PREPARATION_SHA256" "$CROSSWALK_SHA256" "$PLAN_SHA256" "$BINDING_SHA256" "$EXPECTED_INVENTORY"; do [[ "$value" =~ ^[0-9a-f]{64}$ ]]; done
+          [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
+          test "$(git -C audit rev-parse HEAD)" = "$AUDIT_COMMIT"
+          test "$(git -C audit rev-parse 'HEAD^{tree}')" = "$AUDIT_TREE"
+          prep="evidence/historical-replay/final-delta-preparations/$PREPARATION_SHA256.json"
+          crosswalk="evidence/historical-replay/private-crosswalks/$CROSSWALK_SHA256.json"
+          plan="evidence/historical-replay/final-delta-archive-plans/$PLAN_SHA256.json"
+          binding="evidence/historical-replay/final-delta-archive-migrations/$BINDING_SHA256.json"
+          for path in "$prep" "$crosswalk" "$plan" "$binding"; do
+            test "$(git ls-files --error-unmatch -- "$path")" = "$path"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$GITHUB_SHA:$path")"
+          done
+          python scripts/migrate_archive_envelopes.py full-inventory --audit-root audit --source-commit "$AUDIT_COMMIT" --output "$RUNNER_TEMP/full-plan.json"
+          for suffix in one two; do
+            python scripts/prepare_historical_final_delta_archive_migration.py \
+              --submissions-root . --preparation-commit "$PREPARATION_COMMIT" \
+              --preparation-path "$prep" --preparation-sha256 "$PREPARATION_SHA256" \
+              --crosswalk-path "$crosswalk" --full-migration-plan "$RUNNER_TEMP/full-plan.json" \
+              --audit-tree "$AUDIT_TREE" --output-plan "$RUNNER_TEMP/plan-$suffix.json" \
+              --output-binding "$RUNNER_TEMP/binding-$suffix.json"
+          done
+          cmp "$RUNNER_TEMP/plan-one.json" "$RUNNER_TEMP/plan-two.json"
+          cmp "$RUNNER_TEMP/binding-one.json" "$RUNNER_TEMP/binding-two.json"
+          cmp "$plan" "$RUNNER_TEMP/plan-one.json"
+          cmp "$binding" "$RUNNER_TEMP/binding-one.json"
+          test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$PLAN_SHA256"
+          test "$(sha256sum "$binding" | cut -d' ' -f1)" = "$BINDING_SHA256"
+          test "$(jq -er .inventory_digest "$plan")" = "$EXPECTED_INVENTORY"
+          test "$(jq -er .migration_count "$plan")" = "$EXPECTED_COUNT"
+          printf '%s\n' "$plan" > "$RUNNER_TEMP/selected-plan-path"
+          printf '%s\n' "$binding" > "$RUNNER_TEMP/selection-binding-path"
+
+      - name: Require explicit mutation confirmation and absent review branch
+        if: inputs.apply == true
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = stage-final-delta-envelope-migration
+          key=$(mktemp /dev/shm/final-delta-audit-reader.XXXXXX)
+          hosts=$(mktemp /dev/shm/final-delta-known-hosts.XXXXXX)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          chmod 0600 "$key" "$hosts"
+          printf '%s\n' "$AUDIT_MIGRATION_READ_KEY" > "$key"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$hosts"
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts" \
+            python scripts/migrate_archive_envelopes.py preflight-audit --audit-root audit \
+              --source-commit '${{ inputs.audit_commit }}' --plan "$(cat "$RUNNER_TEMP/selected-plan-path")" \
+              --review-branch refs/heads/historical-final-delta-archive-rewrap-v1
+
+      - name: Install exact adapter dependencies
+        if: inputs.apply == true
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --require-hashes -r infrastructure/aws-key-adapter/requirements-workflow.txt
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        if: inputs.apply == true
+        with:
+          go-version-file: server/age-file-key/go.mod
+          cache-dependency-path: server/age-file-key/go.sum
+
+      - name: Build the pinned detached-header helper
+        if: inputs.apply == true
+        run: |
+          set -euo pipefail
+          cd server/age-file-key
+          test "$(go list -m -f '{{.Version}}' filippo.io/age)" = v1.3.1
+          CGO_ENABLED=0 go build -mod=readonly -trimpath -o "$RUNNER_TEMP/age-file-key" .
+
+      - name: Assume only the production migration Wrap role
+        if: inputs.apply == true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_WRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: lean-eval-final-delta-migration
+          mask-aws-account-id: true
+
+      - name: Rewrap only the selected final-delta archive keys
+        if: inputs.apply == true
+        env:
+          LEGACY_ARCHIVE_IDENTITY: ${{ secrets.LEGACY_ARCHIVE_IDENTITY }}
+          LEAN_EVAL_KMS_KEY_ID: alias/lean-eval-archive-identities-production
+          LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
+        run: |
+          set -euo pipefail
+          identity=/dev/shm/final-delta-legacy-identity
+          cleanup() {
+            rm -f "$identity"
+            unset LEGACY_ARCHIVE_IDENTITY
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+            {
+              echo 'AWS_ACCESS_KEY_ID='
+              echo 'AWS_SECRET_ACCESS_KEY='
+              echo 'AWS_SESSION_TOKEN='
+            } >> "$GITHUB_ENV"
+          }
+          trap cleanup EXIT
+          umask 077
+          printf '%s' "$LEGACY_ARCHIVE_IDENTITY" > "$identity"
+          unset LEGACY_ARCHIVE_IDENTITY
+          plan=$(cat "$RUNNER_TEMP/selected-plan-path")
+          binding=$(cat "$RUNNER_TEMP/selection-binding-path")
+          jq -r '.entries[].source_path' "$plan" | while IFS= read -r source; do
+            python scripts/migrate_archive_envelopes.py migrate-one --plan "$plan" \
+              --selection-binding "$binding" --source-root audit \
+              --output-root "$RUNNER_TEMP/migrated-audit" --legacy-identity "$identity" \
+              --file-key-helper "$RUNNER_TEMP/age-file-key" \
+              --adapter-executable scripts/aws_key_adapter.py --source-path "$source"
+          done
+          cleanup
+          trap - EXIT
+          python scripts/migrate_archive_envelopes.py validate-output --plan "$plan" \
+            --selection-binding "$binding" --source-root audit \
+            --output-root "$RUNNER_TEMP/migrated-audit" --output "$RUNNER_TEMP/report.json"
+
+      - name: Prove decrypt and AWS authorities are gone before audit write authority
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        run: |
+          set -euo pipefail
+          test ! -e /dev/shm/final-delta-legacy-identity
+          test -z "${AWS_ACCESS_KEY_ID:-}${AWS_SECRET_ACCESS_KEY:-}${AWS_SESSION_TOKEN:-}"
+          test -s "$RUNNER_TEMP/report.json"
+          rm -rf -- audit
+          test ! -e audit
+
+      - name: Mint audit-only writer
+        if: inputs.apply == true
+        id: audit-token
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Re-check out exact audit source with branch-staging authority
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.audit_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ steps.audit-token.outputs.token }}
+
+      - name: Push only historical-final-delta-archive-rewrap-v1
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+          AUDIT_TOKEN: ${{ steps.audit-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          cleanup_writer() {
+            unset AUDIT_TOKEN audit_token audit_basic_auth
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup_writer EXIT
+          test -n "$AUDIT_TOKEN"
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
+          plan=$(cat "$RUNNER_TEMP/selected-plan-path")
+          git -C audit switch -c historical-final-delta-archive-rewrap-v1
+          jq -r '.entries[].source_path' "$plan" | while IFS= read -r source; do git -C audit rm --quiet -- "$source" "${source%.tar.age}.json"; done
+          cp -a "$RUNNER_TEMP/migrated-audit/." audit/
+          git -C audit config user.name lean-eval-archiver
+          git -C audit config user.email lean-eval-archiver@users.noreply.github.com
+          git -C audit add .
+          git -C audit diff --cached --check
+          git -C audit commit --no-gpg-sign -m 'migration: rewrap final historical delta keys'
+          git -C audit remote set-url origin https://github.com/leanprover/lean-eval-audit.git
+          audit_basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
+          unset audit_token
+          git -C audit -c http.https://github.com/.extraheader="AUTHORIZATION: basic $audit_basic_auth" \
+            push origin HEAD:refs/heads/historical-final-delta-archive-rewrap-v1 \
+            --force-with-lease=refs/heads/historical-final-delta-archive-rewrap-v1:
+          unset audit_basic_auth
+          cleanup_writer
+          trap - EXIT
+
+      - name: Remove all migration scratch
+        if: always()
+        run: |
+          rm -rf -- audit "$RUNNER_TEMP/migrated-audit"
+          rm -f -- /dev/shm/final-delta-legacy-identity "$RUNNER_TEMP"/{full-plan,plan-one,plan-two,binding-one,binding-two,report}.json "$RUNNER_TEMP"/{selected-plan-path,selection-binding-path,age-file-key}

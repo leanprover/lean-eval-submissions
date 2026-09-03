@@ -42,9 +42,11 @@
         "private_crosswalk": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository", "sha256", "audit_repository", "audit_commit", "archive_inventory_digest"],
+          "required": ["repository", "commit", "path", "sha256", "audit_repository", "audit_commit", "archive_inventory_digest"],
           "properties": {
             "repository": {"const": "leanprover/lean-eval-submissions"},
+            "commit": {"$ref": "#/$defs/commit"},
+            "path": {"type": "string", "pattern": "^evidence/historical-replay/private-crosswalks/[0-9a-f]{64}[.]json$"},
             "sha256": {"$ref": "#/$defs/digest"},
             "audit_repository": {"const": "leanprover/lean-eval-audit"},
             "audit_commit": {"$ref": "#/$defs/commit"},
@@ -115,6 +117,7 @@
     "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "resultId": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "requestId": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
     "uuid7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
     "count": {"type": "integer", "minimum": 0, "maximum": 10000},
     "inventoryIdentity": {
@@ -189,10 +192,11 @@
         {"$ref": "#/$defs/entryCore"},
         {
           "type": "object",
-          "required": ["source"],
+          "required": ["source", "public_authority"],
           "properties": {
             "source_visibility": {"const": "public"},
             "disposition": {"const": "replayable"},
+            "public_authority": {"$ref": "#/$defs/publicAuthority"},
             "source": {
               "type": "object",
               "additionalProperties": false,
@@ -215,17 +219,32 @@
         {"$ref": "#/$defs/entryCore"},
         {
           "type": "object",
-          "required": ["unavailability"],
+          "required": ["source", "unavailability", "public_authority"],
           "properties": {
             "source_visibility": {"const": "public"},
             "disposition": {"const": "unavailable"},
+            "public_authority": {"$ref": "#/$defs/publicAuthority"},
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "repository", "commit", "decision_entry_sha256"],
+              "properties": {
+                "kind": {"enum": ["github_repo", "gist"]},
+                "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+                "commit": {"$ref": "#/$defs/commit"},
+                "decision_entry_sha256": {"$ref": "#/$defs/digest"}
+              }
+            },
             "unavailability": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["reason_code", "evidence_sha256", "decision_entry_sha256"],
+              "required": ["candidate_entry_sha256", "disposition_path", "disposition_sha256", "reason_code", "rationale_code", "decision_entry_sha256"],
               "properties": {
                 "reason_code": {"const": "source_ref_permanently_unavailable"},
-                "evidence_sha256": {"$ref": "#/$defs/digest"},
+                "rationale_code": {"const": "accepted_immutable_source_ref_unavailable_without_archive"},
+                "candidate_entry_sha256": {"$ref": "#/$defs/digest"},
+                "disposition_path": {"type": "string", "pattern": "^evidence/public-replay/unavailability-dispositions-v1/[0-9a-f]{64}\\.json$"},
+                "disposition_sha256": {"$ref": "#/$defs/digest"},
                 "decision_entry_sha256": {"$ref": "#/$defs/digest"}
               }
             }
@@ -233,6 +252,15 @@
         }
       ],
       "unevaluatedProperties": false
+    },
+    "publicAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "workflow_run_identity_sha256"],
+      "properties": {
+        "request_id": {"$ref": "#/$defs/requestId"},
+        "workflow_run_identity_sha256": {"$ref": "#/$defs/digest"}
+      }
     },
     "privateReplayable": {
       "allOf": [

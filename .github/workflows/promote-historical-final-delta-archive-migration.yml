@@ -1,0 +1,54 @@
+name: Promote final-delta archive migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_audit_commit: {description: Exact audit source commit, required: true, type: string}
+      staged_migration_commit: {description: Exact final-delta review commit, required: true, type: string}
+      expected_staged_tree: {description: Reviewed staged tree, required: true, type: string}
+      expected_patch_sha256: {description: Reviewed binary-safe patch digest, required: true, type: string}
+      expected_migration_count: {description: Exact final-delta migration count, required: true, type: string}
+      current_audit_head: {description: Exact current audit main, required: true, type: string}
+      expected_result_tree: {description: Reviewed promoted tree, required: true, type: string}
+      expected_result_commit: {description: Deterministic promotion commit, required: true, type: string}
+      confirmation: {description: Enter promote-reviewed-archive-migration, required: true, type: string}
+
+permissions:
+  contents: read
+
+jobs:
+  bind-companion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Bind the exact reviewed audit companion tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          commit=d20953db8bf7d702b5f58ec092d75f954c1fab51
+          tree=4e6cdda3f4245e57bdf0d5913cd9fbc24a9b02d9
+          test "$(gh api "repos/leanprover/lean-eval-audit/git/commits/$commit" --jq .tree.sha)" = "$tree"
+
+  promote:
+    needs: bind-companion
+    uses: leanprover/lean-eval-audit/.github/workflows/promote-archive-migration.yml@d20953db8bf7d702b5f58ec092d75f954c1fab51
+    with:
+      expected_caller_commit: ${{ github.sha }}
+      expected_contract_commit: d20953db8bf7d702b5f58ec092d75f954c1fab51
+      review_branch: historical-final-delta-archive-rewrap-v1
+      source_audit_commit: ${{ inputs.source_audit_commit }}
+      staged_migration_commit: ${{ inputs.staged_migration_commit }}
+      expected_staged_tree: ${{ inputs.expected_staged_tree }}
+      expected_patch_sha256: ${{ inputs.expected_patch_sha256 }}
+      expected_migration_count: ${{ inputs.expected_migration_count }}
+      current_audit_head: ${{ inputs.current_audit_head }}
+      expected_result_tree: ${{ inputs.expected_result_tree }}
+      expected_result_commit: ${{ inputs.expected_result_commit }}
+      confirmation: ${{ inputs.confirmation }}
+    secrets:
+      archiver_client_id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+      archiver_private_key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}

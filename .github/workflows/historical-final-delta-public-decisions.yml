@@ -1,0 +1,136 @@
+name: Prepare final historical delta public decisions
+
+# Temporary one-shot review compiler. It reads only committed cutoff and
+# reviewed-authority inputs and emits a candidate for repository review.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact protected packet commit selected by immutable dispatch tag
+        required: true
+        type: string
+      delta_sha256:
+        description: SHA-256 of the committed final inventory delta
+        required: true
+        type: string
+      reviewed_authority_sha256:
+        description: SHA-256 of the committed reviewed public authority
+        required: true
+        type: string
+      expected_public_result_count:
+        description: Exact number of public Results in the final delta
+        required: true
+        type: string
+      confirm_review_compilation_only:
+        description: Compile decisions without State, replay, archive, or publication authority
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-final-historical-public-decisions
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: inputs.confirm_review_compilation_only == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require the exact protected immutable dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          test "$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq \
+            '[.commit.sha,.protected] | @tsv')" = "$EXPECTED_COMMIT"$'\ttrue'
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Install the pinned schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Bind committed inputs and compile twice
+        env:
+          DELTA_SHA256: ${{ inputs.delta_sha256 }}
+          EXPECTED_PUBLIC_RESULT_COUNT: ${{ inputs.expected_public_result_count }}
+          REVIEWED_AUTHORITY_SHA256: ${{ inputs.reviewed_authority_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$DELTA_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$REVIEWED_AUTHORITY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_PUBLIC_RESULT_COUNT" =~ ^[0-9]+$ ]]
+          test "$EXPECTED_PUBLIC_RESULT_COUNT" -le 10000
+          delta="evidence/historical-replay/deltas/$DELTA_SHA256.json"
+          authority="evidence/historical-replay/public-authorities/$REVIEWED_AUTHORITY_SHA256.json"
+          for descriptor in "$delta:$DELTA_SHA256" \
+            "$authority:$REVIEWED_AUTHORITY_SHA256"; do
+            path=${descriptor%%:*}
+            digest=${descriptor#*:}
+            test "$(git ls-files --error-unmatch -- "$path")" = "$path"
+            test "$(sha256sum "$path" | cut -d' ' -f1)" = "$digest"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$GITHUB_SHA:$path")"
+          done
+          AUTHORITY="$authority" python - <<'PY'
+          import json
+          import os
+          import pathlib
+          from jsonschema import Draft202012Validator, FormatChecker
+
+          value = json.loads(pathlib.Path(os.environ["AUTHORITY"]).read_bytes())
+          schema = json.loads(pathlib.Path(
+              "schemas/historical-final-delta-public-authority-v1.schema.json"
+          ).read_bytes())
+          Draft202012Validator.check_schema(schema)
+          errors = sorted(
+              Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(value),
+              key=lambda error: list(error.path),
+          )
+          assert not errors, errors
+          PY
+          first="$RUNNER_TEMP/historical-final-delta-public-decisions.json"
+          second="$RUNNER_TEMP/historical-final-delta-public-decisions.recomputed.json"
+          for output in "$first" "$second"; do
+            python scripts/prepare_historical_final_delta_public_decisions.py \
+              --delta "$delta" --reviewed-authority "$authority" --output "$output"
+          done
+          cmp "$first" "$second"
+          test "$(jq -r '.entries | length' "$first")" = \
+            "$EXPECTED_PUBLIC_RESULT_COUNT"
+          decision_sha=$(sha256sum "$first" | cut -d' ' -f1)
+          echo "decision_sha256=$decision_sha" >> "$GITHUB_ENV"
+
+      - name: Upload only the reviewed candidate decisions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-final-delta-public-decisions-${{ env.decision_sha256 }}
+          path: ${{ runner.temp }}/historical-final-delta-public-decisions.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Record the bounded result
+        run: |
+          {
+            echo '### Final-delta public decisions prepared'
+            echo
+            echo "- candidate SHA-256: \`$decision_sha256\`"
+            echo '- no State, replay, archive, credential, or publication mutation occurred'
+          } >> "$GITHUB_STEP_SUMMARY"

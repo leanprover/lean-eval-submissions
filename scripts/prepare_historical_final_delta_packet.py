@@ -10,19 +10,18 @@ source-free Result binding for a later, separately reviewed State append.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import pathlib
 import re
 import subprocess
 import sys
+from collections import Counter
 from typing import Any
 
+from build_result_receipt import result_tree_digest
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
-
-from build_result_receipt import result_tree_digest
 from reconcile_historical_replay_inventory_delta import (
     InventoryDeltaError,
     _load_schema,
@@ -37,10 +36,10 @@ from results_schema import (
     read_results_file,
 )
 
-
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 RESULT_ID = re.compile(r"r2_[0-9a-f]{64}\Z")
+REQUEST_ID = re.compile(r"prr_[0-9a-f]{64}\Z")
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
 )
@@ -59,7 +58,9 @@ class FinalDeltaError(ValueError):
 def canonical(value: Any) -> bytes:
     try:
         raw = (
-            json.dumps(value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dumps(
+                value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True
+            )
             + "\n"
         ).encode("utf-8")
     except (TypeError, ValueError, UnicodeError) as error:
@@ -77,7 +78,11 @@ def entry_sha256(value: dict[str, Any]) -> str:
     return sha256(
         b"lean-eval-historical-final-delta-entry-v1\0"
         + json.dumps(
-            value, allow_nan=False, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
         ).encode("utf-8")
     )
 
@@ -96,7 +101,11 @@ def _read(path: pathlib.Path, label: str) -> tuple[dict[str, Any], bytes]:
         value = json.loads(raw)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise FinalDeltaError(f"cannot read {label}") from error
-    if not 0 < len(raw) <= MAX_JSON_BYTES or not isinstance(value, dict) or canonical(value) != raw:
+    if (
+        not 0 < len(raw) <= MAX_JSON_BYTES
+        or not isinstance(value, dict)
+        or canonical(value) != raw
+    ):
         raise FinalDeltaError(f"{label} is not bounded canonical JSON")
     return value, raw
 
@@ -120,8 +129,7 @@ def _git(root: pathlib.Path, *arguments: str) -> str:
             ["git", "-C", str(root), *arguments],
             check=True,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
     except (OSError, subprocess.CalledProcessError) as error:
@@ -143,7 +151,9 @@ def _verify_results_checkout(root: pathlib.Path, commit: str) -> None:
     try:
         _git(repository_root, "merge-base", "--is-ancestor", commit, head)
     except FinalDeltaError as error:
-        raise FinalDeltaError("cutoff commit is not an ancestor of the packet") from error
+        raise FinalDeltaError(
+            "cutoff commit is not an ancestor of the packet"
+        ) from error
     if _git(repository_root, "rev-parse", f"{head}:results") != _git(
         repository_root, "rev-parse", f"{commit}:results"
     ):
@@ -217,21 +227,30 @@ def _inventory_inputs(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, bytes]]:
     try:
         schema = _load_schema(schema_path)
-        baseline, baseline_raw = _read_canonical_json(baseline_path, "baseline inventory")
+        baseline, baseline_raw = _read_canonical_json(
+            baseline_path, "baseline inventory"
+        )
         current, current_raw = _read_canonical_json(current_path, "cutoff inventory")
     except (InventoryDeltaError, OSError, ValueError) as error:
         raise FinalDeltaError(str(error)) from error
     delta, delta_raw = _read(delta_path, "cutoff delta")
     derived = reconcile(baseline, baseline_raw, current, current_raw, schema)
     if canonical_delta_bytes(derived) != delta_raw:
-        raise FinalDeltaError("cutoff delta is not the exact append-only reconciliation")
+        raise FinalDeltaError(
+            "cutoff delta is not the exact append-only reconciliation"
+        )
     if current["source_commit"] != delta["current"]["source_commit"]:
         raise FinalDeltaError("cutoff inventory and delta source commits differ")
-    return baseline, current, delta, {
-        "baseline": baseline_raw,
-        "current": current_raw,
-        "delta": delta_raw,
-    }
+    return (
+        baseline,
+        current,
+        delta,
+        {
+            "baseline": baseline_raw,
+            "current": current_raw,
+            "delta": delta_raw,
+        },
+    )
 
 
 def _public_decisions(
@@ -276,6 +295,9 @@ def _public_decisions(
         classification = item.get("classification")
         base_fields = {
             "result_id",
+            "request_id",
+            "workflow_run_identity_sha256",
+            "source_kind",
             "source_repository",
             "source_commit",
             "classification",
@@ -285,6 +307,9 @@ def _public_decisions(
             or RESULT_ID.fullmatch(result_id) is None
             or result_id in decisions
             or source is None
+            or REQUEST_ID.fullmatch(str(item.get("request_id"))) is None
+            or DIGEST.fullmatch(str(item.get("workflow_run_identity_sha256"))) is None
+            or item.get("source_kind") != source["source"]["kind"]
             or item.get("source_repository") != source["source"]["repository"]
             or item.get("source_commit") != source["source"]["commit"]
         ):
@@ -296,12 +321,29 @@ def _public_decisions(
         elif classification == "source_ref_permanently_unavailable":
             _closed(
                 item,
-                base_fields | {"review_status", "evidence_sha256"},
+                base_fields
+                | {
+                    "review_status",
+                    "candidate_entry_sha256",
+                    "disposition_path",
+                    "disposition_sha256",
+                    "reason_code",
+                    "rationale_code",
+                },
                 "unavailable source decision",
             )
-            if item["review_status"] != "reviewed" or DIGEST.fullmatch(
-                str(item["evidence_sha256"])
-            ) is None:
+            if (
+                item["review_status"] != "reviewed"
+                or DIGEST.fullmatch(str(item["candidate_entry_sha256"])) is None
+                or DIGEST.fullmatch(str(item["disposition_sha256"])) is None
+                or item["disposition_path"]
+                != "evidence/public-replay/unavailability-dispositions-v1/"
+                + item["disposition_sha256"]
+                + ".json"
+                or item["reason_code"] != "source_ref_permanently_unavailable"
+                or item["rationale_code"]
+                != "accepted_immutable_source_ref_unavailable_without_archive"
+            ):
                 raise FinalDeltaError("source unavailability is not reviewed and bound")
         else:
             raise FinalDeltaError("public source remains unclassified")
@@ -320,9 +362,9 @@ def _private_crosswalk(
     try:
         Draft202012Validator.check_schema(schema)
         errors = sorted(
-            Draft202012Validator(
-                schema, format_checker=FormatChecker()
-            ).iter_errors(value),
+            Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
+                value
+            ),
             key=lambda error: list(error.absolute_path),
         )
     except SchemaError as error:
@@ -376,7 +418,8 @@ def _private_crosswalk(
             or RESULT_ID.fullmatch(result_id) is None
             or result_id in entries
             or result_id not in expected_ids
-            or classification not in {
+            or classification
+            not in {
                 "bound",
                 "archive_not_found",
                 "archive_identity_ambiguous",
@@ -401,7 +444,9 @@ def _private_crosswalk(
         or set(entries) != expected_ids
         or value["classification_counts"] != expected_counts
     ):
-        raise FinalDeltaError("private crosswalk does not exactly cover current Results")
+        raise FinalDeltaError(
+            "private crosswalk does not exactly cover current Results"
+        )
     return entries, value, raw
 
 
@@ -424,8 +469,11 @@ def build_packet(
     public_decisions_path: pathlib.Path,
     private_crosswalk_path: pathlib.Path,
     private_crosswalk_schema_path: pathlib.Path,
+    authority_commit: str,
     verify_git: bool = True,
 ) -> dict[str, Any]:
+    if COMMIT.fullmatch(authority_commit) is None:
+        raise FinalDeltaError("packet authority commit is invalid")
     baseline, current, delta, inventory_raw = _inventory_inputs(
         baseline_path, current_path, delta_path, inventory_schema_path
     )
@@ -436,11 +484,33 @@ def build_packet(
         verify_git=verify_git,
     )
     if set(results) != {item["result_id"] for item in current["entries"]}:
-        raise FinalDeltaError("Results records do not exactly equal the cutoff inventory")
-    public, public_raw = _public_decisions(public_decisions_path, delta, inventory_raw["delta"])
+        raise FinalDeltaError(
+            "Results records do not exactly equal the cutoff inventory"
+        )
+    public, public_raw = _public_decisions(
+        public_decisions_path, delta, inventory_raw["delta"]
+    )
     private, crosswalk, crosswalk_raw = _private_crosswalk(
         private_crosswalk_path, private_crosswalk_schema_path, current
     )
+    crosswalk_sha = sha256(crosswalk_raw)
+    crosswalk_path = (
+        "evidence/historical-replay/private-crosswalks/" + crosswalk_sha + ".json"
+    )
+    if verify_git:
+        root = pathlib.Path(
+            _git(private_crosswalk_path.parent, "rev-parse", "--show-toplevel")
+        ).resolve()
+        try:
+            relative = private_crosswalk_path.resolve().relative_to(root).as_posix()
+        except ValueError as error:
+            raise FinalDeltaError("private crosswalk is outside its checkout") from error
+        if (
+            relative != crosswalk_path
+            or _git(root, "hash-object", relative)
+            != _git(root, "rev-parse", f"{authority_commit}:{relative}")
+        ):
+            raise FinalDeltaError("private crosswalk committed locator differs")
 
     entries: list[dict[str, Any]] = []
     classifications: Counter[tuple[str, str]] = Counter()
@@ -460,7 +530,9 @@ def build_packet(
             or result["benchmark_commit"] != inventory_entry["benchmark_commit"]
             or result["results_path"] != inventory_entry["results_path"]
         ):
-            raise FinalDeltaError("cutoff inventory entry differs from its exact Result")
+            raise FinalDeltaError(
+                "cutoff inventory entry differs from its exact Result"
+            )
         output: dict[str, Any] = {
             "result_id": result_id,
             "source_visibility": visibility,
@@ -470,6 +542,12 @@ def build_packet(
         }
         if visibility == "public":
             decision = public[result_id]
+            output["public_authority"] = {
+                "request_id": decision["request_id"],
+                "workflow_run_identity_sha256": decision[
+                    "workflow_run_identity_sha256"
+                ],
+            }
             if decision["classification"] == "available":
                 disposition = "replayable"
                 output["source"] = {
@@ -479,14 +557,32 @@ def build_packet(
                     "tree": decision["source_tree"],
                     "decision_entry_sha256": entry_sha256(decision),
                 }
-                image_requirements[(visibility, inventory_entry["benchmark_commit"])] += 1
+                image_requirements[
+                    (visibility, inventory_entry["benchmark_commit"])
+                ] += 1
             else:
                 disposition = "unavailable"
-                output["unavailability"] = {
-                    "reason_code": decision["classification"],
-                    "evidence_sha256": decision["evidence_sha256"],
+                output["source"] = {
+                    "kind": inventory_entry["source"]["kind"],
+                    "repository": decision["source_repository"],
+                    "commit": decision["source_commit"],
                     "decision_entry_sha256": entry_sha256(decision),
                 }
+                output["unavailability"] = {
+                    key: decision[key]
+                    for key in (
+                        "candidate_entry_sha256",
+                        "disposition_path",
+                        "disposition_sha256",
+                        "reason_code",
+                        "rationale_code",
+                    )
+                }
+                output["unavailability"].update(
+                    {
+                        "decision_entry_sha256": entry_sha256(decision),
+                    }
+                )
         else:
             crosswalk_entry = private[result_id]
             classification = crosswalk_entry["classification"]
@@ -505,7 +601,10 @@ def build_packet(
                 submission_id = crosswalk_entry["submission_id"]
                 if (
                     UUID7.fullmatch(str(submission_id)) is None
-                    or DIGEST.fullmatch(str(crosswalk_entry["archive_plan_entry_sha256"])) is None
+                    or DIGEST.fullmatch(
+                        str(crosswalk_entry["archive_plan_entry_sha256"])
+                    )
+                    is None
                     or schema_version not in {1, 2, 3}
                 ):
                     raise FinalDeltaError("bound private archive identity is invalid")
@@ -520,10 +619,16 @@ def build_packet(
                         "benchmark_relation",
                     )
                 }
-                output["archive"]["crosswalk_entry_sha256"] = entry_sha256(crosswalk_entry)
+                output["archive"]["crosswalk_entry_sha256"] = entry_sha256(
+                    crosswalk_entry
+                )
                 archive_versions[schema_version] += 1
-                (migrated_archives if schema_version == 3 else legacy_archives).add(submission_id)
-                image_requirements[(visibility, inventory_entry["benchmark_commit"])] += 1
+                (migrated_archives if schema_version == 3 else legacy_archives).add(
+                    submission_id
+                )
+                image_requirements[
+                    (visibility, inventory_entry["benchmark_commit"])
+                ] += 1
             elif classification == "archive_not_found":
                 disposition = "unavailable"
                 output["unavailability"] = {
@@ -531,7 +636,9 @@ def build_packet(
                     "crosswalk_entry_sha256": entry_sha256(crosswalk_entry),
                 }
             else:
-                raise FinalDeltaError("private delta has an unresolved archive classification")
+                raise FinalDeltaError(
+                    "private delta has an unresolved archive classification"
+                )
         output["disposition"] = disposition
         output["packet_entry_sha256"] = entry_sha256(output)
         classifications[(visibility, disposition)] += 1
@@ -585,7 +692,9 @@ def build_packet(
             "public_source_decisions_sha256": sha256(public_raw),
             "private_crosswalk": {
                 "repository": RESULTS_REPOSITORY,
-                "sha256": sha256(crosswalk_raw),
+                "commit": authority_commit,
+                "path": crosswalk_path,
+                "sha256": crosswalk_sha,
                 "audit_repository": AUDIT_REPOSITORY,
                 "audit_commit": crosswalk["audit_commit"],
                 "archive_inventory_digest": crosswalk["archive_inventory_digest"],
@@ -627,6 +736,7 @@ def main() -> int:
     parser.add_argument("--public-decisions", required=True, type=pathlib.Path)
     parser.add_argument("--private-crosswalk", required=True, type=pathlib.Path)
     parser.add_argument("--private-crosswalk-schema", required=True, type=pathlib.Path)
+    parser.add_argument("--authority-commit", required=True)
     parser.add_argument("--output", required=True, type=pathlib.Path)
     args = parser.parse_args()
     try:
@@ -639,9 +749,16 @@ def main() -> int:
             public_decisions_path=args.public_decisions.resolve(),
             private_crosswalk_path=args.private_crosswalk.resolve(),
             private_crosswalk_schema_path=args.private_crosswalk_schema.resolve(),
+            authority_commit=args.authority_commit,
         )
         write_exclusive(args.output.resolve(), packet)
-    except (FinalDeltaError, InventoryDeltaError, OSError, TypeError, ValueError) as error:
+    except (
+        FinalDeltaError,
+        InventoryDeltaError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         print(f"historical-final-delta-packet: {error}", file=sys.stderr)
         return 1
     return 0

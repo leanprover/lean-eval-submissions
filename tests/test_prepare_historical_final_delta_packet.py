@@ -19,9 +19,12 @@ from prepare_historical_final_delta_packet import (
     entry_sha256,
     write_exclusive,
 )
+from prepare_historical_final_delta_public_decisions import (
+    PublicDecisionError,
+    build_decisions,
+)
 from reconcile_historical_replay_inventory_delta import canonical_delta_bytes, reconcile
 from results_schema import canonical_file_bytes, result_id
-
 
 INVENTORY_SCHEMA = json.loads(
     (ROOT / "schemas" / "historical-replay-inventory-v1.schema.json").read_text(
@@ -86,9 +89,7 @@ class Fixture:
         public_available = record(
             "public", "b", public=True, benchmark=self.public_benchmark
         )
-        public_unavailable = record(
-            "public", "c", public=True, benchmark="4" * 40
-        )
+        public_unavailable = record("public", "c", public=True, benchmark="4" * 40)
         private_legacy = record(
             "private", "d", public=False, benchmark=self.private_benchmark
         )
@@ -108,10 +109,14 @@ class Fixture:
             canonical_file_bytes(document("old", [old]))
         )
         (self.results / "public.json").write_bytes(
-            canonical_file_bytes(document("public", [public_available, public_unavailable]))
+            canonical_file_bytes(
+                document("public", [public_available, public_unavailable])
+            )
         )
         (self.results / "private.json").write_bytes(
-            canonical_file_bytes(document("private", [private_legacy, private_migrated]))
+            canonical_file_bytes(
+                document("private", [private_legacy, private_migrated])
+            )
         )
         baseline = inventory(self.baseline_results, "a" * 40)
         current = inventory(self.results, self.source_commit)
@@ -137,6 +142,9 @@ class Fixture:
                 [
                     {
                         "result_id": public_available["result_id"],
+                        "request_id": "prr_" + "1" * 64,
+                        "workflow_run_identity_sha256": "2" * 64,
+                        "source_kind": "github_repo",
                         "source_repository": public_available["submission"]["repo"],
                         "source_commit": public_available["submission"]["ref"],
                         "source_tree": "5" * 40,
@@ -144,11 +152,20 @@ class Fixture:
                     },
                     {
                         "result_id": public_unavailable["result_id"],
+                        "request_id": "prr_" + "3" * 64,
+                        "workflow_run_identity_sha256": "4" * 64,
+                        "source_kind": "github_repo",
                         "source_repository": public_unavailable["submission"]["repo"],
                         "source_commit": public_unavailable["submission"]["ref"],
                         "classification": "source_ref_permanently_unavailable",
                         "review_status": "reviewed",
-                        "evidence_sha256": "6" * 64,
+                        "candidate_entry_sha256": "6" * 64,
+                        "disposition_path": "evidence/public-replay/unavailability-dispositions-v1/"
+                        + "7" * 64
+                        + ".json",
+                        "disposition_sha256": "7" * 64,
+                        "reason_code": "source_ref_permanently_unavailable",
+                        "rationale_code": "accepted_immutable_source_ref_unavailable_without_archive",
                     },
                 ],
                 key=lambda item: item["result_id"],
@@ -214,11 +231,30 @@ class Fixture:
             private_crosswalk_schema_path=ROOT
             / "schemas"
             / "historical-private-archive-crosswalk-v1.schema.json",
+            authority_commit=self.source_commit,
             verify_git=False,
         )
 
 
 class HistoricalFinalDeltaPacketTests(unittest.TestCase):
+    def test_public_decision_producer_closes_exact_reviewed_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            reviewed = json.loads(fixture.decisions_path.read_text())
+            reviewed["kind"] = "historical_final_delta_public_authority"
+            reviewed_path = fixture.root / "reviewed-public-authority.json"
+            reviewed_path.write_bytes(canonical(reviewed))
+            produced = build_decisions(fixture.delta_path, reviewed_path)
+            self.assertEqual(
+                produced["kind"], "historical_final_delta_public_source_decisions"
+            )
+            self.assertEqual(produced["entries"], reviewed["entries"])
+
+            reviewed["entries"] = reviewed["entries"][:-1]
+            reviewed_path.write_bytes(canonical(reviewed))
+            with self.assertRaisesRegex(PublicDecisionError, "exactly cover"):
+                build_decisions(fixture.delta_path, reviewed_path)
+
     def test_packet_closes_delta_and_reports_only_required_work(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Fixture(pathlib.Path(temporary))
@@ -231,7 +267,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             },
         )
         self.assertEqual(packet["archive_migration"]["legacy_unique_archive_count"], 1)
-        self.assertEqual(packet["archive_migration"]["migrated_unique_archive_count"], 1)
+        self.assertEqual(
+            packet["archive_migration"]["migrated_unique_archive_count"], 1
+        )
         self.assertEqual(
             packet["image_requirements"],
             [
@@ -250,17 +288,20 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             ],
         )
         self.assertEqual(packet["image_requirement_count"], 2)
-        self.assertEqual(packet["activation_status"], "blocked_pending_exact_profiles_and_state_append")
+        self.assertEqual(
+            packet["activation_status"],
+            "blocked_pending_exact_profiles_and_state_append",
+        )
         for entry in packet["entries"]:
             expected = dict(entry)
             recorded = expected.pop("packet_entry_sha256")
             self.assertEqual(recorded, entry_sha256(expected))
             if entry["source_visibility"] == "private":
                 self.assertNotIn("source", entry)
-        validator = Draft202012Validator(
-            PACKET_SCHEMA, format_checker=FormatChecker()
+        validator = Draft202012Validator(PACKET_SCHEMA, format_checker=FormatChecker())
+        errors = sorted(
+            validator.iter_errors(packet), key=lambda error: list(error.path)
         )
-        errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
         self.assertEqual(errors, [])
 
     def test_changed_delta_fails_exact_reconciliation(self) -> None:
@@ -269,7 +310,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             changed = json.loads(fixture.delta_path.read_bytes())
             changed["entries"][0]["problem_id"] = "changed"
             fixture.delta_path.write_bytes(canonical(changed))
-            with self.assertRaisesRegex(FinalDeltaError, "exact append-only reconciliation"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "exact append-only reconciliation"
+            ):
                 fixture.build()
 
     def test_public_decisions_must_be_complete_and_reviewed(self) -> None:
@@ -316,7 +359,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
                 "archive_metadata_conflict": 0,
             }
             fixture.crosswalk_path.write_bytes(canonical(crosswalk))
-            with self.assertRaisesRegex(FinalDeltaError, "unresolved archive classification"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "unresolved archive classification"
+            ):
                 fixture.build()
 
     def test_crosswalk_must_cover_all_current_private_results(self) -> None:
@@ -327,7 +372,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             crosswalk["private_result_count"] = 1
             crosswalk["classification_counts"]["bound"] = 1
             fixture.crosswalk_path.write_bytes(canonical(crosswalk))
-            with self.assertRaisesRegex(FinalDeltaError, "identity is invalid|exactly cover"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "identity is invalid|exactly cover"
+            ):
                 fixture.build()
 
     def test_output_is_exclusive(self) -> None:

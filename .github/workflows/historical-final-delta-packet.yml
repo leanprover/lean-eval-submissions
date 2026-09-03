@@ -171,6 +171,7 @@ jobs:
               --public-decisions "$public" \
               --private-crosswalk "$private" \
               --private-crosswalk-schema "$PRIVATE_CROSSWALK_SCHEMA" \
+              --authority-commit "$GITHUB_SHA" \
               --output "$target"
           done
           cmp "$output" "$recomputed"

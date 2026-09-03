@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-final-delta-public-authority-v1.schema.json",
+  "title": "Reviewed historical final-delta public authority v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "source_repository", "source_commit", "results_store_sha256", "delta_sha256", "entries"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_final_delta_public_authority"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "source_commit": {"$ref": "#/$defs/commit"},
+    "results_store_sha256": {"$ref": "#/$defs/digest"},
+    "delta_sha256": {"$ref": "#/$defs/digest"},
+    "entries": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "common": {
+      "type": "object",
+      "required": ["result_id", "request_id", "workflow_run_identity_sha256", "source_kind", "source_repository", "source_commit", "classification"],
+      "properties": {
+        "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+        "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+        "workflow_run_identity_sha256": {"$ref": "#/$defs/digest"},
+        "source_kind": {"enum": ["github_repo", "gist"]},
+        "source_repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "source_commit": {"$ref": "#/$defs/commit"}
+      }
+    },
+    "entry": {
+      "oneOf": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/common"},
+            {"type": "object", "additionalProperties": false, "required": ["result_id", "request_id", "workflow_run_identity_sha256", "source_kind", "source_repository", "source_commit", "classification", "source_tree"], "properties": {"result_id": {"type": "string"}, "request_id": {"type": "string"}, "workflow_run_identity_sha256": {"type": "string"}, "source_kind": {"type": "string"}, "source_repository": {"type": "string"}, "source_commit": {"type": "string"}, "classification": {"const": "available"}, "source_tree": {"$ref": "#/$defs/commit"}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/common"},
+            {"type": "object", "additionalProperties": false, "required": ["result_id", "request_id", "workflow_run_identity_sha256", "source_kind", "source_repository", "source_commit", "classification", "review_status", "candidate_entry_sha256", "disposition_path", "disposition_sha256", "reason_code", "rationale_code"], "properties": {"result_id": {"type": "string"}, "request_id": {"type": "string"}, "workflow_run_identity_sha256": {"type": "string"}, "source_kind": {"type": "string"}, "source_repository": {"type": "string"}, "source_commit": {"type": "string"}, "classification": {"const": "source_ref_permanently_unavailable"}, "review_status": {"const": "reviewed"}, "candidate_entry_sha256": {"$ref": "#/$defs/digest"}, "disposition_path": {"type": "string", "pattern": "^evidence/public-replay/unavailability-dispositions-v1/[0-9a-f]{64}\\.json$"}, "disposition_sha256": {"$ref": "#/$defs/digest"}, "reason_code": {"const": "source_ref_permanently_unavailable"}, "rationale_code": {"const": "accepted_immutable_source_ref_unavailable_without_archive"}}}
+          ]
+        }
+      ]
+    }
+  }
+}
