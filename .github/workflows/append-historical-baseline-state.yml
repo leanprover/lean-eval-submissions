@@ -200,7 +200,9 @@ jobs:
           repository: leanprover/lean-eval-submissions
           ref: 81e94fe2f4fc819300fd7d4e036f00124166784f
           path: public-qualification-source
-          fetch-depth: 1
+          # The finalizer proves that the frozen plan commit is an ancestor of
+          # this qualification commit and reads exact blobs from both commits.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check out the frozen public State contract
