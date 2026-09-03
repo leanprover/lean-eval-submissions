@@ -196,6 +196,30 @@ class ReplayControllerTests(unittest.TestCase):
             changed["key_envelope"]["archive_ciphertext_sha256"] = "9" * 64
             with self.assertRaises((ReplayControllerError, ValueError)):
                 prepare_unwrap(plan, changed, ciphertext, "2026-08-23T07:00:00.000Z")
+            different_benchmark = sidecar()
+            different_benchmark["benchmark_commit"] = "e" * 40
+            with self.assertRaisesRegex(ReplayControllerError, "exactly bound"):
+                prepare_unwrap(
+                    plan,
+                    different_benchmark,
+                    ciphertext,
+                    "2026-08-23T07:00:00.000Z",
+                )
+            prepare_unwrap(
+                plan,
+                different_benchmark,
+                ciphertext,
+                "2026-08-23T07:00:00.000Z",
+                expected_archive_benchmark_commit="e" * 40,
+            )
+            with self.assertRaisesRegex(ReplayControllerError, "exactly bound"):
+                prepare_unwrap(
+                    plan,
+                    different_benchmark,
+                    ciphertext,
+                    "2026-08-23T07:00:00.000Z",
+                    expected_archive_benchmark_commit="f" * 40,
+                )
 
     def test_response_and_failure_paths_preserve_distinct_outcomes(self) -> None:
         _, _, _, plan = inputs()

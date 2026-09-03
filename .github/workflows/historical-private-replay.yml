@@ -720,6 +720,7 @@ jobs:
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+            --repository-root "$GITHUB_WORKSPACE" \
             --audit-root audit \
             --prewarm-request "$RUNNER_TEMP/prewarm-request.json" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
@@ -802,7 +803,8 @@ jobs:
           python scripts/historical_private_replay_controller.py build-executor-request \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --audit-root audit --unwrap "$RUNNER_TEMP/unwrap-request.json" \
+            --repository-root "$GITHUB_WORKSPACE" --audit-root audit \
+            --unwrap "$RUNNER_TEMP/unwrap-request.json" \
             --identity "$RUNNER_TEMP/archive-file-key" \
             --output "$RUNNER_TEMP/executor-request.json"
           test "$(jq -r .schema_version "$RUNNER_TEMP/executor-request.json")" = 2
