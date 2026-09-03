@@ -13,6 +13,9 @@ WORKFLOW = (ROOT / ".github/workflows/append-historical-baseline-state.yml").rea
 REVIEW_HELPER = (
     ROOT / "scripts/review_historical_baseline_state_batch.py"
 ).read_text(encoding="utf-8")
+PUBLIC_AUTHORITY_HELPER = (
+    ROOT / "scripts/prepare_historical_public_authority.py"
+).read_text(encoding="utf-8")
 
 
 class HistoricalBaselineStateWorkflowTests(unittest.TestCase):
@@ -152,6 +155,20 @@ class HistoricalBaselineStateWorkflowTests(unittest.TestCase):
         self.assertIn("readback_review=$(git -C state ls-remote --exit-code", stage_push)
         self.assertIn('test "$readback_review" = "$candidate"', stage_push)
         self.assertNotIn("publish_replay_state_batch", WORKFLOW)
+
+    def test_public_qualification_checkout_retains_plan_ancestry(self) -> None:
+        checkout = WORKFLOW[
+            WORKFLOW.index("Check out the frozen public qualification source") :
+            WORKFLOW.index("Check out the frozen public State contract")
+        ]
+        self.assertIn(
+            "ref: 81e94fe2f4fc819300fd7d4e036f00124166784f", checkout
+        )
+        self.assertIn("fetch-depth: 0", checkout)
+        self.assertNotIn("fetch-depth: 1", checkout)
+        self.assertEqual(WORKFLOW.count("fetch-depth: 1"), 1)
+        self.assertIn('"merge-base",\n        "--is-ancestor",', PUBLIC_AUTHORITY_HELPER)
+        self.assertIn("PLAN_COMMIT,\n        qualification_commit,", PUBLIC_AUTHORITY_HELPER)
 
     def test_stage_logs_then_uploads_binding_before_branch_mutation(self) -> None:
         summary = WORKFLOW.index("Record the compact source-free review summary")
