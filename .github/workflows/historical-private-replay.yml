@@ -156,7 +156,10 @@ jobs:
             git@github.com:leanprover/lean-eval-state.git
           test "$(git -C audit remote get-url origin)" = \
             git@github.com:leanprover/lean-eval-audit.git
-          test -z "$(git status --short)"
+          # The State and audit checkouts are intentionally nested untracked
+          # repositories. Require that the controller checkout's tracked files
+          # are pristine without treating those two checkouts as mutations.
+          test -z "$(git status --short --untracked-files=no)"
           test -z "$(git -C state status --short)"
           test -z "$(git -C audit status --short)"
           python scripts/historical_private_replay_controller.py refresh-state \
