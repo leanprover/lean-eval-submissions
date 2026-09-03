@@ -1,0 +1,232 @@
+name: Prepare final historical delta packet
+
+# Temporary one-shot cutoff machinery. It is read-only and emits an explicitly
+# blocked preparation packet; it cannot append State, replay, or migrate an
+# archive. Remove it after the final delta is closed.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact protected packet commit selected by its immutable dispatch tag
+        required: true
+        type: string
+      current_inventory_sha256:
+        description: SHA-256 of the committed full cutoff inventory
+        required: true
+        type: string
+      delta_sha256:
+        description: SHA-256 of the committed append-only cutoff delta
+        required: true
+        type: string
+      public_decisions_sha256:
+        description: SHA-256 of the committed reviewed public-source decisions
+        required: true
+        type: string
+      private_crosswalk_sha256:
+        description: SHA-256 of the committed full-cutoff private crosswalk
+        required: true
+        type: string
+      expected_delta_result_count:
+        description: Exact final delta Result count
+        required: true
+        type: string
+      expected_public_result_count:
+        description: Exact final delta public Result count
+        required: true
+        type: string
+      expected_private_result_count:
+        description: Exact final delta private Result count
+        required: true
+        type: string
+      confirm_preparation_only:
+        description: Build a source-minimized blocked packet without mutation or replay
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-final-historical-delta-packet
+  cancel-in-progress: false
+
+env:
+  BASELINE_INVENTORY: evidence/historical-replay/inventories/bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3.json
+  INVENTORY_SCHEMA: schemas/historical-replay-inventory-v1.schema.json
+  PACKET_SCHEMA: schemas/historical-final-delta-preparation-v1.schema.json
+  PRIVATE_CROSSWALK_SCHEMA: schemas/historical-private-archive-crosswalk-v1.schema.json
+
+jobs:
+  prepare:
+    if: inputs.confirm_preparation_only == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require the exact protected immutable dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          tag_ref="refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$tag_ref" "$tag_ref^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          remote_commit=
+          for line in "${tag_lines[@]}"; do
+            object=${line%%$'\t'*}
+            ref=${line#*$'\t'}
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$tag_ref^{}" ]; then remote_commit="$object"; fi
+            if [ "$ref" = "$tag_ref" ] && [ -z "$remote_commit" ]; then
+              remote_commit="$object"
+            fi
+          done
+          test "$remote_commit" = "$EXPECTED_COMMIT"
+          protected_main=$(timeout 30s gh api \
+            "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq 'select(.protected == true) | .commit.sha')
+          test "$protected_main" = "$EXPECTED_COMMIT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require exact committed content-addressed inputs
+        env:
+          CURRENT_SHA: ${{ inputs.current_inventory_sha256 }}
+          DELTA_SHA: ${{ inputs.delta_sha256 }}
+          PUBLIC_SHA: ${{ inputs.public_decisions_sha256 }}
+          PRIVATE_SHA: ${{ inputs.private_crosswalk_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          for digest in "$CURRENT_SHA" "$DELTA_SHA" "$PUBLIC_SHA" "$PRIVATE_SHA"; do
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          done
+          current="evidence/historical-replay/inventories/$CURRENT_SHA.json"
+          delta="evidence/historical-replay/deltas/$DELTA_SHA.json"
+          public="evidence/historical-replay/public-source-decisions/$PUBLIC_SHA.json"
+          private="evidence/historical-replay/private-crosswalks/$PRIVATE_SHA.json"
+          for descriptor in \
+            "$current:$CURRENT_SHA" "$delta:$DELTA_SHA" \
+            "$public:$PUBLIC_SHA" "$private:$PRIVATE_SHA"; do
+            path=${descriptor%%:*}
+            digest=${descriptor#*:}
+            test "$(git ls-files --error-unmatch -- "$path")" = "$path"
+            test "$(sha256sum "$path" | cut -d' ' -f1)" = "$digest"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$GITHUB_SHA:$path")"
+          done
+          printf '%s\n' "$current" > "$RUNNER_TEMP/current-path"
+          printf '%s\n' "$delta" > "$RUNNER_TEMP/delta-path"
+          printf '%s\n' "$public" > "$RUNNER_TEMP/public-path"
+          printf '%s\n' "$private" > "$RUNNER_TEMP/private-path"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Install the pinned schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Build twice and validate the exact blocked packet
+        id: packet
+        env:
+          EXPECTED_COUNT: ${{ inputs.expected_delta_result_count }}
+          EXPECTED_PUBLIC: ${{ inputs.expected_public_result_count }}
+          EXPECTED_PRIVATE: ${{ inputs.expected_private_result_count }}
+        run: |
+          set -euo pipefail
+          for count in "$EXPECTED_COUNT" "$EXPECTED_PUBLIC" "$EXPECTED_PRIVATE"; do
+            [[ "$count" =~ ^[0-9]+$ ]]
+            test "$count" -le 10000
+          done
+          test "$EXPECTED_COUNT" -gt 0
+          test "$EXPECTED_COUNT" -eq "$((EXPECTED_PUBLIC + EXPECTED_PRIVATE))"
+          current=$(<"$RUNNER_TEMP/current-path")
+          delta=$(<"$RUNNER_TEMP/delta-path")
+          public=$(<"$RUNNER_TEMP/public-path")
+          private=$(<"$RUNNER_TEMP/private-path")
+          output="$RUNNER_TEMP/historical-final-delta-preparation.json"
+          recomputed="$RUNNER_TEMP/historical-final-delta-preparation.recomputed.json"
+          for target in "$output" "$recomputed"; do
+            python scripts/prepare_historical_final_delta_packet.py \
+              --baseline "$BASELINE_INVENTORY" \
+              --current "$current" \
+              --delta "$delta" \
+              --inventory-schema "$INVENTORY_SCHEMA" \
+              --results-root results \
+              --public-decisions "$public" \
+              --private-crosswalk "$private" \
+              --private-crosswalk-schema "$PRIVATE_CROSSWALK_SCHEMA" \
+              --output "$target"
+          done
+          cmp "$output" "$recomputed"
+          PACKET="$output" python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          from jsonschema import Draft202012Validator, FormatChecker
+
+          packet_path = pathlib.Path(os.environ["PACKET"])
+          packet = json.loads(packet_path.read_bytes())
+          schema = json.loads(pathlib.Path(os.environ["PACKET_SCHEMA"]).read_bytes())
+          Draft202012Validator.check_schema(schema)
+          errors = sorted(
+              Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(packet),
+              key=lambda error: list(error.path),
+          )
+          assert not errors, errors
+          assert packet["activation_status"] == "blocked_pending_exact_profiles_and_state_append"
+          counts = packet["classification_counts"]
+          assert counts["public"]["total"] == int(os.environ["EXPECTED_PUBLIC"])
+          assert counts["private"]["total"] == int(os.environ["EXPECTED_PRIVATE"])
+          assert len(packet["entries"]) == int(os.environ["EXPECTED_COUNT"])
+          assert all(
+              "source" not in entry
+              for entry in packet["entries"]
+              if entry["source_visibility"] == "private"
+          )
+          PY
+          packet_sha=$(sha256sum "$output" | cut -d' ' -f1)
+          {
+            echo "sha256=$packet_sha"
+            echo "image_requirements=$(jq -er .image_requirement_count "$output")"
+            echo "legacy_archives=$(jq -er .archive_migration.legacy_unique_archive_count "$output")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload only the source-minimized blocked packet
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-final-delta-preparation-${{ inputs.expected_commit }}
+          path: ${{ runner.temp }}/historical-final-delta-preparation.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record the bounded next-work summary
+        env:
+          IMAGE_REQUIREMENTS: ${{ steps.packet.outputs.image_requirements }}
+          LEGACY_ARCHIVES: ${{ steps.packet.outputs.legacy_archives }}
+          PACKET_SHA256: ${{ steps.packet.outputs.sha256 }}
+        run: |
+          {
+            echo '### Final historical delta preparation'
+            echo
+            echo "- blocked packet SHA-256: \`$PACKET_SHA256\`"
+            echo "- lane/benchmark image requirements: \`$IMAGE_REQUIREMENTS\`"
+            echo "- unique legacy archives requiring rewrap: \`$LEGACY_ARCHIVES\`"
+            echo '- no State, audit, archive, replay, credential, or publication mutation occurred'
+          } >> "$GITHUB_STEP_SUMMARY"
