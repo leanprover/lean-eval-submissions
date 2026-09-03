@@ -499,6 +499,8 @@ jobs:
             --manifest "$candidate/historical-baseline-state-append-candidate.json" \
             --output "$binding"
           test "$(jq -er .candidate.event_count "$binding")" = 2439
+          test "$(jq -er '.candidate.operational_view_addition_count > 0' \
+            "$binding")" = true
           test "$(jq -er .state.parent "$binding")" = "$EXPECTED_STATE_HEAD"
           test "$(jq -er .audit.head "$binding")" = "$EXPECTED_AUDIT_HEAD"
           test "$(jq -er .audit.tree "$binding")" = "$audit_tree"
@@ -678,6 +680,8 @@ jobs:
             echo "- audit head: \`$(jq -er .audit.head "$binding")\`"
             echo "- audit tree: \`$(jq -er .audit.tree "$binding")\`"
             echo "- candidate events: \`$(jq -er .candidate.event_count "$binding")\`"
+            echo "- deterministic operational view additions: \`$(jq -er \
+              .candidate.operational_view_addition_count "$binding")\`"
             echo "- binding SHA-256: \`$(sha256sum "$binding" | cut -d' ' -f1)\`"
             echo '- candidate source: excluded'
           } >> "$GITHUB_STEP_SUMMARY"

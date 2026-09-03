@@ -53,6 +53,19 @@ IMPLEMENTATION_PATHS = (
     "schemas/replay-execution-profile-v1.schema.json",
 )
 MAX_SUMMARY_BYTES = 128 * 1024
+MANAGED_OPERATIONAL_VIEW_KINDS = frozenset(
+    {
+        "effective-result-identities",
+        "model-aliases",
+        "model-identities",
+        "model-identity-reverse-impacts",
+        "result-amendments",
+        "result-identities",
+        "result-overlays",
+        "result-release-status",
+        "result-source-records",
+    }
+)
 
 
 def git(root: pathlib.Path, *arguments: str, maximum: int = 32 * 1024 * 1024) -> str:
@@ -221,6 +234,154 @@ def copy_candidate(
     return sorted(expected_paths)
 
 
+def select_operational_views(materialized: Any) -> dict[str, Any]:
+    if not isinstance(materialized, dict):
+        raise BaselineBatchError("candidate operational view materialization is invalid")
+    selected: dict[str, Any] = {}
+    for path, value in materialized.items():
+        if not isinstance(path, str):
+            raise BaselineBatchError("materialized State view path is invalid")
+        relative = pathlib.PurePosixPath(path)
+        if not relative.parts or relative.parts[0] != "views":
+            continue
+        if (
+            len(relative.parts) != 4
+            or relative.parts[1] not in MANAGED_OPERATIONAL_VIEW_KINDS
+            or relative.is_absolute()
+            or relative.as_posix() != path
+            or any(part in {"", ".", ".."} for part in relative.parts)
+        ):
+            raise BaselineBatchError("materialized State operational view path is invalid")
+        raw = canonical(value)
+        if len(raw) > 64 * 1024:
+            raise BaselineBatchError("materialized State operational view is oversized")
+        selected[path] = value
+    if not selected:
+        raise BaselineBatchError("candidate has no exact State operational views")
+    return selected
+
+
+def operational_views(
+    state_root: pathlib.Path,
+) -> tuple[dict[str, Any], str, list[dict[str, Any]]]:
+    """Derive the exact State-managed indexes without trusting stale indexes.
+
+    ``load_tree`` intentionally validates the tracked operational indexes, so it
+    cannot be used between copying an append batch and writing the indexes that
+    batch requires.  The candidate event files are still parsed canonically,
+    validated one-by-one, and checked as one complete semantic graph before the
+    exact State materializer is allowed to write anything.
+    """
+
+    events = load_event_tree(state_root, "staged State")
+    with state_modules(state_root) as (validator, materializer, _):
+        try:
+            environment = validator.load_environment(state_root, {}, False)
+            for index, event in enumerate(events):
+                validator.validate_event_data(event, f"staged State event[{index}]")
+            validator.validate_semantics(events, environment)
+            materialized = materializer.materialize(environment, events)
+        except BaselineBatchError:
+            raise
+        except Exception as error:
+            raise BaselineBatchError(
+                "candidate event graph cannot materialize exact State indexes"
+            ) from error
+    if environment != "production":
+        raise BaselineBatchError("candidate operational view materialization is invalid")
+    return select_operational_views(materialized), environment, events
+
+
+def commit_blob_if_present(
+    root: pathlib.Path, commit: str, relative: str
+) -> bytes | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit}:{relative}"],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
+        return None
+    except OSError as error:
+        raise BaselineBatchError("exact State parent view proof failed") from error
+    if len(result.stdout) > 64 * 1024:
+        raise BaselineBatchError("exact State parent view exceeds its bound")
+    return result.stdout
+
+
+def required_view_additions(
+    state_root: pathlib.Path,
+    parent: str,
+    views: dict[str, Any],
+) -> list[dict[str, str]]:
+    additions: list[dict[str, str]] = []
+    for path, value in sorted(views.items()):
+        raw = canonical(value)
+        previous = commit_blob_if_present(state_root, parent, path)
+        if previous is None:
+            additions.append({"path": path, "sha256": sha256(raw)})
+        elif previous != raw:
+            raise BaselineBatchError(
+                "historical append would rewrite an existing operational view"
+            )
+    return additions
+
+
+def write_operational_view_additions(
+    state_root: pathlib.Path,
+    parent: str,
+) -> list[dict[str, str]]:
+    views, _, _ = operational_views(state_root)
+    additions = required_view_additions(state_root, parent, views)
+    try:
+        with state_modules(state_root) as (_, materializer, _):
+            materializer.write_views(views, state_root, False)
+    except BaselineBatchError:
+        raise
+    except Exception as error:
+        raise BaselineBatchError("exact State operational views could not be written") from error
+    for descriptor in additions:
+        path = state_root / descriptor["path"]
+        try:
+            raw = path.read_bytes()
+        except OSError as error:
+            raise BaselineBatchError("materialized State operational view is unavailable") from error
+        if sha256(raw) != descriptor["sha256"]:
+            raise BaselineBatchError("materialized State operational view changed")
+    return additions
+
+
+def candidate_diff(
+    state_root: pathlib.Path,
+    parent: str,
+    candidate_commit: str,
+    event_paths: list[str],
+    view_additions: list[dict[str, str]],
+) -> None:
+    lines = git(
+        state_root,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-status",
+        "--no-renames",
+        "-r",
+        parent,
+        candidate_commit,
+    ).splitlines()
+    actual = set(lines)
+    expected = {
+        *(f"A\t{path}" for path in event_paths),
+        *(f"A\t{item['path']}" for item in view_additions),
+    }
+    if not lines or len(actual) != len(lines) or actual != expected:
+        raise BaselineBatchError(
+            "State candidate is not the exact create-only event and view set"
+        )
+
+
 def summarize(
     submissions_root: pathlib.Path,
     state_root: pathlib.Path,
@@ -349,6 +510,15 @@ def summarize(
             {"path": path, "sha256": sha256(canonical(value))}
             for path, value in sorted(views.items())
         ]
+        managed_views = select_operational_views(views)
+    view_additions = required_view_additions(state_root, parent, managed_views)
+    candidate_diff(
+        state_root,
+        parent,
+        candidate_commit,
+        event_paths,
+        view_additions,
+    )
     event_files = event_descriptors(state_root, event_paths)
     occurred = sorted(event["occurred_at"] for event in candidate_events)
     lane_summary = {
@@ -409,6 +579,10 @@ def summarize(
             "lanes": lane_summary,
             "queues": queues,
             "materialized_views_sha256": sha256(canonical(view_descriptors)),
+            "operational_view_addition_count": len(view_additions),
+            "operational_view_addition_set_sha256": sha256(
+                canonical(view_additions)
+            ),
             "redacted_historical_projection_sha256": sha256(canonical(historical)),
             "redacted_historical_series_sha256": sha256(
                 canonical(series)
@@ -438,19 +612,33 @@ def stage(args: argparse.Namespace) -> None:
     ):
         raise BaselineBatchError("candidate manifest binding differs")
     event_paths = copy_candidate(state_root, args.candidate_root.resolve(), manifest)
+    view_additions = write_operational_view_additions(
+        state_root,
+        args.state_parent,
+    )
+    # State's repository validator deliberately requires operational views to
+    # already be indexed as regular 100644 blobs.  Index the closed candidate
+    # before validation, then prove below that the index contains only the
+    # expected create-only event and view paths.
+    git(state_root, "add", "-A", "--", "events", "views")
     subprocess.run(
         [sys.executable, str(state_root / "scripts/state.py"), "--root", str(state_root), "validate"],
         check=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
-    git(state_root, "add", "--", "events")
     staged_paths = git(state_root, "diff", "--cached", "--name-only").splitlines()
     status_lines = git(state_root, "diff", "--cached", "--name-status").splitlines()
-    if sorted(staged_paths) != event_paths or any(
-        not line.startswith("A\t") for line in status_lines
+    expected_paths = sorted(
+        [*event_paths, *(item["path"] for item in view_additions)]
+    )
+    if (
+        sorted(staged_paths) != expected_paths
+        or sorted(status_lines) != sorted(f"A\t{path}" for path in expected_paths)
     ):
-        raise BaselineBatchError("State candidate is not the exact create-only event set")
+        raise BaselineBatchError(
+            "State candidate is not the exact create-only event and view set"
+        )
     git(state_root, "config", "user.name", "lean-eval-replay-controller")
     git(state_root, "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
     git(state_root, "commit", "--no-gpg-sign", "--message", "Stage reviewed historical replay baseline")
@@ -495,13 +683,26 @@ def verify(args: argparse.Namespace) -> None:
     verify_implementation(submissions_root, implementation)
     if git(state_root, "rev-parse", "HEAD") != candidate_commit:
         raise BaselineBatchError("State checkout is not the staged candidate")
+    if git(state_root, "status", "--porcelain"):
+        raise BaselineBatchError("State candidate checkout is not clean")
     parents = git(state_root, "rev-list", "--parents", "-n", "1", candidate_commit).split()
     if parents != [candidate_commit, parent] or git(state_root, "rev-parse", f"{candidate_commit}^{{tree}}") != state.get("candidate_tree"):
         raise BaselineBatchError("staged candidate commit or tree differs")
-    status_lines = git(state_root, "diff-tree", "--no-commit-id", "--name-status", "-r", parent, candidate_commit).splitlines()
-    if not status_lines or any(not line.startswith("A\t") for line in status_lines):
-        raise BaselineBatchError("staged candidate is not create-only")
-    event_paths = [line.split("\t", 1)[1] for line in status_lines]
+    status_lines = git(
+        state_root,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-status",
+        "--no-renames",
+        "-r",
+        parent,
+        candidate_commit,
+    ).splitlines()
+    event_paths = [
+        line.split("\t", 1)[1]
+        for line in status_lines
+        if line.startswith("A\tevents/")
+    ]
     actual = summarize(
         submissions_root,
         state_root,

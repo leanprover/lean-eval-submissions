@@ -38,9 +38,9 @@ The fixed reviewed implementation bindings are:
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74` |
 | Two-lane driver | `.github/workflows/historical-replay-two-lane-driver.yml`, SHA-256 `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21` |
-| State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `590582cf72500fad58e2eb4fe563b00f1d9f2e7bc3521f6382b7b8a4eae83ade` |
+| State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `05ff5d0cdc39a4bc275a42fbe49b8771547db29a7c86f150e610d03c48656a17` |
 | State candidate closer | `scripts/prepare_historical_baseline_state_batch.py`, SHA-256 `8d8112571223316a5fd9f499b7d18ea63c530ce8f2333ffc0150211a77f1d415` |
-| State review verifier | `scripts/review_historical_baseline_state_batch.py`, SHA-256 `4c8821b105b5e3f93639abf8b4359e152f20889a9b92e049cf614e3e789c36f8` |
+| State review verifier | `scripts/review_historical_baseline_state_batch.py`, SHA-256 `4a7311a8f9e07a83b44d70c26f97c7db4a4c8eae7f3c45c8d55d8cba375f4d4b` |
 | State batch expectation | `configuration/historical-baseline-state-batch-v1.json`, SHA-256 `6f16b548b1774f4fff9101c6f9ac6e8b1e9e08d014de1fef6ad4ffd13ec320e2` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2982dd857279fb4e76bca34fff178cbb8bf07950a77be252f0d158189431109e` |
@@ -278,7 +278,8 @@ and revalidated its source-free canonical promotion binding.
    --append-ready` against that exact current head with non-overlapping times.
    Validate both candidate sets together against the current head before
    committing either candidate. The one-shot State workflow stages all 2,439
-   events as one create-only commit on fixed private review branch
+   events and their exact missing deterministic operational indexes as one
+   create-only commit on fixed private review branch
    `historical-baseline-state-v1` and emits one compact source-free canonical
    binding. A separate packet-only commit must install that exact canonical
    object at `configuration/historical-baseline-state-promotion-v1.json`,
