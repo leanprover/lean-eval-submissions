@@ -16,7 +16,7 @@ performed by the maintainer because the agent lacks access is an operator
 handoff, not a new permission gate. The remaining approval exceptions are
 listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
 
-Last reconciled: **2026-09-02**
+Last reconciled: **2026-09-03**
 
 ## Current baseline
 
@@ -27,10 +27,17 @@ Last reconciled: **2026-09-02**
 | Replay image tag | `lean-eval-authoritative:4026b18d5e679b07be1961d538a51ad689a9d8d4` |
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
 
-Public structured health currently reports one coherent deployed commit with:
+Public structured health currently reports one coherent deployment at
+`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`:
 
-- production commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` with
-  durable intake;
+- production intake `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`, replay
+  `8dabd811-9e81-4a37-95c2-5290b07fbabb`, broker
+  `30d025fd-aa30-40d5-9cbb-a1762fc99725`, and container application version
+  `25`, with durable intake;
+- staging intake `70373652-8cd0-4519-ab8a-54c01467455c`, replay
+  `b4f1f260-cf8d-498a-9e31-6c926ce7aaec`, broker
+  `75276fda-6c36-4f53-af5a-00f507afe1ba`, and container application version
+  `22`;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - staging acceptance enabled and production acceptance disabled;
@@ -43,11 +50,21 @@ Public structured health currently reports one coherent deployed commit with:
 
 Automatic release publication is enabled. The terminal production canary is
 scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. Production
-State was observed at `fb70dd6ba14cae94b30d570818e4801884e81e04` after the
-canary events and may advance append-only. Production archive Wrap is connected
-and its Encrypt-only/decrypt-
-denial preflight is qualified; the production replay role variable is absent.
-Both release roles trust their exact current ID-bearing GitHub OIDC subjects.
+State is append-only and can advance during ordinary intake; the retained
+historical baseline is promoted at commit
+`76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+`e196521b812a0942eea9d11a8bcb2d7569728d50`. Resolve protected `main`
+immediately before every later State-bound operation.
+Production archive Wrap is connected and its Encrypt-only/decrypt-denial
+preflight is qualified. The production replay role and Cloudflare, State, and
+audit credentials are installed in `replay-production`. The public historical
+controller variable and private historical controller variable are both absent.
+The non-replenishing migrated-envelope private canary completed successfully,
+and protected State `d223853a90b37a51d4bbfac30c8213cf78be5778`
+materializes 174 public and 637 private queued tasks. General Worker replay
+remains disabled, and the bounded drain is not enabled.
+Both release roles trust their exact repository/environment GitHub OIDC
+subjects.
 The staging credentialed, publication-disabled reconstruction boundary and the
 production controller, audit-read, and OIDC trust preflights are qualified.
 
@@ -80,11 +97,10 @@ remains the overlap fallback through no earlier than
 | Production | `lean-eval-submission-server` | `lean-eval-github-broker-production` | `lean-eval-replay-executor` / `lean-eval-replay-executor-replaysandbox-production@25` |
 
 The broker Workers have no public route. Intake and replay health endpoints use
-their matching `workers.dev` names. Obtain the active Worker version IDs and
-deployed commit from the latest successful protected deployment and structured
-health when preparing a rollback or launch readiness packet; copying those ephemeral
-values into this file would make this inventory stale during its own
-documentation-only deployment.
+their matching `workers.dev` names. The current exact Worker version IDs are
+recorded in the current-baseline section above. Re-read the latest successful
+protected deployment and structured health before preparing any later rollback
+or launch-readiness packet.
 
 Declarative configuration is in `server/wrangler.jsonc`,
 `server/wrangler.broker.jsonc`, and `server/wrangler.replay.jsonc`. Replay uses
@@ -251,9 +267,12 @@ passed the same preflight.
 
 ### Audit repository rulesets
 
-`leanprover/lean-eval-audit` is private. Its protected default branch is `main`,
-currently at `7a53c75c6d7c263c684ebcd54590c657c9298642` with bootstrap-verified
-tree `4e44c06`. Four rules are effective on the default branch:
+`leanprover/lean-eval-audit` is private. Its protected default branch is `main`
+at retained-baseline migration checkpoint
+`d73132415738b0d82c99fd43f630804fe996e342`, tree
+`48c24fc428eea77d7d9320133fd978f8c7b6abfc`. Resolve the live append-only
+head before every later bound operation. Four rules are effective on the
+default branch:
 
 | Ruleset | Enforcement and target | Rules | Bypass |
 | --- | --- | --- | --- |
@@ -270,16 +289,18 @@ tree `4e44c06`. Four rules are effective on the default branch:
 | Historical migration | audit `161041934`; read-only |
 | Accepted-archive replay | State `161043118` as `STAGING_STATE_READ_KEY`; audit `161043119` as `AUDIT_READ_KEY`; read-only |
 | Staging authoritative replay | State writer `161051584`; private half only as `STAGING_STATE_WRITE_KEY` in `replay-staging` |
+| Production historical replay | State reader `162046868`; State writer `162046869`; audit reader `162046872`; held only by `replay-production` |
 
-Production release keys are installed, but publication remains impossible
-without the separate absent publication variable. Rotate or revoke a deploy key
-in its owning repository and matching protected environment; never reuse one
-key across roles. Kim Morrison is the temporary operator for this deploy-key
-set. GitHub deploy keys have no provider-enforced expiry; no separate rotation
-deadline is recorded. Rotation means adding a replacement public deploy key
-with the same read-only/read-write bit, replacing only the matching
-environment's private-key secret, verifying the protected read or disabled
-publication path, and deleting the old deploy key from its owning repository.
+Production release keys are installed and automatic publication is enabled by
+the `release-production` environment variable `PUBLICATION_ENABLED=true`.
+Rotate or revoke a deploy key in its owning repository and matching protected
+environment; never reuse one key across roles. Kim Morrison is the temporary
+operator for this deploy-key set. GitHub deploy keys have no provider-enforced
+expiry; no separate rotation deadline is recorded. Rotation means adding a
+replacement public deploy key with the same read-only/read-write bit, replacing
+only the matching environment's private-key secret, verifying the protected
+read or publication path, and deleting the old deploy key from its owning
+repository.
 For immediate revocation, delete the public deploy key first and then remove the
 matching environment secret. If the private half is lost, remove the public key,
 keep the dependent workflow disabled, and generate a new pair rather than
@@ -292,10 +313,10 @@ trying to recover the old private material.
 | submissions / `archive-staging` | `EN_kwDOSh7OzM8AAAAEu8r2_A` | `lean-eval-dispatch/*` | `AWS_WRAP_ROLE_ARN` set to staging Wrap role |
 | submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Encrypt-only `AWS_WRAP_ROLE_ARN` set and qualified |
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
-| submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
+| submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Replay unwrap role, State read/write, audit read, and Cloudflare account/token are installed; both repository-level historical controller variables are absent |
 | submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Bound to the live dedicated Encrypt-only migration role; `AUDIT_MIGRATION_READ_KEY` is installed and `LEGACY_ARCHIVE_IDENTITY` is absent |
-| releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
-| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication enabled |
+| releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the exact repository/environment subject |
+| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the exact repository/environment subject; publication enabled |
 
 Environment protection/policy IDs, in the same order, are:
 
@@ -326,7 +347,7 @@ AWS supplies archive key custody and one-use unwrap, not evaluation compute.
 | GitHub OIDC provider | `arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com` |
 | OIDC audience / thumbprint | `sts.amazonaws.com` / `ab9d0263244dd0326eb67015705a667e79cfe998` |
 | Staging stack | `lean-eval-key-adapter-staging`; `UPDATE_COMPLETE`; `2251e410-9e15-11f1-a8ef-0eba172391bd` |
-| Production stack | `lean-eval-key-adapter-production`; `CREATE_COMPLETE`; `6ab5d7c0-9e15-11f1-9a35-0affda52f513` |
+| Production stack | `lean-eval-key-adapter-production`; `UPDATE_COMPLETE`; `6ab5d7c0-9e15-11f1-9a35-0affda52f513` |
 
 | Output | Staging | Production |
 | --- | --- | --- |
@@ -336,6 +357,7 @@ AWS supplies archive key custody and one-use unwrap, not evaluation compute.
 | One-use table | `lean-eval-capability-consumption-staging` | `lean-eval-capability-consumption-production` |
 | Unwrap alias | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-staging:live` | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-production:live` |
 | Archive Wrap role | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-staging` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production` |
+| Migration Wrap role | — | `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production` |
 | Replay invoker | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-production` |
 | Release invoker | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
 | Function role | `lean-eval-archive-unwrap-function-staging` | `lean-eval-archive-unwrap-function-production` |
@@ -348,21 +370,25 @@ before decrypt and enforces reuse refusal.
 
 Current GitHub OIDC subject prefixes are
 `repo:leanprover/lean-eval-submissions` and
-`repo:leanprover@7233018/lean-eval-releases@1340741242`. The staging release
-role trusts exact subject
-`repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-staging`.
-The production release role trusts exact subject
-`repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-production`.
-Automatic publication remains independently disabled because the repository
-variable `PUBLICATION_ENABLED` is absent.
+`repo:leanprover/lean-eval-releases`. The staging release role trusts exact
+subject
+`repo:leanprover/lean-eval-releases:environment:release-staging`. The
+production release role trusts exact subject
+`repo:leanprover/lean-eval-releases:environment:release-production`.
+Automatic publication is enabled because the `release-production` environment
+variable `PUBLICATION_ENABLED` is `true`.
 
 The historical migration role
 `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`
-and stack output `MigrationWrapRoleArn` are not provisioned. The existing
-ordinary production Wrap role does not trust the migration environment. The
-GitHub environment is prebound to the intended dedicated role ARN, but that
-does not create AWS authority. The required authenticated CloudFormation/IAM
-apply and readback, and the `LEGACY_ARCHIVE_IDENTITY` secret, remain absent.
+and stack output `MigrationWrapRoleArn` are provisioned. Its policy permits
+only the exact-context migration Encrypt operation; the ordinary production
+Wrap role does not trust the migration environment. The retained-baseline
+migration is complete for all 439 selected archives, and
+`LEGACY_ARCHIVE_IDENTITY` is absent from the protected environment. Keep the
+role and environment only for the separately bound final-cutoff delta. The
+custodian-held legacy key remains offline until that delta is migrated,
+promoted, read back, and recovery-checked; then destroy it and verify that no
+working copy remains.
 
 Archives remain standard `age` ciphertext. The schema-version-3 sidecar binds
 submission ID, ciphertext digest, recipient, adapter name, and opaque wrapped
@@ -418,10 +444,11 @@ is interrupted, keep intake paused and rerun disable-only recovery or
 forward-deploy one coherent reviewed unit. Never mix target commits.
 
 The current coherent rollback unit is commit
-`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`, disabled intake
-`1b1b12d1-2cf3-4f8f-8b32-ef064263d569`, replay
-`00501e8b-6285-4948-8386-2aa8ced3aea4`, and broker
-`24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
+`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`, intake
+`98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`, replay
+`8dabd811-9e81-4a37-95c2-5290b07fbabb`, and broker
+`30d025fd-aa30-40d5-9cbb-a1762fc99725`. The rollback controller redeploys
+this target with intake disabled.
 
 Release-removal and confidentiality recovery use the contracts in
 `leanprover/lean-eval-releases`:
@@ -456,7 +483,8 @@ At least quarterly and after every infrastructure change:
 3. verify staging cannot reach production State and vice versa;
 4. compare AWS account, OIDC subjects, stack outputs, KMS aliases and rotation,
    one-use tables, Lambda aliases, and IAM trust/policy boundaries;
-5. verify production replay, publication, and public lifecycle gates remain
-   absent or disabled until their readiness packets are complete, and verify
-   the connected production archive Wrap boundary remains Encrypt-only; and
+5. verify production replay remains disabled until its readiness packet is
+   complete; verify publication and the approved public lifecycle gates match
+   their intended enabled posture; and verify the connected production archive
+   Wrap boundary remains Encrypt-only; and
 6. update `Last reconciled` and current values here without adding run history.

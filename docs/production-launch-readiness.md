@@ -14,39 +14,40 @@ or evidence appendices.
 
 ## 1. Launch and current runtime bindings
 
-Protected launch implementation bindings:
+Protected launch and current operational bindings:
 
 | Repository | Binding |
 | --- | --- |
-| `leanprover/lean-eval` | `313078a0962c4a929d790772a7bf2f997f22857b` |
-| `leanprover/lean-eval-submissions` | Protected implementation ancestor `b8d0338f96f133614f04df0a0560a6f364aef808`; this documentation-only merge is an expected descendant and does not redeploy or change the Worker runtime |
+| `leanprover/lean-eval` | Launch-copy milestone `313078a0962c4a929d790772a7bf2f997f22857b` |
+| `leanprover/lean-eval-submissions` | Deployed Worker and current replay-controller source `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`; State staging/promotion milestone `36e405e558be69d50e3093d3e188d24d6fc7cfa1`. |
 | `leanprover/lean-eval-leaderboard` | `c593bfb7dcb719ee7613848f9951828dfeb4e1da` |
-| `leanprover/lean-eval-state` | Observed at `fb70dd6ba14cae94b30d570818e4801884e81e04`; this append-only head may advance |
-| `leanprover/lean-eval-state-staging` | `c604bb446a51fc833c96887053ec64672c912d8c` |
+| `leanprover/lean-eval-state` | Retained-baseline promotion checkpoint `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree `e196521b812a0942eea9d11a8bcb2d7569728d50`; resolve the live append-only head before every later bound operation |
+| `leanprover/lean-eval-state-staging` | Retained final launch-acceptance checkpoint `c604bb446a51fc833c96887053ec64672c912d8c`; resolve the live append-only head when needed |
 | `leanprover/lean-eval-releases` | `dbd9d7ca947e28b041fbb1b72667f0283265189f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
-| `leanprover/lean-eval-audit` | `7a53c75c6d7c263c684ebcd54590c657c9298642`; tree `4e44c06` bootstrap-verified |
+| `leanprover/lean-eval-audit` | Retained-baseline migration checkpoint `d73132415738b0d82c99fd43f630804fe996e342`; tree `48c24fc428eea77d7d9320133fd978f8c7b6abfc`; resolve live append-only `main` before later replay operations |
 
 The protected submissions `staging-results` branch is
 `1deb87414faf64edfa31639a8430fcf98fb2ccb5`.
 
-Current production state and retained final-staging bindings:
+Current production and staging runtime bindings:
 
 | Boundary | Exact runtime and effective gates |
 | --- | --- |
-| Production submission unit | Commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`; intake is durable; the six approved lifecycle and one-way publication-opt-in gates are enabled with `kim-em` / GitHub user `477956` in both maintainer lists. Model consolidation, publication opt-out, and the promotion canary are disabled. |
-| Production replay | Commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`; general replay, historical-public replay, and staging acceptance are disabled. |
-| Final staging acceptance submission binding | Commit `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a`; intake version `c55e2220-393a-4739-b0ad-71d8eb455dc2`, broker version `b93729b0-dfac-4fba-bf9b-12d318e2111f`; intake and every public lifecycle gate were false, with only the staging promotion canary enabled. |
-| Final staging acceptance replay binding | Commit `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a`; version `c91f96f2-a0f8-4900-a951-b8f26eaceef9`, container application version `22`; general and historical-public replay disabled; staging acceptance enabled. |
-| Release controller | Protected commit `dbd9d7ca947e28b041fbb1b72667f0283265189f`; publication variable `PUBLICATION_ENABLED` is `true`. The production canary is scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. |
+| Production submission unit | Commit `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`; intake version `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`; intake is durable; the six approved lifecycle and one-way publication-opt-in gates are enabled with `kim-em` / GitHub user `477956` in both maintainer lists. Model consolidation, publication opt-out, and the promotion canary are disabled. |
+| Production replay | Commit `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`; replay version `8dabd811-9e81-4a37-95c2-5290b07fbabb`, broker version `30d025fd-aa30-40d5-9cbb-a1762fc99725`, container application version `25`; general replay, historical-public replay, and staging acceptance are disabled. Production replay credentials are installed, and both historical controller variables are absent. |
+| Current staging runtime | Commit `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`; intake version `70373652-8cd0-4519-ab8a-54c01467455c`, replay version `b4f1f260-cf8d-498a-9e31-6c926ce7aaec`, broker version `75276fda-6c36-4f53-af5a-00f507afe1ba`, container application version `22`; intake and lifecycle APIs are disabled, promotion canary and staging acceptance are enabled, and general/historical replay is disabled. |
+| Retained-baseline State batch | Promoted commit `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree `e196521b812a0942eea9d11a8bcb2d7569728d50`; binding SHA-256 `e2b95a76d5d854f27d95358a2aafd380a40acc8445c3ab13ae7621614ce8d31f`; 2,439 events materialize 174 public and 639 private replay tasks; the fixed review branch is absent. |
+| Current historical queues | Protected State `d223853a90b37a51d4bbfac30c8213cf78be5778` materializes 174 public and 637 private queued tasks after the successful non-replenishing private canary; the bounded two-lane drain is disabled. |
+| Release controller | Protected commit `dbd9d7ca947e28b041fbb1b72667f0283265189f`; `release-production` environment variable `PUBLICATION_ENABLED` is `true`. The production canary is scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. |
 | Public entry and leaderboard | Protected and deployed leaderboard `c593bfb7dcb719ee7613848f9951828dfeb4e1da` keeps problem statements visible and makes `https://lean-lang.org/eval/submit/` server-primary with issue intake as the overlap fallback. |
 
 The immutable dispatch ref for the protected submissions candidate is
-`lean-eval-dispatch/ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`.
+`lean-eval-dispatch/b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`.
 The automatic release controller, durable production intake, and the six
-approved lifecycle and one-way publication-opt-in gates are enabled. Replay,
-model consolidation, publication opt-out, and the promotion canary remain
-disabled.
+approved lifecycle and one-way publication-opt-in gates are enabled. General
+Worker replay, the bounded historical drain, model consolidation, publication
+opt-out, and the promotion canary remain disabled.
 
 ## 2. Launch gate status
 
@@ -61,11 +62,11 @@ The established launch boundaries below are qualified:
 - production release OIDC, audit-read, State-write, and unwrap-invoker scope,
   with no production decrypt or publication performed during preflight;
 - protected production State contract and event-schema readiness;
-- exact-`f03f5cde` browser OAuth and source-bound headless archive, evaluation,
-  and Result paths;
+- retained staging browser OAuth and source-bound headless archive, evaluation,
+  and Result qualification;
 - launch-approved optional lifecycle routes, authorization denials, and
-  redaction through repository tests and prior staging route evidence; an
-  exact-`f03f5cde` route matrix is not a launch gate;
+  redaction through repository tests and prior staging route evidence; a second
+  staging route matrix is not a launch gate;
 - one-way publication opt-in remains launch-enabled behind its feature flag;
   the production canary supplies its launch proof;
 - production all-false recovery and coherent rollback; and
@@ -77,10 +78,10 @@ verification.
 
 | Phase 4 finalization category | Required exact final binding | Current status |
 | --- | --- | --- |
-| Final staging smoke | Browser and source-bound headless paths; terminal archive, evaluation, Result, State, scheduled release, and all-false cleanup | **Complete:** the final staging acceptance binding above is retained; temporary staging fixture access is removed. |
-| Automatic release | Protected releases `dbd9d7ca947e28b041fbb1b72667f0283265189f`; scoped credentials and write-free no-op controls; `PUBLICATION_ENABLED=true` | **Complete:** the enabled controller has one canary release scheduled for `2026-11-02T03:50:01.002Z`; no source is due now. |
-| Production lifecycle APIs | Exact protected submissions commit and dispatch tag; effective-health readback showing only the approved lifecycle and publication-opt-in families enabled while intake, consolidation, opt-out, and replay remain false; one non-mutating authorization denial | **Complete:** the approved lifecycle and publication-opt-in surface is deployed at `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`. |
-| Production intake lease and durable transition | Exact merged intake commit and dispatch tag; provisional-disabled and finite-lease version/readback; lease start and expiry; one-use smoke result; protected State head recheck; final durable intake, broker, and replay effective health | **Complete:** production intake is durable at `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`. |
+| Final staging smoke | Browser and source-bound headless paths; terminal archive, evaluation, Result, State, scheduled release, and all-false cleanup | **Complete:** the retained final staging acceptance passed and temporary staging fixture access is removed. |
+| Automatic release | Protected releases `dbd9d7ca947e28b041fbb1b72667f0283265189f`; scoped credentials and write-free no-op controls; `release-production` environment variable `PUBLICATION_ENABLED=true` | **Complete:** the enabled controller has one canary release scheduled for `2026-11-02T03:50:01.002Z`; no source is due now. |
+| Production lifecycle APIs | Exact protected submissions commit and dispatch tag; effective-health readback showing only the approved lifecycle and publication-opt-in families enabled while intake, consolidation, opt-out, and replay remain false; one non-mutating authorization denial | **Complete:** the approved lifecycle and publication-opt-in surface is deployed at `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`. |
+| Production intake lease and durable transition | Exact merged intake commit and dispatch tag; provisional-disabled and finite-lease version/readback; lease start and expiry; one-use smoke result; protected State head recheck; final durable intake, broker, and replay effective health | **Complete:** production intake is durable at `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`. |
 | Production canary | Submission ID and packet-bound source/model identity; archive and evaluation terminal state; Result and State identity; initial withheld presentation; irreversible opt-in and scheduled presentation | **Complete:** submission `01a0603c-6189-7751-9c43-c904b50b477a` produced Result `r2_176e0f46710a69d54b3cbcc722a948b364de2acdf2a1ee6fe667f0a331254a59`; its one-way opt-in is scheduled for `2026-11-02T03:50:01.002Z`. Production State was observed at `fb70dd6ba14cae94b30d570818e4801884e81e04` after these terminal events and may advance append-only. The fixture branch and temporary App repository access are removed. |
 | Production pause | Exact pre-pause release, intake, broker, replay, and State heads; all-false recovery action and disabled readback; publication-disabled no-op preflight and unchanged State | **Complete:** the exact production all-false pause was exercised and verified. |
 | Ordered restore | Separate release-controller, lifecycle-with-intake-disabled, and finite-lease-to-durable intake restore actions; exact commit/effective-health, publication posture, and protected-State readback after each action | **Complete:** release, lifecycle, and durable intake were restored in order at the reviewed production release. |
@@ -158,17 +159,19 @@ must state that:
    for a reviewed coherent intake/broker/replay target. It redeploys target
    code with current secrets and finishes with production intake disabled. The
    current coherent rollback unit is commit
-   `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`, intake
-   `1b1b12d1-2cf3-4f8f-8b32-ef064263d569`, replay
-   `00501e8b-6285-4948-8386-2aa8ced3aea4`, and broker
-   `24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
+   `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`, intake
+   `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`, replay
+   `8dabd811-9e81-4a37-95c2-5290b07fbabb`, and broker
+   `30d025fd-aa30-40d5-9cbb-a1762fc99725`.
 5. Never rewrite State, Results, releases, audit objects, AWS data, credentials,
    or Git history as rollback.
 
 ## 7. Deferred or deliberately disabled
 
-- Historical replay and legacy private-envelope migration continue after
-  launch; general and historical-public replay remain disabled meanwhile.
+- The retained-baseline private-envelope migration and State promotion are
+  complete. The non-replenishing migrated-envelope private canary reached
+  `replay.accepted`, and its cleanup, artifact, resource, scrub, and Audit checks
+  passed. Both controller variables and the bounded two-lane drain are disabled.
 - Model consolidation remains disabled. Publication opt-out remains absent.
 - FC integration, disproof support, experimental kernels, persistent
   qualification machinery, model-consolidation launch, automatic copycat

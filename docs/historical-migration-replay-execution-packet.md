@@ -2,9 +2,10 @@
 
 This is the compact preparation record for the one-time retained-baseline
 historical migration and replay. Archive migration and audit promotion are
-complete. It is not a replay activation record: State promotion remains
-blocked until the staged candidate's canonical binding is committed and
-revalidated against the then-current production State and audit heads.
+complete, and the exact retained-baseline State batch is promoted. It is not a
+replay activation record: the non-replenishing migrated-envelope private canary
+completed successfully, both historical controller variables are absent, and
+general Worker replay and the bounded two-lane drain remain disabled.
 
 The packet reuses the existing public batch finalizer, private replay-plan
 builder, archive migration validator, and State validators. It does not define
@@ -35,7 +36,7 @@ The fixed reviewed implementation bindings are:
 | Component | Exact binding |
 | --- | --- |
 | Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f1d00a45092a39afa0a0bc6be4cc9a319be85876e29a9ac20334f41f0aa0eb99` |
-| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6` |
+| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `bc52de811ee135ef3409eb36a6231750a8034102b82ae0434a26e86169535194` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74` |
 | Two-lane driver | `.github/workflows/historical-replay-two-lane-driver.yml`, SHA-256 `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21` |
 | State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `05ff5d0cdc39a4bc275a42fbe49b8771547db29a7c86f150e610d03c48656a17` |
@@ -163,9 +164,9 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before bounded
       installation. The private material and path were not recorded, and
       `LEGACY_ARCHIVE_IDENTITY` is no longer installed.
-- [x] Controller source commit
-      `ffe2a6a2707136e667f1cb843098a2d2b00c716e` binds private-controller
-      SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6`
+- [x] Current controller source commit
+      `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2` binds private-controller
+      SHA-256 `bc52de811ee135ef3409eb36a6231750a8034102b82ae0434a26e86169535194`
       and public-controller SHA-256
       `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74`,
       plus bounded driver SHA-256
@@ -202,12 +203,27 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `main` `d73132415738b0d82c99fd43f630804fe996e342`, tree
       `48c24fc428eea77d7d9320133fd978f8c7b6abfc`. The review branch and installed
       legacy identity are absent. The production replay role and Cloudflare
-      credential are installed, while both historical replay flags remain
-      false and protected production State
-      `3e4342b54252ba7225ced558c94ad0f03acc845d` has no active replay series.
+      credential are installed, both historical controller variables are
+      absent, and general Worker replay remains disabled. The retained State
+      batch is promoted at
+      `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+      `e196521b812a0942eea9d11a8bcb2d7569728d50`.
       Retain the migration role, protected environment, and workflow for the
       separately bound final-cutoff delta unless the lane is explicitly
       abandoned and retired.
+- [x] The non-replenishing migrated-envelope private canary task
+      `rt1_0124080c80e6f8f9d1ea4fff1aaf51728c62986f0d2e49a1b577622b9047fb5d`
+      for Result
+      `r2_99b67e41e94f0084a243ad0643510df796c56ace27fae3d9fa0755d3189d5114`
+      and problem `pi1_circle_mulEquiv_int` started at protected State
+      `d3ab034f0d8acd913b5398d30976a240fd2e5cd6`, event
+      `01a0659a-b990-7e9a-8454-63ad9134b525`, and reached `replay.accepted`
+      at protected State `c6243f8ab5758847942861ed13e34650e166a0e8`, event
+      `01a065a3-9ee8-7549-8754-037364344700`. Artifact, resource, scrub, Audit,
+      terminal-State validation, and cleanup checks passed. Both historical
+      controller variables are absent. Validated protected State
+      `d223853a90b37a51d4bbfac30c8213cf78be5778` materializes 174 public and
+      637 private queued tasks.
 - [x] Explicit exclusions: no legacy-key destruction, final-cutoff delta,
       intake or publication change, experimental checker, FC/disproof work,
       external PR/comment, or item outside the hashes in this packet.
@@ -229,14 +245,15 @@ binds the profile descriptor set instead of copying those fields into a second
 format.
 
 The retained-baseline migration portion of this section is complete. The
-identity value was never part of the packet and is no longer installed; the
-offline master remains retained only for the separately bound final-cutoff
-delta.
+identity value was never part of the packet and is no longer installed. The
+custodian-held legacy key remains retained offline only until the separately
+bound final-cutoff delta is migrated, promoted, read back, and recovery-checked;
+then destroy it and verify that no working copy remains.
 
 ## Post-migration readback and State bindings
 
-The archive migration and promotion fields are fixed above. The State
-candidate is bound by
+The archive migration and promotion fields are fixed above. The promoted State
+batch is bound by
 `configuration/historical-baseline-state-promotion-v1.json`, SHA-256
 `e2b95a76d5d854f27d95358a2aafd380a40acc8445c3ab13ae7621614ce8d31f`.
 
@@ -274,6 +291,9 @@ candidate is bound by
       `ce6285b2aab106cb6bc6d489ee940de5707a2f98c98d130fb9c809ce3749195c`;
       materialized-views SHA-256 is
       `0b1aef26f9205f52700d1ee19232d31c41a8340127c4b11a9081fb66f69b7958`.
+- [x] Protected State `main` was fast-forwarded to that exact candidate and
+      tree after the committed binding was rederived against the exact State
+      parent and audit checkpoint. The fixed review branch is absent.
 - [x] The read-only redacted historical projection and series SHA-256 values
       are
       `0092cc0311a77095f011e9672373a269d87e265a05eed76b24d4c89f4defd1e5`
@@ -289,53 +309,30 @@ candidate is bound by
 ## Packet-bound execution order
 
 1. The protected private replay plan, 63 profile locators, bounded migration
-   infrastructure, archive migration, exact-patch audit promotion, and
-   credential cleanup are complete at the bindings above. Do not rebuild or
-   requalify the completed profiles and do not reinstall the legacy identity.
-2. Run `prepare_historical_public_authority.py finalize-batch` against its
-   pinned, complete State contract checkout
-   `0c943edde8a247b8670e10339b80fc65be6c0f33`; the finalizer derives the exact
-   20 terminal exclusions from that validated ledger. The caller supplies the
-   timestamp and event-ID seed, and the finalizer requires every derived event
-   to follow the ledger's latest event. Run
-   `prepare_historical_private_replay.py state-events --selection full
-   --append-ready` against that exact current head with non-overlapping times.
-   Validate both candidate sets together against the current head before
-   committing either candidate. The one-shot State workflow stages all 2,439
-   events and their exact missing deterministic operational indexes as one
-   create-only commit on fixed private review branch
-   `historical-baseline-state-v1` and emits one compact source-free canonical
-   binding. A separate packet-only commit must install that exact canonical
-   object at `configuration/historical-baseline-state-promotion-v1.json`,
-   binding the exact State and audit heads and trees, staged commit and tree,
-   complete event/task/Result set, queue, view, and redacted-projection digests
-   before promotion is dispatched.
-3. Re-derive the complete committed binding from the staged State tree. Advance
-   State `main` only by non-force fast-forward when it still equals the exact
-   staged parent; otherwise leave `main` unchanged and discard only the exact
-   stale review branch before restaging. Delete the review branch only after
-   exact promoted-main commit and tree readback. Then enable only the private
-   lane for one non-replenishing migrated-envelope canary. After its terminal
-   cleanup, enable and replenish both bounded lanes, drain both queues with
-   bounded retries, and record a terminal
-   replay or reviewed-unavailable disposition for every retained-baseline
-   Result.
-4. After the retained-baseline queues reach their reviewed terminal states,
+   infrastructure, archive migration, exact-patch audit promotion, State batch
+   promotion, and credential cleanup are complete at the bindings above. Do
+   not rebuild or requalify the completed profiles, restage the promoted batch,
+   or reinstall the legacy identity.
+2. The non-replenishing migrated-envelope private canary and its cleanup are
+   complete at the bindings above. Enable and replenish both bounded lanes,
+   drain both queues with bounded retries, and record a terminal replay or
+   reviewed-unavailable disposition for every retained-baseline Result.
+3. After the retained-baseline queues reach their reviewed terminal states,
    disable the historical replay controllers. Retain the dedicated migration
    Encrypt role and stack output, protected migration environment, one-shot
-   migration workflow, and custodian-held offline master for the separately
+   migration workflow, and custodian-held legacy key for the separately
    bound final-cutoff delta.
-5. After the announced issue-intake cutoff, generate the append-only delta and
+4. After the announced issue-intake cutoff, generate the append-only delta and
    prepare a new exact packet covering only those added Results. Never extend
    this retained-baseline packet by implication. Use that packet to migrate any
    selected delta archives, apply its exact staged patch to the separately
    bound current audit head, promote the resulting tree, and complete its
    post-migration readback.
-6. Only after final-delta promotion and readback, remove the installed identity
+5. Only after final-delta promotion and readback, remove the installed identity
    and session material, one-shot migration workflow, protected migration
    environment, and dedicated migration Encrypt role and stack output. The
-   custodian must then destroy the
-   offline master and verify that no installed or working copy remains. Retain
+   custodian must then destroy the legacy key and verify that no installed or
+   working copy remains. Retain
    v2 replay Decrypt support, the schema-3 file-key replay implementation, and
    the versioned replay/checker records. Enable the historical controllers only
    for the separately reviewed final-delta queues and disable them again after

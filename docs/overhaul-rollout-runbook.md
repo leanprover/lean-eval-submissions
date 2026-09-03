@@ -20,7 +20,7 @@ client secrets in documentation, issues, pull requests, logs, or artifacts.
 ## 1. Current posture
 
 The deployed production release at
-`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` tracks:
+`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2` tracks:
 
 - durable production intake;
 - staging and production general replay disabled;
@@ -30,14 +30,18 @@ The deployed production release at
 - exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
 - staging intake and every staging lifecycle API all-false with empty
   maintainer lists;
-- model consolidation disabled in both environments; and
+- model consolidation and publication opt-out disabled in both environments;
+- both historical controller variables absent after one successful
+  non-replenishing migrated-envelope private canary, with the bounded drain
+  disabled; and
 - automatic release publication enabled in `leanprover/lean-eval-releases`.
 
 The launch-readiness packet is `GO`. The production canary is terminal and its
 one-way publication opt-in is scheduled for `2026-11-02T03:50:01.002Z`.
-Production State was observed at
-`fb70dd6ba14cae94b30d570818e4801884e81e04` after the terminal canary events;
-the append-only head may advance. The canary fixture branch is deleted and the
+The retained historical baseline is promoted in production State at
+`76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+`e196521b812a0942eea9d11a8bcb2d7569728d50`; the append-only head may
+advance during ordinary intake. The canary fixture branch is deleted and the
 temporary source repository is removed from both App selections. The exact
 production pause and ordered release/lifecycle/intake restore are complete.
 Server-primary presentation is live. The overlap began
@@ -155,7 +159,7 @@ and always rejects model-consolidation enablement. The normal protected
 deployment controller binds this state to the immutable dispatch tag, enters
 `cloudflare-production`, and verifies every effective public health field. The
 approved lifecycle state and durable intake are deployed at
-`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`.
+`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`.
 
 The same disable-only recovery used for intake also returns every lifecycle
 gate to false. It validates the exact recovered Worker version against explicit
@@ -178,8 +182,9 @@ Current authority boundaries and environment variables are recorded in
 [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). The staging release trust and
 credentialed reconstruction boundary are qualified, as is the connected
 production archive Wrap-only boundary. The production release role trusts its
-exact ID-bearing subject, and its publication-disabled controller, audit-read,
-and OIDC preflights pass without decrypting or publishing production source.
+exact repository/environment subject, and its pre-enablement
+publication-disabled controller, audit-read, and OIDC preflights passed without
+decrypting or publishing production source.
 
 The qualified staging release boundary is limited to:
 
@@ -212,17 +217,27 @@ silently substitute a newer source or toolchain.
 
 Classify each accepted Result as public-source replayable,
 private-archive replayable, or reviewed unavailable. Use bounded retries and
-record an explicit terminal outcome. Private legacy-envelope migration requires
-its exact immutable execution packet and credential-custodian operator handoff.
-Standing authorization covers the bounded infrastructure, credential, and
-canonical writes; rewrap the per-submission key without changing archive
-ciphertext or stable IDs. After the retained baseline, remove the installed
-legacy identity, session credentials, and scratch, and disable the replay
-controllers; retain the migration role, protected environment, one-shot
-workflow, and offline master for the separately bound final-cutoff delta. Only
-after that delta's audit tree is promoted and read back may the migration lane
-be removed and the offline master destroyed. Retain v2 replay Decrypt support
-and the versioned replay records.
+record an explicit terminal outcome. The retained-baseline migration is
+complete: all 439 recoverable archives have bound schema-version-3 envelopes;
+its audit checkpoint is `d73132415738b0d82c99fd43f630804fe996e342`, tree
+`48c24fc428eea77d7d9320133fd978f8c7b6abfc`; and the transient installed
+identity and review branch are absent. The retained State batch is promoted at
+`76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+`e196521b812a0942eea9d11a8bcb2d7569728d50`, with 174 public and 639
+private tasks. The production replay role, State/audit keys, and Cloudflare
+credential are installed. The non-replenishing migrated-envelope private
+canary reached `replay.accepted`, and its cleanup, artifact, resource, scrub,
+and Audit checks passed. Both historical controller variables are absent and
+general Worker replay remains disabled. Protected State
+`d223853a90b37a51d4bbfac30c8213cf78be5778` materializes 174 public and 637
+private queued tasks; the bounded two-lane drain remains disabled until explicit
+activation.
+
+Retain the migration role, protected environment, one-shot workflow, and
+custodian-held legacy key for the separately bound final-cutoff delta. Only
+after that delta's audit tree is promoted, read back, and recovery-checked may
+the migration lane be removed and the key destroyed; verify that no working
+copy remains. Retain v2 replay Decrypt support and the versioned replay records.
 
 ## 9. Rollback
 
@@ -238,10 +253,12 @@ changing broker or replay.
 
 The current coherent rollback unit is:
 
-- commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`;
-- disabled intake `1b1b12d1-2cf3-4f8f-8b32-ef064263d569`;
-- replay `00501e8b-6285-4948-8386-2aa8ced3aea4`; and
-- broker `24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
+- commit `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`;
+- intake `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`;
+- replay `8dabd811-9e81-4a37-95c2-5290b07fbabb`; and
+- broker `30d025fd-aa30-40d5-9cbb-a1762fc99725`.
+
+The rollback controller redeploys this target with intake disabled.
 
 Rollback never rewrites State, Results, releases, AWS resources, credentials,
 or GitHub repository history. If the multi-component deploy is interrupted,
