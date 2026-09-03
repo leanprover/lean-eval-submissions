@@ -94,7 +94,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertEqual(
             job_headers,
             [
-                "  intake:", "  evaluate:", "  archive_issue:",
+                "  issue_intake_admission:", "  intake:", "  evaluate:", "  archive_issue:",
                 "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
                 "  evaluation_state:", "  record:", "  result_state:", "  notify:",
@@ -118,7 +118,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("python scripts/evaluate_submission.py", evaluate)
         self.assertIn("EXPECTED_METADATA_SHA256", evaluate)
         self.assertIn("ref: ${{ needs.archive.outputs.benchmark_commit }}", evaluate)
-        self.assertIn("needs: intake", archive)
+        self.assertIn("needs: [issue_intake_admission, intake]", archive)
         self.assertNotIn("needs: evaluate", archive)
         self.assertIn("python scripts/fetch_submission.py", archive)
         self.assertIn("python scripts/archive_submission.py encrypt", archive)
@@ -132,7 +132,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         normalized = self.text.split("\n  archive:", 1)[1].split(
             "\n  archive_failure_state:", 1
         )[0]
-        self.assertIn("needs: [intake, archive_issue, archive_server]", normalized)
+        self.assertIn(
+            "needs: [issue_intake_admission, intake, archive_issue, archive_server]",
+            normalized,
+        )
         self.assertIn("Require selected archive lane success", normalized)
 
     def test_both_checkouts_disable_persisted_credentials(self) -> None:
@@ -144,10 +147,11 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
-        # 9: intake; two each in archive and evaluate; one trusted evaluation
-        # callback; record's two; and notify's classifier checkout.
+        # 10: issue admission and intake; two each in archive and evaluate; one
+        # trusted evaluation callback; record's two; and notify's classifier
+        # checkout.
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 9, "expected 9 checkout steps"
+            self.text.count("uses: actions/checkout@"), 10, "expected 10 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
@@ -232,7 +236,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # jobs intentionally skip; that run must not report an infrastructure
         # failure while the labeled-event run performs the submission.
         notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn("needs: [intake, evaluate, archive, record]", notify)
+        self.assertIn(
+            "needs: [issue_intake_admission, intake, evaluate, archive, record]",
+            notify,
+        )
         self.assertIn("github.event.action == 'labeled'", notify)
         self.assertIn("github.event.label.name == 'submission'", notify)
         self.assertIn("github.event.action == 'opened'", notify)
@@ -294,6 +301,45 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("needs: intake", evaluate_header)
         self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
         self.assertIn("github.event.label.name == 'submission'", evaluate_header)
+
+    def test_issue_cutoff_is_cached_before_intake_and_cannot_gate_server_dispatch(self) -> None:
+        admission = self.text.split("\n  issue_intake_admission:", 1)[1].split(
+            "\n  intake:", 1
+        )[0]
+        self.assertIn("if: github.event_name == 'issues'", admission)
+        self.assertIn("ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}", admission)
+        self.assertIn('repos/$REPOSITORY/actions/runs/$RUN_ID', admission)
+        self.assertIn(".event == \"issues\"", admission)
+        self.assertIn("python scripts/classify_issue_intake_cutoff.py", admission)
+        self.assertNotIn("issues: write", admission)
+
+        intake = self.text.split("\n  intake:", 1)[1].split("\n  evaluate:", 1)[0]
+        archive_issue = self.text.split("\n  archive_issue:", 1)[1].split(
+            "\n  archive_server:", 1
+        )[0]
+        archive_server = self.text.split("\n  archive_server:", 1)[1].split(
+            "\n  archive:", 1
+        )[0]
+        archive = self.text.split("\n  archive:", 1)[1].split(
+            "\n  archive_failure_state:", 1
+        )[0]
+        notify = self.text.split("\n  notify:", 1)[1]
+        gate = "needs.issue_intake_admission.outputs.allowed == 'true'"
+        self.assertIn(gate, intake)
+        self.assertIn(gate, archive_issue)
+        self.assertIn(gate, archive)
+        self.assertIn(gate, notify)
+        self.assertNotIn("ISSUE_INTAKE_CUTOFF", archive_server)
+        self.assertNotIn("issue_intake_admission", archive_server)
+        self.assertIn(
+            "if: always() && github.event_name == 'workflow_dispatch'",
+            archive_server,
+        )
+        self.assertIn("github.event_name == 'workflow_dispatch'", archive)
+
+        form = ISSUE_FORM.read_text(encoding="utf-8")
+        self.assertIn("this form remains visible", form)
+        self.assertIn("new issue submissions are not processed", form)
 
     def test_git_state_stripped_from_both_checkouts(self) -> None:
         self.assertIn(

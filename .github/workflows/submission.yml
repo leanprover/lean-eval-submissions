@@ -65,6 +65,56 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A selected cutoff is activated by creating the repository variable
+  # ISSUE_INTAKE_CUTOFF with one canonical UTC-second timestamp. Admission is
+  # bound to the workflow run's immutable creation time and cached here, so a
+  # pre-cutoff run may finish even if the variable is created while it is
+  # queued or executing. The server workflow_dispatch lane never depends on
+  # this issue-only job.
+  issue_intake_admission:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      allowed: ${{ steps.classify.outputs.allowed }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Cache issue-intake admission at the run boundary
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ISSUE_INTAKE_CUTOFF" ]; then
+            printf '%s\n' 'allowed=true' 'reason=cutoff_absent' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          run=$(timeout 30s gh api "repos/$REPOSITORY/actions/runs/$RUN_ID")
+          jq -e --arg repository "$REPOSITORY" --argjson run_id "$RUN_ID" '
+            .id == $run_id and
+            .repository.full_name == $repository and
+            .event == "issues" and
+            (.created_at | type == "string")
+          ' <<< "$run" >/dev/null
+          run_created_at=$(jq -er .created_at <<< "$run")
+          python scripts/classify_issue_intake_cutoff.py \
+            --run-created-at "$run_created_at" \
+            --cutoff "$ISSUE_INTAKE_CUTOFF" >> "$GITHUB_OUTPUT"
+
   # The web Issue Form applies `submission` itself. GitHub's issue API drops
   # labels requested by authors without triage permission, so an API-created
   # issue arrives unlabeled. For opened issues only, validate the current form
@@ -72,7 +122,9 @@ jobs:
   # evaluate it. GITHUB_TOKEN-authored events do not recursively start another
   # workflow run, hence the explicit output consumed by `evaluate` below.
   intake:
+    needs: issue_intake_admission
     if: >-
+      needs.issue_intake_admission.outputs.allowed == 'true' &&
       github.event.action == 'opened' &&
       startsWith(github.event.issue.title, '[submission]') &&
       !contains(github.event.issue.labels.*.name, 'submission')
@@ -484,9 +536,11 @@ jobs:
     # source, and persists it to lean-eval-audit. It never runs untrusted Lean.
     # This is the compatibility lane for Issue Form submissions. Server intake
     # uses the isolated KMS-backed reusable workflow below.
-    needs: intake
+    needs: [issue_intake_admission, intake]
     if: >-
       always() &&
+      needs.issue_intake_admission.result == 'success' &&
+      needs.issue_intake_admission.outputs.allowed == 'true' &&
       github.event_name == 'issues' &&
       ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
@@ -822,11 +876,13 @@ jobs:
   archive:
     # Normalize the mutually exclusive issue/server archive lanes into the
     # single output and result contract consumed by evaluation and callbacks.
-    needs: [intake, archive_issue, archive_server]
+    needs: [issue_intake_admission, intake, archive_issue, archive_server]
     if: >-
       always() &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'issues' &&
+        needs.issue_intake_admission.result == 'success' &&
+        needs.issue_intake_admission.outputs.allowed == 'true' &&
         ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
          (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))))
     runs-on: ubuntu-latest
@@ -1558,10 +1614,12 @@ jobs:
   # do not duplicate those dedicated archive-job comments. A pre-fetch
   # infrastructure failure remains operator-visible.
   notify:
-    needs: [intake, evaluate, archive, record]
+    needs: [issue_intake_admission, intake, evaluate, archive, record]
     if: |
       always()
       && github.event_name == 'issues'
+      && needs.issue_intake_admission.result == 'success'
+      && needs.issue_intake_admission.outputs.allowed == 'true'
       && (
         (github.event.action == 'labeled' && github.event.label.name == 'submission')
         || (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true')

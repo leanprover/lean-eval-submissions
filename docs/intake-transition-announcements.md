@@ -88,7 +88,31 @@ Ready-to-edit closure announcement:
 > **<ledger or reviewed PR URL>**. Existing issues and historical results are
 > unaffected; this changes only how new submissions enter the system.
 
-After that announcement and its stated date, close issue intake through a
-reviewed pull request that replaces the submission issue form with a server
-link. Do not delete historical issues, rewrite Results or State, enable another
-feature, or shorten the published notice as part of that change.
+After the cutoff freeze, final delta, and retirement gates have passed, retire
+issue intake through a reviewed pull request that replaces the submission issue
+form with a server link. Do not delete historical issues, rewrite Results or
+State, enable another feature, or shorten the published notice as part of that
+change.
+
+## Cutoff freeze mechanism
+
+Keep the Issue Form present while the final corpus is reconciled. At the exact
+selected cutoff, create the `lean-eval-submissions` repository Actions variable
+`ISSUE_INTAKE_CUTOFF` with the canonical UTC-second cutoff timestamp. An absent
+variable means issue intake remains open. The `Submission` workflow compares
+the variable with the immutable workflow-run creation time, admits only runs
+created strictly before the cutoff, and caches that decision before intake.
+Server `workflow_dispatch` submissions do not pass through this gate.
+
+Before creating the variable, verify the selected timestamp and that every
+preceding closure gate except the final cutoff/delta readback is satisfied. Read
+the variable back exactly after creation. New issue runs at or after the cutoff
+must complete only the admission job and perform no label, issue, source,
+archive, evaluation, Results, State, or leaderboard mutation. Runs created
+before the cutoff retain their cached admission and may drain normally.
+
+If the freeze was activated with the wrong timestamp, delete only
+`ISSUE_INTAKE_CUTOFF`, verify it is absent, and leave issue intake open while a
+corrected cutoff is reviewed. Do not delete the variable merely to retry a
+post-cutoff submission. Final retirement replaces the form with the server link
+only after the final delta and readiness packet have passed.
