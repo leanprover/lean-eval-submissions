@@ -36,7 +36,7 @@ The fixed reviewed implementation bindings are:
 | Component | Exact binding |
 | --- | --- |
 | Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f1d00a45092a39afa0a0bc6be4cc9a319be85876e29a9ac20334f41f0aa0eb99` |
-| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `bc52de811ee135ef3409eb36a6231750a8034102b82ae0434a26e86169535194` |
+| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `061eb7176bd19d69e4744248854d66536b32ee4a4d9fab78f56a6f396b6a4eee` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74` |
 | Two-lane driver | `.github/workflows/historical-replay-two-lane-driver.yml`, SHA-256 `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21` |
 | State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `05ff5d0cdc39a4bc275a42fbe49b8771547db29a7c86f150e610d03c48656a17` |
@@ -165,8 +165,8 @@ workflow artifact, worktree file, mutable tag, or branch head.
       installation. The private material and path were not recorded, and
       `LEGACY_ARCHIVE_IDENTITY` is no longer installed.
 - [x] Current controller source commit
-      `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2` binds private-controller
-      SHA-256 `bc52de811ee135ef3409eb36a6231750a8034102b82ae0434a26e86169535194`
+      `1f8279069278a934c38420df59b50b17543b03cd` binds private-controller
+      SHA-256 `061eb7176bd19d69e4744248854d66536b32ee4a4d9fab78f56a6f396b6a4eee`
       and public-controller SHA-256
       `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74`,
       plus bounded driver SHA-256
@@ -181,7 +181,8 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `/api/v1/historical-public-replay/cleanup`, and
       `/api/v1/historical-public-replay/cleanup-reservation`. Private audience
       `lean-eval-historical-private-replay` is limited to POST on
-      `/api/v1/replay`, `/api/v1/replay/status`,
+      `/api/v1/historical-private-replay/prewarm`, `/api/v1/replay`,
+      `/api/v1/replay/status`,
       `/api/v1/historical-private-replay/reserve`, and
       `/api/v1/historical-private-replay/cleanup`. Each lane uses independent
       non-cancelling serialization, a seven-hour recovery lease, 360-minute

@@ -109,13 +109,15 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. The Lean Eval controller first atomically claims a durable, nonce-specific
+3. The Lean Eval controller performs a source-free prewarm before State start
+   or archive unwrap. The prewarm atomically claims a durable, nonce-specific
    binding to the exact task, attempt, execution profile, measurement config,
-   and image. Every start and status call must match it before the Sandbox is
-   looked up. It then creates a fresh nonce-specific Sandbox and starts one
-   fixed background process. A duplicate matching start is idempotent; a
-   differently bound duplicate fails closed. A persistent or shared generic
-   replay executor is a configuration error.
+   and image before its first Sandbox RPC, then creates the fresh Sandbox. The
+   later source-bearing start refreshes and reuses that same nonce and binding;
+   every start and status call must match it before the Sandbox is looked up.
+   It starts one fixed background process. A duplicate matching start is
+   idempotent; a differently bound duplicate fails closed. A persistent or
+   shared generic replay executor is a configuration error.
 4. The trusted controller verifies the exact ciphertext, consumes the one-use
    unwrap capability, drops AWS authority, and sends only that ciphertext, its
    per-archive identity, the nonce, and public expectations to the Sandbox.
