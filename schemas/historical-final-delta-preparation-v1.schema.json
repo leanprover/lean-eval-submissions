@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lean-lang.org/schemas/lean-eval/historical-final-delta-preparation-v1.schema.json",
+  "title": "LeanEval one-shot final historical delta preparation packet version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "activation_status",
+    "source_repository",
+    "cutoff",
+    "classification_inputs",
+    "classification_counts",
+    "archive_migration",
+    "image_requirement_count",
+    "image_requirements",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_final_delta_preparation_packet"},
+    "activation_status": {"const": "blocked_pending_exact_profiles_and_state_append"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "cutoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_inventory", "current_inventory", "delta_sha256", "delta_counts"],
+      "properties": {
+        "baseline_inventory": {"$ref": "#/$defs/inventoryIdentity"},
+        "current_inventory": {"$ref": "#/$defs/inventoryIdentity"},
+        "delta_sha256": {"$ref": "#/$defs/digest"},
+        "delta_counts": {"$ref": "#/$defs/deltaCounts"}
+      }
+    },
+    "classification_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public_source_decisions_sha256", "private_crosswalk"],
+      "properties": {
+        "public_source_decisions_sha256": {"$ref": "#/$defs/digest"},
+        "private_crosswalk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "sha256", "audit_repository", "audit_commit", "archive_inventory_digest"],
+          "properties": {
+            "repository": {"const": "leanprover/lean-eval-submissions"},
+            "sha256": {"$ref": "#/$defs/digest"},
+            "audit_repository": {"const": "leanprover/lean-eval-audit"},
+            "audit_commit": {"$ref": "#/$defs/commit"},
+            "archive_inventory_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
+    "classification_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public", "private"],
+      "properties": {
+        "public": {"$ref": "#/$defs/dispositionCounts"},
+        "private": {"$ref": "#/$defs/dispositionCounts"}
+      }
+    },
+    "archive_migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy_unique_archive_count", "migrated_unique_archive_count", "bound_result_schema_counts"],
+      "properties": {
+        "legacy_unique_archive_count": {"$ref": "#/$defs/count"},
+        "migrated_unique_archive_count": {"$ref": "#/$defs/count"},
+        "bound_result_schema_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["1", "2", "3"],
+          "properties": {
+            "1": {"$ref": "#/$defs/count"},
+            "2": {"$ref": "#/$defs/count"},
+            "3": {"$ref": "#/$defs/count"}
+          }
+        }
+      }
+    },
+    "image_requirement_count": {"$ref": "#/$defs/count"},
+    "image_requirements": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_visibility", "benchmark_repository", "benchmark_commit", "result_count"],
+        "properties": {
+          "source_visibility": {"enum": ["public", "private"]},
+          "benchmark_repository": {"const": "leanprover/lean-eval"},
+          "benchmark_commit": {"$ref": "#/$defs/commit"},
+          "result_count": {"type": "integer", "minimum": 1, "maximum": 10000}
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/publicReplayable"},
+          {"$ref": "#/$defs/publicUnavailable"},
+          {"$ref": "#/$defs/privateReplayable"},
+          {"$ref": "#/$defs/privateUnavailable"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "resultId": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "uuid7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "inventoryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_commit", "results_store_sha256", "inventory_sha256", "result_count"],
+      "properties": {
+        "source_commit": {"$ref": "#/$defs/commit"},
+        "results_store_sha256": {"$ref": "#/$defs/digest"},
+        "inventory_sha256": {"$ref": "#/$defs/digest"},
+        "result_count": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
+    "deltaCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending"],
+      "properties": {
+        "result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "public_source_probe_pending": {"$ref": "#/$defs/count"},
+        "private_archive_migration_pending": {"$ref": "#/$defs/count"}
+      }
+    },
+    "dispositionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replayable", "unavailable", "total"],
+      "properties": {
+        "replayable": {"$ref": "#/$defs/count"},
+        "unavailable": {"$ref": "#/$defs/count"},
+        "total": {"$ref": "#/$defs/count"}
+      }
+    },
+    "resultBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owner_login", "declared_model", "problem_id", "statement_revision",
+        "historical_accepted_at", "benchmark_commit", "results_path",
+        "result_file_sha256", "result_tree_digest"
+      ],
+      "properties": {
+        "owner_login": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"},
+        "declared_model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "problem_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"},
+        "statement_revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "historical_accepted_at": {"type": "string", "format": "date-time"},
+        "benchmark_commit": {"$ref": "#/$defs/commit"},
+        "results_path": {"type": "string", "pattern": "^results/[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.json$"},
+        "result_file_sha256": {"$ref": "#/$defs/digest"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "entryCore": {
+      "type": "object",
+      "required": [
+        "result_id", "source_visibility", "benchmark_repository", "benchmark_commit",
+        "result", "disposition", "packet_entry_sha256"
+      ],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/resultId"},
+        "source_visibility": {"enum": ["public", "private"]},
+        "benchmark_repository": {"const": "leanprover/lean-eval"},
+        "benchmark_commit": {"$ref": "#/$defs/commit"},
+        "result": {"$ref": "#/$defs/resultBinding"},
+        "disposition": {"enum": ["replayable", "unavailable"]},
+        "packet_entry_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "publicReplayable": {
+      "allOf": [
+        {"$ref": "#/$defs/entryCore"},
+        {
+          "type": "object",
+          "required": ["source"],
+          "properties": {
+            "source_visibility": {"const": "public"},
+            "disposition": {"const": "replayable"},
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "repository", "commit", "tree", "decision_entry_sha256"],
+              "properties": {
+                "kind": {"enum": ["github_repo", "gist"]},
+                "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+                "commit": {"$ref": "#/$defs/commit"},
+                "tree": {"$ref": "#/$defs/commit"},
+                "decision_entry_sha256": {"$ref": "#/$defs/digest"}
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "publicUnavailable": {
+      "allOf": [
+        {"$ref": "#/$defs/entryCore"},
+        {
+          "type": "object",
+          "required": ["unavailability"],
+          "properties": {
+            "source_visibility": {"const": "public"},
+            "disposition": {"const": "unavailable"},
+            "unavailability": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reason_code", "evidence_sha256", "decision_entry_sha256"],
+              "properties": {
+                "reason_code": {"const": "source_ref_permanently_unavailable"},
+                "evidence_sha256": {"$ref": "#/$defs/digest"},
+                "decision_entry_sha256": {"$ref": "#/$defs/digest"}
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "privateReplayable": {
+      "allOf": [
+        {"$ref": "#/$defs/entryCore"},
+        {
+          "type": "object",
+          "required": ["archive"],
+          "properties": {
+            "source_visibility": {"const": "private"},
+            "disposition": {"const": "replayable"},
+            "archive": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "submission_id", "archive_plan_entry_sha256", "archive_schema_version",
+                "archive_result_evidence", "benchmark_relation", "crosswalk_entry_sha256"
+              ],
+              "properties": {
+                "submission_id": {"$ref": "#/$defs/uuid7"},
+                "archive_plan_entry_sha256": {"$ref": "#/$defs/digest"},
+                "archive_schema_version": {"enum": [1, 2, 3]},
+                "archive_result_evidence": {"enum": ["confirmed_pass", "legacy_unrecorded"]},
+                "benchmark_relation": {"enum": ["same", "archive_recorded_different"]},
+                "crosswalk_entry_sha256": {"$ref": "#/$defs/digest"}
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "privateUnavailable": {
+      "allOf": [
+        {"$ref": "#/$defs/entryCore"},
+        {
+          "type": "object",
+          "required": ["unavailability"],
+          "properties": {
+            "source_visibility": {"const": "private"},
+            "disposition": {"const": "unavailable"},
+            "unavailability": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reason_code", "crosswalk_entry_sha256"],
+              "properties": {
+                "reason_code": {"const": "archive_not_found"},
+                "crosswalk_entry_sha256": {"$ref": "#/$defs/digest"}
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}
