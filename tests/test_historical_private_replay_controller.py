@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import copy
 import datetime as dt
 import hashlib
@@ -31,6 +32,31 @@ def recursive_keys(value: object) -> set[str]:
     return set()
 
 
+@contextlib.contextmanager
+def fixture_reconfiguration_incident(fixture: Fixture):
+    incident = {
+        fixture.task["benchmark_commit"]: {
+            "execution_profile_digest": fixture.task["execution_profile_digest"],
+            "task_ids": frozenset({fixture.task["replay_task_id"]}),
+        }
+    }
+    with (
+        mock.patch.object(controller, "RECONFIGURATION_INCIDENT", incident),
+        mock.patch.object(controller, "RECONFIGURATION_INCIDENT_COUNTS", (1,)),
+        mock.patch.object(
+            controller,
+            "RECONFIGURATION_RESULT_IDS",
+            {fixture.task["replay_task_id"]: fixture.task["result_id"]},
+        ),
+        mock.patch.object(
+            controller,
+            "RECONFIGURATION_CANARY_TASK",
+            fixture.task["replay_task_id"],
+        ),
+    ):
+        yield
+
+
 class Fixture:
     def __init__(
         self,
@@ -38,6 +64,7 @@ class Fixture:
         archived_benchmark: str | None = None,
         benchmark_relation: str = "same",
         archive_result_evidence: str = "confirmed_pass",
+        backfill_archive: bool = False,
     ) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.repository = pathlib.Path(self.temporary.name)
@@ -307,7 +334,10 @@ class Fixture:
                 else archived_benchmark
             ),
             "archiver_workflow_run": (
-                "https://github.com/leanprover/lean-eval-submissions/actions/runs/123"
+                "https://github.com/leanprover/lean-eval-submissions/blob/main/"
+                "scripts/backfill_audit.py"
+                if backfill_archive
+                else "https://github.com/leanprover/lean-eval-submissions/actions/runs/123"
             ),
             "key_envelope": {
                 "schema_version": 2,
@@ -452,11 +482,22 @@ class Fixture:
             "sorted((args.root / 'events').glob('*/*.json'))]\n"
             "    task = queue['tasks'][0] if queue['tasks'] else None\n"
             "    if task is not None:\n"
+            "        replacement = None\n"
+            "        reconfiguration = None\n"
             "        for event in events:\n"
-            "            if event['subject_id'] != task['replay_task_id']:\n"
-            "                continue\n"
             "            kind = event['event_type']\n"
             "            payload = event['payload']\n"
+            "            if (kind == 'historical_archive_result.replay_profile_qualified' "
+            "and event['subject_id'] == task['result_id'] and "
+            "'qualification_commit' in payload):\n"
+            "                replacement = (event, payload)\n"
+            "                continue\n"
+            "            if (kind == 'historical_archive_result.replay_reconfigured' "
+            "and event['subject_id'] == task['result_id']):\n"
+            "                reconfiguration = event\n"
+            "                continue\n"
+            "            if event['subject_id'] != task['replay_task_id']:\n"
+            "                continue\n"
             "            if kind == 'replay.started':\n"
             "                task.update(status='running', **payload)\n"
             "                task.pop('reason_code', None)\n"
@@ -464,6 +505,30 @@ class Fixture:
             "            elif kind == 'replay.failed':\n"
             "                task.update(status='failed', **payload)\n"
             "                task.pop('runner_profile', None)\n"
+            "            elif (kind == 'replay.enqueued' and reconfiguration is not None "
+            "and replacement is not None and "
+            "event['causation_event_id'] == reconfiguration['event_id']):\n"
+            "                task.update(status='queued', **payload)\n"
+            "                for field in ('reason_code', 'retryable', 'runner_profile', "
+            "'evidence_repository', 'evidence_commit', 'evidence_path', "
+            "'evidence_sha256'):\n"
+            "                    task.pop(field, None)\n"
+            "                qualified, qualification = replacement\n"
+            "                task.update(qualification, "
+            "qualification_event_id=qualified['event_id'], "
+            "qualified_at=qualified['occurred_at'], "
+            "reconfiguration_event_id=reconfiguration['event_id'], "
+            "reconfigured_at=reconfiguration['occurred_at'], "
+            "superseded_qualification_event_id="
+            "reconfiguration['payload']['superseded_qualification_event_id'], "
+            "reconfiguration_repository="
+            "reconfiguration['payload']['reconfiguration_repository'], "
+            "reconfiguration_commit="
+            "reconfiguration['payload']['reconfiguration_commit'], "
+            "reconfiguration_path="
+            "reconfiguration['payload']['reconfiguration_path'], "
+            "reconfiguration_sha256="
+            "reconfiguration['payload']['reconfiguration_sha256'])\n"
             "            elif kind in {'replay.accepted', 'replay.rejected', "
             "'replay.unavailable'}:\n"
             "                task.update(status=kind.split('.')[1], **payload)\n"
@@ -507,7 +572,13 @@ class Fixture:
                 "subject_id": self.task["replay_task_id"],
                 "causation_event_id": self.task["qualification_event_id"],
                 "actor": {"kind": "system"},
-                "payload": {"result_id": self.result_id},
+                "payload": {
+                    "result_id": self.result_id,
+                    "measurement_config_digest": self.measurement_digest,
+                    "execution_profile_digest": self.profile_digest,
+                    "checker": "nanoda",
+                    "benchmark_commit": self.task["benchmark_commit"],
+                },
             },
         )
         for event in history:
@@ -527,10 +598,14 @@ class Fixture:
 
     def commit_in(self, repository: pathlib.Path, message: str) -> str:
         subprocess.run(
-            ["git", "-C", str(repository), "add", "."], check=True
+            ["git", "-C", str(repository), "-c", "gc.auto=0", "add", "."],
+            check=True,
         )
         subprocess.run(
-            ["git", "-C", str(repository), "commit", "-qm", message],
+            [
+                "git", "-C", str(repository), "-c", "gc.auto=0",
+                "commit", "-qm", message,
+            ],
             check=True,
             env=self.environment,
         )
@@ -580,6 +655,99 @@ class Fixture:
         )
         self.state_head = self.commit_in(self.state, "Update exact private queue")
         self.set_state_upstream()
+
+    def reconfigured_task(
+        self,
+    ) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+        runtime_path = self.repository / controller.SOURCE_BLOB_PATHS["runtime_helper"]
+        runtime_path.write_bytes(b"fixture source blob: repaired runtime helper\n")
+        replacement_source_commit = self.commit("Repair private replay archive roots")
+
+        replacement = copy.deepcopy(self.profile)
+        replacement["image_source_commit"] = replacement_source_commit
+        replacement["source_blobs"]["runtime_helper"]["sha256"] = (
+            controller.sha256_bytes(runtime_path.read_bytes())
+        )
+        replacement["qualification"]["workflow_commit"] = replacement_source_commit
+        replacement["registry_manifest_digest"] = "sha256:" + "b" * 64
+        replacement["execution_profile"]["vm_image_digest"] = (
+            replacement["registry_manifest_digest"]
+        )
+        replacement_digest = config_digest(
+            "lean-eval-replay-execution-profile-v1",
+            replacement["execution_profile"],
+        )
+        replacement["execution_profile_digest"] = replacement_digest
+        replacement_raw = controller.canonical_bytes(replacement)
+        replacement_sha256 = controller.sha256_bytes(replacement_raw)
+        replacement_path = (
+            f"evidence/private-replay/profiles/{replacement_digest}.json"
+        )
+        (self.repository / replacement_path).write_bytes(replacement_raw)
+        replacement_commit = self.commit("Add repaired private replay profile")
+
+        original_task = copy.deepcopy(self.task)
+        original_task.update(
+            status="failed",
+            attempt=3,
+            reason_code="runner_lost",
+            retryable=True,
+            event_id="01900000-0000-7000-8000-000000000010",
+            occurred_at="2026-10-21T06:20:00.000Z",
+        )
+        task = copy.deepcopy(original_task)
+        task.pop("reason_code")
+        task.pop("retryable")
+        task.update(
+            qualification_commit=replacement_commit,
+            qualification_path=replacement_path,
+            qualification_sha256=replacement_sha256,
+            qualification_event_id="01900000-0000-7000-8000-000000000012",
+            qualified_at="2026-10-21T06:20:02.000Z",
+            execution_profile_digest=replacement_digest,
+            status="queued",
+            event_id="01900000-0000-7000-8000-000000000014",
+            occurred_at="2026-10-21T06:20:04.000Z",
+            reconfiguration_event_id="01900000-0000-7000-8000-000000000013",
+            reconfigured_at="2026-10-21T06:20:03.000Z",
+            superseded_qualification_event_id=original_task[
+                "qualification_event_id"
+            ],
+            reconfiguration_repository="leanprover/lean-eval-submissions",
+        )
+        artifact = {
+            "schema_version": 1,
+            "kind": controller.RECONFIGURATION_KIND,
+            "reason_code": "profile_execution_unavailable",
+            "selection": "failed_canary",
+            "task_count": 1,
+            "entries": [
+                controller._expected_reconfiguration_entry(task, original_task)
+            ],
+        }
+        artifact_raw = controller.canonical_bytes(artifact)
+        artifact_sha256 = controller.sha256_bytes(artifact_raw)
+        artifact_path = (
+            "evidence/private-replay/reconfigurations/"
+            f"{artifact_sha256}.json"
+        )
+        artifact_file = self.repository / artifact_path
+        artifact_file.parent.mkdir(parents=True, exist_ok=True)
+        artifact_file.write_bytes(artifact_raw)
+        artifact_commit = self.commit("Add reviewed private replay replacement")
+        task.update(
+            reconfiguration_commit=artifact_commit,
+            reconfiguration_path=artifact_path,
+            reconfiguration_sha256=artifact_sha256,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(self.repository), "update-ref",
+                "refs/remotes/origin/main", artifact_commit,
+            ],
+            check=True,
+        )
+        return task, replacement, artifact
 
     def close(self) -> None:
         controller.STATE_MINIMUM_COMMITS["production"] = self.previous_state_minimum
@@ -859,14 +1027,13 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             controller,
             "_closed_crosswalk",
             side_effect=TypeError("malformed closed-corpus structure"),
+        ), self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "not the closed retained corpus",
         ):
-            with self.assertRaisesRegex(
-                controller.HistoricalPrivateReplayControllerError,
-                "not the closed retained corpus",
-            ):
-                controller.load_reviewed_crosswalk_entry(
-                    self.fixture.repository, self.fixture.audit, self.fixture.task
-                )
+            controller.load_reviewed_crosswalk_entry(
+                self.fixture.repository, self.fixture.audit, self.fixture.task
+            )
         for field, value in (
             ("crosswalk_sha256", "0" * 64),
             ("crosswalk_entry_sha256", "1" * 64),
@@ -909,6 +1076,158 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             controller._verify_profile_provenance(
                 self.fixture.repository, self.fixture.task, profile
             )
+
+    def test_reviewed_reconfiguration_bridges_original_authority_to_replacement(self) -> None:
+        task, replacement, _ = self.fixture.reconfigured_task()
+        with (
+            fixture_reconfiguration_incident(self.fixture),
+            mock.patch.object(
+                controller,
+                "_verify_ancestor",
+                wraps=controller._verify_ancestor,
+            ) as verify_ancestor,
+        ):
+            authority, authority_raw, profile, profile_raw = (
+                controller.load_reviewed_inputs(self.fixture.repository, task)
+            )
+        verify_ancestor.assert_any_call(
+            self.fixture.repository,
+            task["authority_commit"],
+            task["reconfiguration_commit"],
+        )
+        self.assertEqual(authority, self.fixture.authority)
+        self.assertEqual(authority_raw, self.fixture.authority_raw)
+        self.assertEqual(profile, replacement)
+        self.assertEqual(profile_raw, controller.canonical_bytes(replacement))
+
+        queue = {**self.fixture.queue, "tasks": [task]}
+        plan = controller._plan_next(
+            queue,
+            controller.state_canonical_bytes(queue),
+            self.fixture.state_head,
+            authority,
+            authority_raw,
+            profile,
+            profile_raw,
+            self.fixture.archive_binding,
+            self.fixture.profile,
+        )
+        self.assertEqual(
+            plan["execution_plan"]["request"]["execution_profile_digest"],
+            task["execution_profile_digest"],
+        )
+        self.assertNotEqual(
+            task["execution_profile_digest"], self.fixture.profile_digest
+        )
+
+    def test_reconfiguration_artifact_and_profile_tampering_fail_closed(self) -> None:
+        task, replacement, artifact = self.fixture.reconfigured_task()
+        superseded = controller._superseded_profile_task(
+            self.fixture.authority, task
+        )
+        with fixture_reconfiguration_incident(self.fixture):
+            for field, value in (
+                ("result_id", "r2_" + "0" * 64),
+                ("measurement_config_digest", "0" * 64),
+            ):
+                with self.subTest(field=field):
+                    changed = copy.deepcopy(artifact)
+                    changed["entries"][0][field] = value
+                    with self.assertRaisesRegex(
+                        controller.HistoricalPrivateReplayControllerError,
+                        "differs from the queued task",
+                    ):
+                        controller._validate_reconfiguration_for_task(
+                            changed, task, superseded
+                        )
+
+        changed_profile = copy.deepcopy(replacement)
+        changed_profile["checker"] = "different"
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "qualified execution contract",
+        ):
+            controller._validate_profile_replacement(
+                self.fixture.profile, changed_profile
+            )
+
+        with fixture_reconfiguration_incident(self.fixture):
+            wrong_attempt = copy.deepcopy(artifact)
+            wrong_attempt["entries"][0]["attempt"] = 2
+            with self.assertRaisesRegex(
+                controller.HistoricalPrivateReplayControllerError,
+                "selection attempt is invalid",
+            ):
+                controller.validate_reconfiguration(wrong_attempt)
+
+            wrong_selection = copy.deepcopy(artifact)
+            wrong_selection["selection"] = "queued_remainder"
+            with self.assertRaisesRegex(
+                controller.HistoricalPrivateReplayControllerError,
+                "selection count is invalid",
+            ):
+                controller.validate_reconfiguration(wrong_selection)
+
+    def test_exact_queued_remainder_contains_all_46_incident_tasks(self) -> None:
+        _, _, canary_artifact = self.fixture.reconfigured_task()
+        template = canary_artifact["entries"][0]
+        entries = []
+        for benchmark, binding in controller.RECONFIGURATION_INCIDENT.items():
+            for task_id in binding["task_ids"]:
+                if task_id == controller.RECONFIGURATION_CANARY_TASK:
+                    continue
+                entry = copy.deepcopy(template)
+                entry.update(
+                    result_id=controller.RECONFIGURATION_RESULT_IDS[task_id],
+                    replay_task_id=task_id,
+                    benchmark_commit=benchmark,
+                    attempt=0,
+                )
+                entry["superseded_qualification"][
+                    "execution_profile_digest"
+                ] = binding["execution_profile_digest"]
+                entry["superseded_qualification"]["path"] = (
+                    "evidence/private-replay/profiles/"
+                    f"{binding['execution_profile_digest']}.json"
+                )
+                entries.append(entry)
+        entries.sort(key=lambda entry: entry["replay_task_id"])
+        artifact = {
+            "schema_version": 1,
+            "kind": controller.RECONFIGURATION_KIND,
+            "reason_code": "profile_execution_unavailable",
+            "selection": "queued_remainder",
+            "task_count": 46,
+            "entries": entries,
+        }
+        self.assertEqual(controller.validate_reconfiguration(artifact), artifact)
+        self.assertEqual(
+            sorted(
+                len(binding["task_ids"])
+                for binding in controller.RECONFIGURATION_INCIDENT.values()
+            ),
+            [2, 2, 3, 4, 9, 27],
+        )
+
+    def test_replacement_profile_must_postdate_authority_and_precede_decision(self) -> None:
+        task, replacement, _ = self.fixture.reconfigured_task()
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "provenance ancestry",
+        ):
+            controller._verify_profile_provenance(
+                self.fixture.repository,
+                task,
+                replacement,
+                upper_bound_commit=self.fixture.authority_commit,
+            )
+
+        task["reconfiguration_commit"] = self.fixture.profile_commit
+        with (
+            fixture_reconfiguration_incident(self.fixture),
+            self.assertRaises(controller.HistoricalPrivateReplayControllerError),
+        ):
+            controller.load_reviewed_inputs(self.fixture.repository, task)
 
     def test_plan_binds_state_head_and_only_adapts_archive_uuid_to_executor(self) -> None:
         plan = self.fixture.plan()
@@ -1017,9 +1336,12 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         for rejected in required:
             with self.subTest(rejected=rejected):
                 def reject(
-                    root: pathlib.Path, ancestor: str, descendant: str
+                    root: pathlib.Path,
+                    ancestor: str,
+                    descendant: str,
+                    target: tuple[pathlib.Path, str, str] = rejected,
                 ) -> None:
-                    if (root, ancestor, descendant) == rejected:
+                    if (root, ancestor, descendant) == target:
                         raise controller.HistoricalPrivateReplayControllerError(
                             "private replay provenance ancestry is invalid"
                         )
@@ -1027,16 +1349,15 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
 
                 with mock.patch.object(
                     controller, "_verify_ancestor", side_effect=reject
+                ), self.assertRaisesRegex(
+                    controller.HistoricalPrivateReplayControllerError,
+                    "provenance ancestry",
                 ):
-                    with self.assertRaisesRegex(
-                        controller.HistoricalPrivateReplayControllerError,
-                        "provenance ancestry",
-                    ):
-                        controller.load_reviewed_crosswalk_entry(
-                            self.fixture.repository,
-                            self.fixture.audit,
-                            self.fixture.task,
-                        )
+                    controller.load_reviewed_crosswalk_entry(
+                        self.fixture.repository,
+                        self.fixture.audit,
+                        self.fixture.task,
+                    )
 
     def test_archive_benchmark_relation_remains_strict(self) -> None:
         cases = (

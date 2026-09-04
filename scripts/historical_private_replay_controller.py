@@ -111,6 +111,139 @@ PROFILE_PATH = re.compile(r"evidence/private-replay/profiles/[0-9a-f]{64}\.json\
 RECONFIGURATION_PATH = re.compile(
     r"evidence/private-replay/reconfigurations/[0-9a-f]{64}\.json\Z"
 )
+RECONFIGURATION_KIND = "historical_private_replay_profile_reconfiguration"
+RECONFIGURATION_CANARY_TASK = (
+    "rt1_06f5e1cc8896337e56cbabcae49d672b10ea9e8789f0e5c6c96740dfc4bbc05b"
+)
+RECONFIGURATION_INCIDENT_COUNTS = (4, 3, 27, 2, 2, 9)
+RECONFIGURATION_RESULT_IDS = {
+    "rt1_06f5e1cc8896337e56cbabcae49d672b10ea9e8789f0e5c6c96740dfc4bbc05b": "r2_cf48e195817a3757dfa215faa0bcc5bbf3c70c3a589c85bce0c93e5ec3c19a21",
+    "rt1_09b70b2e24f22881f67934b6485b7b6f5467b00a7620d2fe78fa1bbd6307c476": "r2_9fff51ce52e767d9579c2d7f781b04abab137b92d9edc22d0d37ad22ffb03f61",
+    "rt1_09e325bdf3f88e21ad8015234929262d984902647352057327480dd2bb5c4bf9": "r2_bbed737a8d5977d23ac998b32495dafb3b8e6346fd7c77d84c0428bbb43faf0f",
+    "rt1_165d972532dabc1972d5e3d5821d64657877df1ec47da5f82ffe5e4fa826c419": "r2_cf81021564d81908d605d933214ced76f1286311cc7be11e5dca37bc13c3c0a2",
+    "rt1_16e2b78d2742d259ec450f8f98d50b25c57a5927a591382d3f0c2e68d166faee": "r2_9572135f65ef0e5826204db9f1285daef33c77ae2e38e865ed0aa22f84e8d2e0",
+    "rt1_1b866a1ea105d0e60b6d40e99d0e9f2a7f7de1dd523df4ca4ba7b09515815462": "r2_904883f65c52da010cf221257b768d05a8b5888dde85c39b60e120b2374bcd89",
+    "rt1_1e3933bef7fe8fb3dbcdba3d087827316ef29fb7ff822f9a131a08149ac43047": "r2_3dfe2784f4e3dc27d6c7e6c70ce48dde9f5ef6e6b8978563a943fd4d9f5d01b6",
+    "rt1_2f8191e9d954897baeaf3685724ddcad31f480b6f32f3162839b3ee11ab67a43": "r2_16cdb7feea514d206918b31cbf2dd70ca64d844064ad604cd3c3eddb8fec281a",
+    "rt1_41c9067819a44c162caa47075987870c9a70a973878150dcd80671570426f221": "r2_c5034d8b7649805e49154907fc9ce5c212ca319df7af28be8a0baf4e7dfe2907",
+    "rt1_4465012a19298391e305e80af69f6e5119ebcf8f576f73d1262c846f103d4576": "r2_311a6f1234369007f91e2ea1366546276f9ece76bb8534670dda9526d4fc37c1",
+    "rt1_599946dacf753cc9766a7b32932bb622a3ab9e75da22c51d02d4ea50964dd36f": "r2_3d6c2513274f859db43d51d9116a53a96cdeebfc30bb3510816d39335e9d739c",
+    "rt1_59dff212166d1a68f71e18df789c48584ebef67d47d9a6c7a038e56be19ef3f8": "r2_0cac8fd2e310612dddcff6dbe8b6c7e030920eeedd4670b767532da6f1ff8107",
+    "rt1_5c1aa41b2f6b08ad538aabef6618a3d81bf1be93b1344f1efad2829294e148eb": "r2_2b60786c75c13e1c13ae5e40d7b269999eb30bbe9aa23d0ba99e2a94f6c2b750",
+    "rt1_67ba4735bfd40f77234aa78e7dab168d424b7fbd2bb7c5cce6aa9944a04514d0": "r2_53124f0ec029dbebc0c49b3681cfe3b3cdbd3949042127be75c1ff8a240052a1",
+    "rt1_69fac296706ad275f3dd6e6ded832143e47a712e53ab9def0a88f70b813a7573": "r2_dec99e39ee0785a07310f999defd9ce8506992c035fd8052a3c1bab45eb30a30",
+    "rt1_6e5235cdc13e6fc536b517d6f47fe00d518c1f1286a666c08f89a95298a4f8fa": "r2_abdc705224c0d983089b919e918ff7a640e04ebef243dc0d95133bb282dd983a",
+    "rt1_7066c622a38d921e6cca39564f266a3f2ea3ae779d3a6fd02b50c313ba95f225": "r2_c89a5edae71feb56876deab2c64c676942c880d0327ee113d4dca56a391b98bd",
+    "rt1_7143dd341f10f2a60a86501a92bcc33816713dcf4cc395232e72a0121f87ef48": "r2_21c32a04fea1da18bbb8482bc89a336075a443e3876cd764abd868103010157b",
+    "rt1_77eee062c8317735d66b86275e1c42d6d4f486e88e78d17570c9b7f1de45f272": "r2_690152ffe8886a32d46e9b61e22232d9b36c099dd26b7962415823443570c73e",
+    "rt1_8fd9f6ed105c955098b1a453614021a578ab38be461756e7d0a3dd724cd50038": "r2_e5fe0c616825f42127004d7cb771bfa0018cedf16a698f36cca0443c3554ac0d",
+    "rt1_916905ba24e2f7c4e43a3df2f157866a3fd145034283a8a1226075c813d6cdb3": "r2_a4fcc4652f734ca03eafeaa440419bd0287616a2277e51b721dd93dbeaca715b",
+    "rt1_9557079db8784b0beef3a0991997d373b12921c75ee67d3b6478b711ca54bac9": "r2_c7ca82c21bbd697446bd730b744ce9d33e1d68759e051995cdf311c493429070",
+    "rt1_98115e74dcc7ca86b8982cb32041d20aa01f84d0bd53808d38be99ab3f11abe6": "r2_ed0171a707b8940eadee8857d7c1b072e4a77578005eced3d36bae3bfc4313fa",
+    "rt1_98dd78906b0007be8dd5de302e3572267e8e7d901dd1b85352cea4da577c59e6": "r2_32a68295c087362ea21d32188946262d901db0e44cf1138a4023f0da2dc2568e",
+    "rt1_9a9abcc87f620fd4821beeb52db7da23c9bfb84e7ad4f14fde0ed85fd4c2d854": "r2_a41aaab751f4944a30c332cf6808c3dc89c2a76c8a317249b1e27e9e73f777ae",
+    "rt1_a902f0fd1d1ae48a0468a3a0c4014ee28213e179ca1958bd4d3eef86e3671901": "r2_943a1326d1e9066f82f19dc0e35ca221b5ea7896ecfee391fc8af2298db47e1c",
+    "rt1_ad9ce8332bb06cb20868c8a178e3825a977f922dcb3cf49afc38d30362dec1b2": "r2_acbf6639ba3882c45cddb60c2604aab5bac22806bae62d1f9dda4cd8da6dcc6f",
+    "rt1_b3f1d4f028afe2245ed4f63bf43281b21473b26105f890d3bf56d3469deeee84": "r2_cd6d278818219f41aa19b839ac58f1b841bd8f81b8c4ca0ac8f452a070788b98",
+    "rt1_b9b62d9fc5baa86098deb71b475f10c940a1deb0c9d080e503b1402c1b8b3b98": "r2_a720e4ab045fd2e5e3e8c7394d2541aa96d8db04980aecb0f9dff269f9b8d4f1",
+    "rt1_bb1adc36a06e7f256fe9b4260bc733391d738502d2dd3d94b7911b048576413d": "r2_69015af7be7052e83ec797d23a762b44927d149f294a3a3bb737674664f28afd",
+    "rt1_bb9aeb9a2656967496aa3a3ac5f7609ec693bd070057e91bc13548141cef061d": "r2_a05098133647a1f01984dda312c219ad2e056dc6f8e97f17c9345119a19bfdeb",
+    "rt1_bc08a92683bd9fedfcd36ebe4a4155efcae5f02cc45c6bc69860f4f2be794f3a": "r2_de003356ecdcf0d8c615f24576e06d3c234223876db6bb3b5f44a88597b1b34a",
+    "rt1_bfa2c0f288d3de30f290b8cfa639ec22f56576681758bc8ae5d626744d009ea5": "r2_1a7d5b3f0b56250cbf7bec42f3f7e3c8a7a07ed8d79b0ae2cbc13651a0f1a3d1",
+    "rt1_c06dca4b05f20df8213ca812e52f70aecf8cdbcfe38472e8e669eb444d6fb22a": "r2_bc3e2917fb2350ade0703e74c9ba1594d70e14112b3c1c7f1b6ce3ce2d6c8078",
+    "rt1_c3876c2c6c24c96b4a9ae418ab8e1dce3bb849b95a86bc4079a1f74681668f39": "r2_26361fa5c5288ba4683d7bb35c40291a65a0c4df2395449e9436344ada8e3e07",
+    "rt1_c51006ab0f071bb8e07d2ebba30af5851b50bdf1870d82565870c950333eb5bb": "r2_cb77c175a59b5480ad930af76804b4a4fdbb387acb9216a11a557875ebac58db",
+    "rt1_ca3038d3907b30f601a0328af269c2770bc3eb3d6e116b5f8dc05520f73fd22b": "r2_40b9be58ccf5a8b1be33794da0bfeb642b2778c00b1f4ec05cdd62e1dd88c9be",
+    "rt1_cf86e9b248a38798b188dcceccfa481c69dd9272664804b1f255477e6ec124cd": "r2_e1835c24ef14b6b352a89b2e0adade01be8c5ae45a5edf488840bd20f2ac6b67",
+    "rt1_cf9e2a78bfec4be9a4fd40ed641a5018a1439b55dcd0979370b74851ba166e17": "r2_76d1c25a72e40851a9543a7aa6727a0621e01ebf04a6b2aaa923de5a6c5d79fb",
+    "rt1_d6a29359e9adb5235591e6d9bf444311896f3b25c6a887090c1c91bfd977bb8d": "r2_569022ee661e83541917012c8b175fa690b7d0f3443be7625eb692f85e5d5a76",
+    "rt1_dff1f4b327cbd157b7188c1c0f28018719c467f35b26daec9c0b02ff7d36fff4": "r2_bc77a05aeb6cacac7e466c80ea624b96f70109a3178ee684f9b3b3de0d116d83",
+    "rt1_e8ea4eb2932b482c6a09e5130ae0ed95242adc31fbb066772c672e756f8392a2": "r2_bc8d8ffe1381557fa1b5a47a385245367c7dff0b078d32f0c76f01af10f314d1",
+    "rt1_efc78aa57882c7a52f8514a0fb1a5f01b1ec4bce75f16b41484709eed13cbb37": "r2_87259650e1408edabf4731eacf3f9dc9458af0f60b718a8955908e4466dea22d",
+    "rt1_f374d6e712f0383059b31df25b87bd615c9d3f4f41f69c1dfc59d93d06844602": "r2_4f0b4b38d5dc5ec1a40338a8d96a66e61fb8b346cef70343f83c504d9a0a76d9",
+    "rt1_fa3ff579c8104bcdc981622d152856fca41b8180c715ad50bf04865a09dc6875": "r2_b371f96ae0cb5aab3b2dfda4d59db16f6304549f074c27c894a3ee7b750017c8",
+    "rt1_fbcc63e5e7f044724a75182fb71404674de9325c7c078850de4a2bede9b97efd": "r2_91b5faebbde5f732519b2bda2b74790006df0320fe087e2b29cd1cd1a2be8dba",
+    "rt1_fcd69ed15d4333ab659ba787d7ff9ee67a63a1833d2535e14560a9e29a3e6945": "r2_b927e88023f9fedfc1b36d02562149b18658e1e754dcb5165a214588bb3aa154",
+}
+RECONFIGURATION_INCIDENT = {
+    "11081d345a580a0f3c46699240f28e4f41fbf9fe": {
+        "execution_profile_digest": "278cd9515bd7a219cbcac26bb66f7c6cdc542a901f581b0e5d885ee4a3b01408",
+        "task_ids": frozenset({
+            "rt1_4465012a19298391e305e80af69f6e5119ebcf8f576f73d1262c846f103d4576",
+            "rt1_cf9e2a78bfec4be9a4fd40ed641a5018a1439b55dcd0979370b74851ba166e17",
+            "rt1_efc78aa57882c7a52f8514a0fb1a5f01b1ec4bce75f16b41484709eed13cbb37",
+            "rt1_fcd69ed15d4333ab659ba787d7ff9ee67a63a1833d2535e14560a9e29a3e6945",
+        }),
+    },
+    "22ed426aa75a262d33937508336e042907886caa": {
+        "execution_profile_digest": "5746f53c2cdb541649de0625c8cec1e2f6bd5dfcf4b19570ea477e55291ba1f4",
+        "task_ids": frozenset({
+            "rt1_6e5235cdc13e6fc536b517d6f47fe00d518c1f1286a666c08f89a95298a4f8fa",
+            "rt1_98115e74dcc7ca86b8982cb32041d20aa01f84d0bd53808d38be99ab3f11abe6",
+            "rt1_fbcc63e5e7f044724a75182fb71404674de9325c7c078850de4a2bede9b97efd",
+        }),
+    },
+    "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9": {
+        "execution_profile_digest": "85d96cbbb364299714911e662655f9b08f544867aa7b95a2c3e92933c091be05",
+        "task_ids": frozenset({
+            RECONFIGURATION_CANARY_TASK,
+            "rt1_09b70b2e24f22881f67934b6485b7b6f5467b00a7620d2fe78fa1bbd6307c476",
+            "rt1_165d972532dabc1972d5e3d5821d64657877df1ec47da5f82ffe5e4fa826c419",
+            "rt1_16e2b78d2742d259ec450f8f98d50b25c57a5927a591382d3f0c2e68d166faee",
+            "rt1_1e3933bef7fe8fb3dbcdba3d087827316ef29fb7ff822f9a131a08149ac43047",
+            "rt1_41c9067819a44c162caa47075987870c9a70a973878150dcd80671570426f221",
+            "rt1_5c1aa41b2f6b08ad538aabef6618a3d81bf1be93b1344f1efad2829294e148eb",
+            "rt1_67ba4735bfd40f77234aa78e7dab168d424b7fbd2bb7c5cce6aa9944a04514d0",
+            "rt1_69fac296706ad275f3dd6e6ded832143e47a712e53ab9def0a88f70b813a7573",
+            "rt1_7066c622a38d921e6cca39564f266a3f2ea3ae779d3a6fd02b50c313ba95f225",
+            "rt1_77eee062c8317735d66b86275e1c42d6d4f486e88e78d17570c9b7f1de45f272",
+            "rt1_8fd9f6ed105c955098b1a453614021a578ab38be461756e7d0a3dd724cd50038",
+            "rt1_916905ba24e2f7c4e43a3df2f157866a3fd145034283a8a1226075c813d6cdb3",
+            "rt1_9557079db8784b0beef3a0991997d373b12921c75ee67d3b6478b711ca54bac9",
+            "rt1_a902f0fd1d1ae48a0468a3a0c4014ee28213e179ca1958bd4d3eef86e3671901",
+            "rt1_ad9ce8332bb06cb20868c8a178e3825a977f922dcb3cf49afc38d30362dec1b2",
+            "rt1_b3f1d4f028afe2245ed4f63bf43281b21473b26105f890d3bf56d3469deeee84",
+            "rt1_b9b62d9fc5baa86098deb71b475f10c940a1deb0c9d080e503b1402c1b8b3b98",
+            "rt1_bb1adc36a06e7f256fe9b4260bc733391d738502d2dd3d94b7911b048576413d",
+            "rt1_bb9aeb9a2656967496aa3a3ac5f7609ec693bd070057e91bc13548141cef061d",
+            "rt1_bc08a92683bd9fedfcd36ebe4a4155efcae5f02cc45c6bc69860f4f2be794f3a",
+            "rt1_bfa2c0f288d3de30f290b8cfa639ec22f56576681758bc8ae5d626744d009ea5",
+            "rt1_c06dca4b05f20df8213ca812e52f70aecf8cdbcfe38472e8e669eb444d6fb22a",
+            "rt1_c51006ab0f071bb8e07d2ebba30af5851b50bdf1870d82565870c950333eb5bb",
+            "rt1_d6a29359e9adb5235591e6d9bf444311896f3b25c6a887090c1c91bfd977bb8d",
+            "rt1_e8ea4eb2932b482c6a09e5130ae0ed95242adc31fbb066772c672e756f8392a2",
+            "rt1_f374d6e712f0383059b31df25b87bd615c9d3f4f41f69c1dfc59d93d06844602",
+        }),
+    },
+    "a9a74a383cb2ae8d841ee66ac9df85e378cdd621": {
+        "execution_profile_digest": "abb2e01f676fa6e561d0ab78bc2af353855ac30e8753699a753f42a1c3b43530",
+        "task_ids": frozenset({
+            "rt1_59dff212166d1a68f71e18df789c48584ebef67d47d9a6c7a038e56be19ef3f8",
+            "rt1_c3876c2c6c24c96b4a9ae418ab8e1dce3bb849b95a86bc4079a1f74681668f39",
+        }),
+    },
+    "c9e5b20fb06a0285ec861cec142e5f9498b5d58e": {
+        "execution_profile_digest": "479ae9aece81d617ec9b071033a8dc0ba4d0dbb748371319098a326b38146f3a",
+        "task_ids": frozenset({
+            "rt1_dff1f4b327cbd157b7188c1c0f28018719c467f35b26daec9c0b02ff7d36fff4",
+            "rt1_fa3ff579c8104bcdc981622d152856fca41b8180c715ad50bf04865a09dc6875",
+        }),
+    },
+    "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32": {
+        "execution_profile_digest": "dc013b00e2605c5f6e00c9a340489d1f4412c6f9c6ba468cbea0f7ad4b5be047",
+        "task_ids": frozenset({
+            "rt1_09e325bdf3f88e21ad8015234929262d984902647352057327480dd2bb5c4bf9",
+            "rt1_1b866a1ea105d0e60b6d40e99d0e9f2a7f7de1dd523df4ca4ba7b09515815462",
+            "rt1_2f8191e9d954897baeaf3685724ddcad31f480b6f32f3162839b3ee11ab67a43",
+            "rt1_599946dacf753cc9766a7b32932bb622a3ab9e75da22c51d02d4ea50964dd36f",
+            "rt1_7143dd341f10f2a60a86501a92bcc33816713dcf4cc395232e72a0121f87ef48",
+            "rt1_98dd78906b0007be8dd5de302e3572267e8e7d901dd1b85352cea4da577c59e6",
+            "rt1_9a9abcc87f620fd4821beeb52db7da23c9bfb84e7ad4f14fde0ed85fd4c2d854",
+            "rt1_ca3038d3907b30f601a0328af269c2770bc3eb3d6e116b5f8dc05520f73fd22b",
+            "rt1_cf86e9b248a38798b188dcceccfa481c69dd9272664804b1f255477e6ec124cd",
+        }),
+    },
+}
 ACCOUNT_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 TASK_FIELDS = {
@@ -205,6 +338,21 @@ REPOSITORY_REMOTES = {
 MAX_ARCHIVE_BYTES = 11 * 1024 * 1024
 MAX_PROVIDER_JSON_BYTES = 512 * 1024
 MAX_STATE_EXPORT_BYTES = 512 * 1024 * 1024
+
+RECONFIGURATION_FIELDS_ROOT = {
+    "schema_version", "kind", "reason_code", "selection", "task_count", "entries",
+}
+RECONFIGURATION_ENTRY_FIELDS = {
+    "result_id", "replay_task_id", "benchmark_commit", "toolchain",
+    "lean_toolchain_blob_sha256", "checker", "measurement_config_digest",
+    "attempt", "superseded_qualification", "replacement_qualification",
+}
+RECONFIGURATION_SUPERSEDED_QUALIFICATION_FIELDS = {
+    "event_id", "execution_profile_digest", "repository", "commit", "path", "sha256",
+}
+RECONFIGURATION_REPLACEMENT_QUALIFICATION_FIELDS = {
+    "execution_profile_digest", "repository", "commit", "path", "sha256",
+}
 
 
 def _load_provider_json(path: pathlib.Path, label: str) -> dict[str, Any]:
@@ -810,14 +958,26 @@ def _verify_ancestor(repository_root: pathlib.Path, ancestor: str, descendant: s
 
 
 def _verify_profile_provenance(
-    repository_root: pathlib.Path, task: dict[str, Any], profile: dict[str, Any]
+    repository_root: pathlib.Path,
+    task: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    profile_commit: str | None = None,
+    upper_bound_commit: str | None = None,
 ) -> None:
     image_commit = profile["image_source_commit"]
     workflow_commit = profile["qualification"]["workflow_commit"]
-    profile_commit = task["qualification_commit"]
+    profile_commit = (
+        task["qualification_commit"] if profile_commit is None else profile_commit
+    )
+    upper_bound_commit = (
+        task["authority_commit"]
+        if upper_bound_commit is None
+        else upper_bound_commit
+    )
     _verify_ancestor(repository_root, image_commit, profile_commit)
     _verify_ancestor(repository_root, workflow_commit, profile_commit)
-    _verify_ancestor(repository_root, profile_commit, task["authority_commit"])
+    _verify_ancestor(repository_root, profile_commit, upper_bound_commit)
     for name, binding in profile["source_blobs"].items():
         if sha256_bytes(_git_blob(repository_root, image_commit, binding["path"])) != binding["sha256"]:
             raise HistoricalPrivateReplayControllerError(
@@ -894,6 +1054,337 @@ def _verify_profile_provenance(
         )
 
 
+def _superseded_profile_task(
+    authority_value: Any, task: dict[str, Any]
+) -> dict[str, Any]:
+    """Recover the original qualified-profile locator from immutable authority."""
+
+    authority = _object(authority_value, "private replay authority plan")
+    entries = authority.get("entries")
+    if not isinstance(entries, list):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay authority entries are invalid"
+        )
+    selected = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("result_id") == task["result_id"]
+    ]
+    if len(selected) != 1:
+        raise HistoricalPrivateReplayControllerError(
+            "private replay authority selection is ambiguous"
+        )
+    original_digest = _match(
+        DIGEST,
+        selected[0].get("execution_profile_digest"),
+        "superseded private execution profile digest",
+    )
+    profiles = _object(authority.get("profiles"), "private replay authority profiles")
+    authorized_profile = _object(
+        profiles.get(original_digest), "authorized private replay profile"
+    )
+    locator = _object(
+        authorized_profile.get("private_profile"),
+        "authorized private replay profile locator",
+    )
+    _fields(
+        locator,
+        {"repository", "commit", "path", "sha256"},
+        "authorized private replay profile locator",
+    )
+    if locator["repository"] != "leanprover/lean-eval-submissions":
+        raise HistoricalPrivateReplayControllerError(
+            "authorized private replay profile repository is invalid"
+        )
+    commit = _match(
+        COMMIT, locator["commit"], "authorized private replay profile commit"
+    )
+    digest = _match(
+        DIGEST, locator["sha256"], "authorized private replay profile sha256"
+    )
+    path = _match(
+        PROFILE_PATH, locator["path"], "authorized private replay profile path"
+    )
+    if path != f"evidence/private-replay/profiles/{original_digest}.json":
+        raise HistoricalPrivateReplayControllerError(
+            "authorized private replay profile path differs from digest"
+        )
+    original = copy.deepcopy(task)
+    original.update(
+        execution_profile_digest=original_digest,
+        qualification_repository=locator["repository"],
+        qualification_commit=commit,
+        qualification_path=path,
+        qualification_sha256=digest,
+        qualification_event_id=task.get(
+            "superseded_qualification_event_id", task["qualification_event_id"]
+        ),
+    )
+    return original
+
+
+def _profile_qualification_binding(task: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "execution_profile_digest": task["execution_profile_digest"],
+        "repository": task["qualification_repository"],
+        "commit": task["qualification_commit"],
+        "path": task["qualification_path"],
+        "sha256": task["qualification_sha256"],
+    }
+
+
+def _validate_reconfiguration_entry(value: Any, index: int) -> dict[str, Any]:
+    label = f"private replay reconfiguration entries[{index}]"
+    entry = _object(value, label)
+    _fields(entry, RECONFIGURATION_ENTRY_FIELDS, label)
+    _match(RESULT_ID, entry["result_id"], f"{label}.result_id")
+    _match(REPLAY_ID, entry["replay_task_id"], f"{label}.replay_task_id")
+    _match(COMMIT, entry["benchmark_commit"], f"{label}.benchmark_commit")
+    _match(TOOLCHAIN, entry["toolchain"], f"{label}.toolchain")
+    _match(
+        DIGEST,
+        entry["lean_toolchain_blob_sha256"],
+        f"{label}.lean_toolchain_blob_sha256",
+    )
+    if entry["checker"] != "nanoda":
+        raise HistoricalPrivateReplayControllerError(f"{label}.checker is invalid")
+    _match(
+        DIGEST,
+        entry["measurement_config_digest"],
+        f"{label}.measurement_config_digest",
+    )
+    _integer(entry["attempt"], f"{label}.attempt")
+    superseded = _object(
+        entry["superseded_qualification"], f"{label}.superseded_qualification"
+    )
+    replacement = _object(
+        entry["replacement_qualification"], f"{label}.replacement_qualification"
+    )
+    _fields(
+        superseded,
+        RECONFIGURATION_SUPERSEDED_QUALIFICATION_FIELDS,
+        f"{label}.superseded_qualification",
+    )
+    _fields(
+        replacement,
+        RECONFIGURATION_REPLACEMENT_QUALIFICATION_FIELDS,
+        f"{label}.replacement_qualification",
+    )
+    _match(UUID7, superseded["event_id"], f"{label}.superseded_qualification.event_id")
+    for name, binding in (("superseded", superseded), ("replacement", replacement)):
+        digest = _match(
+            DIGEST,
+            binding["execution_profile_digest"],
+            f"{label}.{name}_qualification.execution_profile_digest",
+        )
+        if binding["repository"] != "leanprover/lean-eval-submissions":
+            raise HistoricalPrivateReplayControllerError(
+                f"{label}.{name}_qualification repository is invalid"
+            )
+        _match(COMMIT, binding["commit"], f"{label}.{name}_qualification.commit")
+        path = _match(PROFILE_PATH, binding["path"], f"{label}.{name}_qualification.path")
+        _match(DIGEST, binding["sha256"], f"{label}.{name}_qualification.sha256")
+        if path != f"evidence/private-replay/profiles/{digest}.json":
+            raise HistoricalPrivateReplayControllerError(
+                f"{label}.{name}_qualification path differs from digest"
+            )
+    if (
+        superseded["execution_profile_digest"]
+        == replacement["execution_profile_digest"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            f"{label} does not replace the execution profile"
+        )
+    return entry
+
+
+def validate_reconfiguration(value: Any) -> dict[str, Any]:
+    artifact = _object(value, "private replay reconfiguration")
+    _fields(
+        artifact,
+        RECONFIGURATION_FIELDS_ROOT,
+        "private replay reconfiguration",
+    )
+    entries_value = artifact["entries"]
+    if (
+        artifact["schema_version"] != 1
+        or artifact["kind"] != RECONFIGURATION_KIND
+        or artifact["reason_code"] != "profile_execution_unavailable"
+        or artifact["selection"] not in {"failed_canary", "queued_remainder"}
+        or isinstance(artifact["task_count"], bool)
+        or not isinstance(artifact["task_count"], int)
+        or not 1 <= artifact["task_count"] <= 47
+        or not isinstance(entries_value, list)
+        or len(entries_value) != artifact["task_count"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration identity is invalid"
+        )
+    expected_count = 1 if artifact["selection"] == "failed_canary" else 46
+    if artifact["task_count"] != expected_count:
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration selection count is invalid"
+        )
+    entries = [
+        _validate_reconfiguration_entry(entry, index)
+        for index, entry in enumerate(entries_value)
+    ]
+    expected_attempt = 3 if artifact["selection"] == "failed_canary" else 0
+    if any(entry["attempt"] != expected_attempt for entry in entries):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration selection attempt is invalid"
+        )
+    identities = [entry["replay_task_id"] for entry in entries]
+    if identities != sorted(identities) or len(identities) != len(set(identities)):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration entries are not unique and sorted"
+        )
+    result_identities = [entry["result_id"] for entry in entries]
+    if len(result_identities) != len(set(result_identities)):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration results are not unique"
+        )
+    incident: dict[str, tuple[str, str]] = {}
+    counts: list[int] = []
+    for benchmark, binding_value in sorted(RECONFIGURATION_INCIDENT.items()):
+        _match(COMMIT, benchmark, "private replay incident benchmark")
+        binding = _object(binding_value, "private replay incident binding")
+        _fields(
+            binding,
+            {"execution_profile_digest", "task_ids"},
+            "private replay incident binding",
+        )
+        profile = _match(
+            DIGEST,
+            binding["execution_profile_digest"],
+            "private replay incident execution profile",
+        )
+        task_ids = binding["task_ids"]
+        if not isinstance(task_ids, frozenset) or not task_ids:
+            raise HistoricalPrivateReplayControllerError(
+                "private replay incident task identities are invalid"
+            )
+        counts.append(len(task_ids))
+        for task_id in task_ids:
+            replay_task_id = _match(
+                REPLAY_ID, task_id, "private replay incident task identity"
+            )
+            if replay_task_id in incident:
+                raise HistoricalPrivateReplayControllerError(
+                    "private replay incident task identities are not unique"
+                )
+            incident[replay_task_id] = (benchmark, profile)
+    if (
+        tuple(counts) != RECONFIGURATION_INCIDENT_COUNTS
+        or len(incident) != sum(RECONFIGURATION_INCIDENT_COUNTS)
+        or set(RECONFIGURATION_RESULT_IDS) != set(incident)
+        or len(set(RECONFIGURATION_RESULT_IDS.values())) != len(incident)
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay incident binding is not the exact reviewed set"
+        )
+    for task_id, result_id in RECONFIGURATION_RESULT_IDS.items():
+        _match(RESULT_ID, result_id, f"private replay incident result for {task_id}")
+    expected_identities = (
+        {RECONFIGURATION_CANARY_TASK}
+        if artifact["selection"] == "failed_canary"
+        else set(incident) - {RECONFIGURATION_CANARY_TASK}
+    )
+    if set(identities) != expected_identities:
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration selection differs from the reviewed incident"
+        )
+    for entry in entries:
+        benchmark, profile = incident[entry["replay_task_id"]]
+        if (
+            entry["benchmark_commit"] != benchmark
+            or entry["result_id"]
+            != RECONFIGURATION_RESULT_IDS[entry["replay_task_id"]]
+            or entry["superseded_qualification"]["execution_profile_digest"]
+            != profile
+        ):
+            raise HistoricalPrivateReplayControllerError(
+                "private replay reconfiguration differs from the queued task or reviewed incident"
+            )
+    return artifact
+
+
+def _validate_profile_replacement(
+    superseded: dict[str, Any], replacement: dict[str, Any]
+) -> None:
+    unchanged = {
+        "benchmark_commit", "benchmark_tree", "toolchain",
+        "lean_toolchain_blob_sha256", "checker", "measurement_config_digest",
+        "measurement_config", "image_family", "registry_repository",
+        "image_source_repository",
+    }
+    if any(superseded[field] != replacement[field] for field in unchanged):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay replacement changes the qualified execution contract"
+        )
+    old_execution = copy.deepcopy(superseded["execution_profile"])
+    new_execution = copy.deepcopy(replacement["execution_profile"])
+    old_manifest = old_execution.pop("vm_image_digest", None)
+    new_manifest = new_execution.pop("vm_image_digest", None)
+    if (
+        old_execution != new_execution
+        or old_manifest == new_manifest
+        or superseded["execution_profile_digest"]
+        == replacement["execution_profile_digest"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay replacement is not one image-only profile repair"
+        )
+    old_blobs = copy.deepcopy(superseded["source_blobs"])
+    new_blobs = copy.deepcopy(replacement["source_blobs"])
+    old_runtime = old_blobs.pop("runtime_helper", None)
+    new_runtime = new_blobs.pop("runtime_helper", None)
+    if old_blobs != new_blobs or old_runtime == new_runtime:
+        raise HistoricalPrivateReplayControllerError(
+            "private replay replacement source closure is not the runner-only repair"
+        )
+
+
+def _expected_reconfiguration_entry(
+    task: dict[str, Any], superseded_task: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "result_id": task["result_id"],
+        "replay_task_id": task["replay_task_id"],
+        "benchmark_commit": task["benchmark_commit"],
+        "toolchain": task["toolchain"],
+        "lean_toolchain_blob_sha256": task["lean_toolchain_blob_sha256"],
+        "checker": task["checker"],
+        "measurement_config_digest": task["measurement_config_digest"],
+        "attempt": task["attempt"],
+        "superseded_qualification": {
+            "event_id": task["superseded_qualification_event_id"],
+            **_profile_qualification_binding(superseded_task),
+        },
+        "replacement_qualification": _profile_qualification_binding(task),
+    }
+
+
+def _validate_reconfiguration_for_task(
+    artifact_value: Any,
+    task: dict[str, Any],
+    superseded_task: dict[str, Any],
+) -> dict[str, Any]:
+    artifact = validate_reconfiguration(artifact_value)
+    selected = [
+        entry
+        for entry in artifact["entries"]
+        if entry["replay_task_id"] == task["replay_task_id"]
+    ]
+    if len(selected) != 1 or selected[0] != _expected_reconfiguration_entry(
+        task, superseded_task
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay reconfiguration differs from the queued task"
+        )
+    return artifact
+
+
 def _validate_authority(value: Any, task: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
     authority = _object(value, "private replay authority plan")
     _fields(
@@ -968,9 +1459,11 @@ def _validate_authority(value: Any, task: dict[str, Any], profile: dict[str, Any
     return authority
 
 
-def load_reviewed_inputs(
+def _load_reviewed_input_context(
     repository_root: pathlib.Path, task_value: Any
-) -> tuple[dict[str, Any], bytes, dict[str, Any], bytes]:
+) -> tuple[
+    dict[str, Any], bytes, dict[str, Any], bytes, dict[str, Any], dict[str, Any]
+]:
     task = _validate_task(task_value, 0)
     _verify_checkout(repository_root, "leanprover/lean-eval-submissions")
     for field in ("authority_commit", "qualification_commit"):
@@ -992,8 +1485,94 @@ def load_reviewed_inputs(
         profile["qualification"]["workflow_commit"],
         "qualification.workflow_commit",
     )
-    _verify_profile_provenance(repository_root, task, profile)
-    _validate_authority(authority, task, profile)
+    if "reconfiguration_event_id" not in task:
+        _verify_profile_provenance(repository_root, task, profile)
+        _validate_authority(authority, task, profile)
+        return authority, authority_raw, profile, profile_raw, task, profile
+
+    _verify_ancestor_of_upstream(
+        repository_root, task["reconfiguration_commit"], "reconfiguration_commit"
+    )
+    _verify_ancestor(
+        repository_root,
+        task["authority_commit"],
+        task["reconfiguration_commit"],
+    )
+    _verify_ancestor(
+        repository_root,
+        task["qualification_commit"],
+        task["reconfiguration_commit"],
+    )
+    reconfiguration_raw = _git_blob(
+        repository_root,
+        task["reconfiguration_commit"],
+        task["reconfiguration_path"],
+    )
+    if sha256_bytes(reconfiguration_raw) != task["reconfiguration_sha256"]:
+        raise HistoricalPrivateReplayControllerError(
+            "private reconfiguration Git blob differs from locator"
+        )
+    reconfiguration = _parse_canonical(
+        reconfiguration_raw, "exact private reconfiguration Git blob"
+    )
+    superseded_task = _superseded_profile_task(authority, task)
+    _validate_reconfiguration_for_task(
+        reconfiguration, task, superseded_task
+    )
+    superseded_raw = _git_blob(
+        repository_root,
+        superseded_task["qualification_commit"],
+        superseded_task["qualification_path"],
+    )
+    if sha256_bytes(superseded_raw) != superseded_task["qualification_sha256"]:
+        raise HistoricalPrivateReplayControllerError(
+            "superseded private profile Git blob differs from locator"
+        )
+    superseded_profile = _validate_profile(
+        _parse_canonical(superseded_raw, "exact superseded private profile Git blob"),
+        superseded_task,
+    )
+    for label, commit in (
+        ("superseded qualification_commit", superseded_task["qualification_commit"]),
+        ("superseded image_source_commit", superseded_profile["image_source_commit"]),
+        (
+            "superseded qualification.workflow_commit",
+            superseded_profile["qualification"]["workflow_commit"],
+        ),
+    ):
+        _verify_ancestor_of_upstream(repository_root, commit, label)
+    _verify_profile_provenance(
+        repository_root,
+        superseded_task,
+        superseded_profile,
+        upper_bound_commit=task["authority_commit"],
+    )
+    _verify_profile_provenance(
+        repository_root,
+        task,
+        profile,
+        upper_bound_commit=task["reconfiguration_commit"],
+    )
+    _validate_profile_replacement(superseded_profile, profile)
+    _validate_authority(authority, superseded_task, superseded_profile)
+    return (
+        authority,
+        authority_raw,
+        profile,
+        profile_raw,
+        superseded_task,
+        superseded_profile,
+    )
+
+
+def load_reviewed_inputs(
+    repository_root: pathlib.Path, task_value: Any
+) -> tuple[dict[str, Any], bytes, dict[str, Any], bytes]:
+    """Load the executable profile and prove any reviewed replacement bridge."""
+
+    authority, authority_raw, profile, profile_raw, _, _ = (
+        _load_reviewed_input_context(repository_root, task_value)
+    )
     return authority, authority_raw, profile, profile_raw
 
 
@@ -1235,6 +1814,7 @@ def _plan_next(
     profile_value: Any | None = None,
     profile_raw: bytes | None = None,
     archive_binding_value: Any | None = None,
+    authority_profile_value: Any | None = None,
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
     if not isinstance(queue_raw, bytes) or state_canonical_bytes(queue) != queue_raw:
@@ -1268,7 +1848,19 @@ def _plan_next(
     ):
         raise HistoricalPrivateReplayControllerError("reviewed private inputs differ from queue")
     profile = _validate_profile(profile_value, task)
-    _validate_authority(authority_value, task, profile)
+    if "reconfiguration_event_id" in task:
+        if authority_profile_value is None:
+            raise HistoricalPrivateReplayControllerError(
+                "reconfigured task lacks its reviewed superseded profile"
+            )
+        superseded_task = _superseded_profile_task(authority_value, task)
+        authority_profile = _validate_profile(
+            authority_profile_value, superseded_task
+        )
+        _validate_profile_replacement(authority_profile, profile)
+        _validate_authority(authority_value, superseded_task, authority_profile)
+    else:
+        _validate_authority(authority_value, task, profile)
     state["task_sha256"] = sha256_bytes(state_canonical_bytes(task))
     return {
         "schema_version": 1,
@@ -1291,9 +1883,14 @@ def plan_from_checkouts(
     if not queue["tasks"]:
         return _plan_next(queue, queue_raw, state_head)
     task = queue["tasks"][0]
-    authority, authority_raw, profile, profile_raw = load_reviewed_inputs(
-        repository_root, task
-    )
+    (
+        authority,
+        authority_raw,
+        profile,
+        profile_raw,
+        _,
+        authority_profile,
+    ) = _load_reviewed_input_context(repository_root, task)
     crosswalk_entry = load_reviewed_crosswalk_entry(
         repository_root, audit_root, task
     )
@@ -1309,6 +1906,7 @@ def plan_from_checkouts(
         profile,
         profile_raw,
         archive_binding,
+        authority_profile,
     )
 
 
