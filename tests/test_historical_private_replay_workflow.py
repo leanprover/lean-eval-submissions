@@ -33,6 +33,16 @@ def step(name: str, following_name: str) -> str:
     )[0]
 
 
+def executor_status_500_classifier() -> str:
+    execute = step(
+        "Invoke and poll the exact blocked-network executor",
+        "Confirm exact sandbox destruction after every attempted start",
+    )
+    start = execute.index("          classify_executor_status_500() {")
+    end = execute.index("\n          }", start) + len("\n          }")
+    return textwrap.dedent(execute[start:end])
+
+
 class HistoricalPrivateExecutorDeleteTests(unittest.TestCase):
     worker = "hpr-" + "a" * 56 + "-1"
     application = "le-hpr-" + "b" * 22 + "-1"
@@ -183,6 +193,45 @@ esac
 
 
 class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
+    def run_executor_status_500_classifier(
+        self, responses: list[bytes]
+    ) -> list[tuple[str, int, str]]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            paths: list[str] = []
+            for index, response in enumerate(responses):
+                path = root / f"response-{index}.json"
+                path.write_bytes(response)
+                paths.append(str(path))
+            script = (
+                "set -euo pipefail\n"
+                "executor_status_500_count=0\n"
+                "executor_status_500_reason=\n"
+                f"{executor_status_500_classifier()}\n"
+                'for response in "$@"; do\n'
+                '  if classify_executor_status_500 "$response"; then\n'
+                "    decision=retry\n"
+                "  else\n"
+                "    decision=stop\n"
+                "  fi\n"
+                "  printf '%s|%s|%s\\n' \"$decision\" "
+                '"$executor_status_500_count" "$executor_status_500_reason"\n'
+                "done\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", script, "classifier", *paths],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        return [
+            (decision, int(count), reason)
+            for decision, count, reason in (
+                line.split("|", 2) for line in completed.stdout.splitlines()
+            )
+        ]
+
     def test_cold_container_start_has_one_bounded_private_sdk_window(self) -> None:
         prewarm = step(
             "Prove exact container readiness without private material",
@@ -579,12 +628,81 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "            prove_running",
             execute,
         )
+        self.assertIn('executor_status_500_count=0', execute)
+        self.assertEqual(execute.count('executor_status_500_count=0'), 1)
+        self.assertIn('executor_status_500_count + 1', execute)
+        self.assertIn('test "$executor_status_500_count" -le 2', execute)
+        self.assertIn('if [ "$status" = 500 ]', execute)
+        self.assertIn("scripts/sanitize_executor_failure.py", execute)
+        self.assertIn(
+            "Private executor status retry::reason=$executor_status_500_reason "
+            "retry=$executor_status_500_count/2",
+            execute,
+        )
+        self.assertIn("Private executor status retry exhausted", execute)
+        self.assertIn(
+            "'{\"error\":\"executor_failed\",\"reason\":\"command_rpc_failed\"}'",
+            execute,
+        )
+        self.assertIn(
+            "'{\"error\":\"executor_failed\",\"reason\":\"sandbox_destroy_failed\"}'",
+            execute,
+        )
+        self.assertLess(
+            execute.index('if [ "$status" = 500 ]'),
+            execute.index('mv "$RUNNER_TEMP/executor-poll-response.json"'),
+        )
+        retry = execute.index("Private executor status retry::reason=")
+        remove = execute.index('rm "$RUNNER_TEMP/executor-poll-response.json"', retry)
+        exhaustion = execute.index("Private executor status retry exhausted")
+        retain = execute.index(
+            'mv "$RUNNER_TEMP/executor-poll-response.json"', exhaustion
+        )
+        self.assertLess(retry, remove)
+        self.assertLess(remove, exhaustion)
+        self.assertLess(exhaustion, retain)
+        self.assertNotIn('cat "$RUNNER_TEMP/executor-poll-response.json"', execute)
         cleanup = step(
             "Confirm exact sandbox destruction after every attempted start",
             "Derive the exact terminal candidate after destruction",
         )
         self.assertIn("running-before-cleanup.json", cleanup)
         self.assertIn("running-after-cleanup.json", cleanup)
+
+    def test_executor_status_500_retry_is_exact_and_bounded(self) -> None:
+        command_rpc = b'{"error":"executor_failed","reason":"command_rpc_failed"}'
+        sandbox_destroy = (
+            b'{"error":"executor_failed","reason":"sandbox_destroy_failed"}'
+        )
+        self.assertEqual(
+            self.run_executor_status_500_classifier(
+                [command_rpc, sandbox_destroy, command_rpc]
+            ),
+            [
+                ("retry", 1, "command_rpc_failed"),
+                ("retry", 2, "sandbox_destroy_failed"),
+                ("stop", 3, "command_rpc_failed"),
+            ],
+        )
+
+    def test_executor_status_500_retry_rejects_every_other_shape(self) -> None:
+        responses = [
+            json.dumps(
+                {
+                    "error": "executor_failed",
+                    "reason": "command_rpc_failed",
+                    "detail": "runtime_profile_mismatch",
+                }
+            ).encode(),
+            b'{"error":"executor_failed","reason":"command_failed"}',
+            b'{"error":"executor_failed","reason":"command_rpc_failed","source":"private"}',
+            b"not-json",
+            b"{" + b"x" * 4096 + b"}",
+        ]
+        self.assertEqual(
+            self.run_executor_status_500_classifier(responses),
+            [("stop", 0, "") for _ in responses],
+        )
 
     def test_kms_capability_is_exact_one_use_and_dropped_before_executor(self) -> None:
         preflight = step(
@@ -630,6 +748,9 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("steps.cleanup.outputs.confirmed == 'true'", failure_step)
         self.assertIn("terminal-candidate", failure_step)
         self.assertIn("publish_replay_state_event", failure_step)
+        self.assertIn("scripts/sanitize_executor_failure.py", failure_step)
+        self.assertIn("Sanitized private executor failure", failure_step)
+        self.assertNotIn('cat "$RUNNER_TEMP/executor-response.json"', failure_step)
 
     def test_private_material_and_temporary_refs_are_destroyed(self) -> None:
         cleanup = WORKFLOW.split(
