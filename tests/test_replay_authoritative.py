@@ -261,6 +261,39 @@ class AuthoritativeReplayTests(unittest.TestCase):
                 (source / "proof" / "Submission.lean").read_bytes(), b"by decide\n"
             )
 
+    def test_safe_extraction_accepts_legacy_backfill_root(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            archive = root / "source.tar.gz"
+            write_tar(
+                archive,
+                {
+                    "src/proof/lakefile.toml": b'name = "two_plus_two"\n',
+                    "src/proof/Submission.lean": b"by decide\n",
+                },
+            )
+            source = authoritative.extract_archive(archive, root / "out")
+            self.assertEqual(source.name, "src")
+            self.assertEqual(
+                (source / "proof" / "Submission.lean").read_bytes(), b"by decide\n"
+            )
+
+    def test_extraction_rejects_mixed_archive_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            archive = root / "source.tar.gz"
+            write_tar(
+                archive,
+                {
+                    "source/proof/Submission.lean": b"by decide\n",
+                    "src/other/Submission.lean": b"by decide\n",
+                },
+            )
+            with self.assertRaisesRegex(
+                authoritative.AuthoritativeReplayError, "unsafe member"
+            ):
+                authoritative.extract_archive(archive, root / "out")
+
     def test_extraction_rejects_git_and_traversal(self) -> None:
         for name in ("source/.git/config", "source/../escape"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as raw:

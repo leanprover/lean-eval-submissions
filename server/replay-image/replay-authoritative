@@ -8,8 +8,8 @@ import hashlib
 import json
 import os
 import pathlib
-import signal
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -214,7 +214,7 @@ def validate_measurement_limits(request: dict[str, Any]) -> None:
 
 def extract_archive(path: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
     try:
-        archive = tarfile.open(path, "r:gz")
+        archive = tarfile.open(path, "r:gz")  # noqa: SIM115
     except (OSError, tarfile.TarError) as error:
         raise AuthoritativeReplayError("decrypted archive is invalid") from error
     with archive:
@@ -222,17 +222,23 @@ def extract_archive(path: pathlib.Path, destination: pathlib.Path) -> pathlib.Pa
         if not members or len(members) > MAX_MEMBERS:
             raise AuthoritativeReplayError("decrypted archive member count is invalid")
         expanded = 0
+        archive_root: str | None = None
         validated: list[tuple[tarfile.TarInfo, pathlib.PurePosixPath]] = []
         for member in members:
             relative = pathlib.PurePosixPath(member.name)
+            root = relative.parts[0] if relative.parts else None
+            # The one-shot historical backfill packed its checkout as `src/`;
+            # the live archiver has always used `source/`.
             if (
                 relative.is_absolute()
                 or not relative.parts
-                or relative.parts[0] != "source"
+                or root not in {"source", "src"}
+                or (archive_root is not None and root != archive_root)
                 or any(part in {"", ".", "..", ".git"} for part in relative.parts)
                 or not (member.isfile() or member.isdir())
             ):
                 raise AuthoritativeReplayError("decrypted archive contains an unsafe member")
+            archive_root = root
             if member.isfile():
                 expanded += member.size
                 if member.size < 0 or expanded > MAX_EXPANDED:
@@ -251,7 +257,8 @@ def extract_archive(path: pathlib.Path, destination: pathlib.Path) -> pathlib.Pa
             descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with source, os.fdopen(descriptor, "wb") as output:
                 shutil.copyfileobj(source, output, 1024 * 1024)
-    source_root = destination / "source"
+    assert archive_root is not None
+    source_root = destination / archive_root
     if not source_root.is_dir():
         raise AuthoritativeReplayError("archive has no source directory")
     return source_root
