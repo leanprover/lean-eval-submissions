@@ -839,6 +839,28 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           running_proof_index=0
+          executor_status_500_count=0
+          executor_status_500_reason=
+          classify_executor_status_500() {
+            local response=$1
+            local sanitized_failure
+            executor_status_500_reason=
+            if ! sanitized_failure=$(python scripts/sanitize_executor_failure.py \
+              "$response"); then
+              return 1
+            fi
+            case "$sanitized_failure" in
+              '{"error":"executor_failed","reason":"command_rpc_failed"}')
+                executor_status_500_reason=command_rpc_failed
+                ;;
+              '{"error":"executor_failed","reason":"sandbox_destroy_failed"}')
+                executor_status_500_reason=sandbox_destroy_failed
+                ;;
+              *) return 1 ;;
+            esac
+            executor_status_500_count=$((executor_status_500_count + 1))
+            test "$executor_status_500_count" -le 2
+          }
           prove_running() {
             running_proof_index=$((running_proof_index + 1))
             proof="$RUNNER_TEMP/current-running-executor-$running_proof_index.json"
@@ -972,6 +994,17 @@ jobs:
                   . == ($expected[0] + {status:"running"})
                 ' "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
                 continue
+              fi
+              if [ "$status" = 500 ]; then
+                if classify_executor_status_500 \
+                  "$RUNNER_TEMP/executor-poll-response.json"; then
+                  echo "::notice title=Private executor status retry::reason=$executor_status_500_reason retry=$executor_status_500_count/2"
+                  rm "$RUNNER_TEMP/executor-poll-response.json"
+                  continue
+                fi
+                if [ -n "$executor_status_500_reason" ]; then
+                  echo "::notice title=Private executor status retry exhausted::reason=$executor_status_500_reason failures=$executor_status_500_count"
+                fi
               fi
               mv "$RUNNER_TEMP/executor-poll-response.json" \
                 "$RUNNER_TEMP/executor-response.json"
@@ -1119,6 +1152,15 @@ jobs:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
         run: |
           set -euo pipefail
+          sanitized_failure=$(
+            python scripts/sanitize_executor_failure.py \
+              "$RUNNER_TEMP/executor-response.json" || true
+          )
+          if [ -n "$sanitized_failure" ]; then
+            echo "::notice title=Sanitized private executor failure::$sanitized_failure"
+            echo "Sanitized private executor failure: \`$sanitized_failure\`" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
           reason=$(cat "$RUNNER_TEMP/failure-reason")
           published=false
           for cas_attempt in $(seq 1 4); do
