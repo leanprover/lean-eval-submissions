@@ -221,11 +221,15 @@ jobs:
               --baseline "$BASELINE_INVENTORY" \
               --current "$artifact" \
               --inventory-schema "$INVENTORY_SCHEMA" \
+              --results-root results \
+              --results-commit "$EXPECTED_COMMIT" \
               --output "$delta"
             python scripts/reconcile_historical_replay_inventory_delta.py \
               --baseline "$BASELINE_INVENTORY" \
               --current "$artifact" \
               --inventory-schema "$INVENTORY_SCHEMA" \
+              --results-root results \
+              --results-commit "$EXPECTED_COMMIT" \
               --output "$delta_recomputed"
             cmp "$delta" "$delta_recomputed"
             DELTA="$delta" ARTIFACT="$artifact" python - <<'PY'
@@ -268,7 +272,8 @@ jobs:
           ).hexdigest()
           counts = delta["delta_counts"]
           assert counts["result_count"] == len(delta["entries"])
-          assert counts["result_count"] == (
+          assert counts["server_native_excluded"] == len(delta["server_exclusions"])
+          assert counts["result_count"] + counts["server_native_excluded"] == (
               delta["current"]["result_count"] - delta["baseline"]["result_count"]
           )
           assert counts["result_count"] == (
@@ -277,6 +282,9 @@ jobs:
           )
           identities = [entry["result_id"] for entry in delta["entries"]]
           assert identities == sorted(set(identities))
+          excluded = [entry["result_id"] for entry in delta["server_exclusions"]]
+          assert excluded == sorted(set(excluded))
+          assert not set(identities) & set(excluded)
           canonical = (
               json.dumps(delta, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
           ).encode("utf-8")

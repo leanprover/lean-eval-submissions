@@ -111,9 +111,10 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn(
-            'delta["current"]["result_count"] - delta["baseline"]["result_count"]',
+            'counts["result_count"] + counts["server_native_excluded"]',
             WORKFLOW,
         )
+        self.assertIn("--results-commit \"$EXPECTED_COMMIT\"", WORKFLOW)
         self.assertIn(
             "historical-replay-inventory-delta-${{ inputs.expected_commit }}",
             WORKFLOW,

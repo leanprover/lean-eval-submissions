@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lean-lang.org/schemas/lean-eval/historical-final-delta-executor-absence-v1.schema.json",
+  "title": "LeanEval final historical delta executor absence proof version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "status", "checked_at", "submissions_commit", "authority", "audit", "state", "controller_variables", "review_branches", "executors", "readbacks", "temporary_workflows"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_final_delta_executor_absence"},
+    "status": {"const": "verified_absent"},
+    "checked_at": {"type": "string", "format": "date-time"},
+    "submissions_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "authority": {"type": "object", "additionalProperties": false, "required": ["repository", "implementation_commit", "workflow_path", "workflow_run_id"], "properties": {"repository": {"const": "leanprover/lean-eval-submissions"}, "implementation_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "workflow_path": {"const": ".github/workflows/historical-final-delta-activation.yml"}, "workflow_run_id": {"type": "integer", "minimum": 1}}},
+    "audit": {"type": "object", "additionalProperties": false, "required": ["repository", "head", "tree"], "properties": {"repository": {"const": "leanprover/lean-eval-audit"}, "head": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}},
+    "state": {"type": "object", "additionalProperties": false, "required": ["repository", "head", "tree"], "properties": {"repository": {"const": "leanprover/lean-eval-state"}, "head": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}},
+    "controller_variables": {"const": {"HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED": "absent", "HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED": "absent"}},
+    "review_branches": {"const": {"audit": {"name": "historical-final-delta-archive-rewrap-v1", "status": "absent"}, "state": {"name": "historical-final-delta-state-v1", "status": "absent"}}},
+    "executors": {
+      "type": "object", "additionalProperties": false, "required": ["public", "private"],
+      "properties": {
+        "public": {"type": "object", "additionalProperties": false, "required": ["status", "state_recovery_kind"], "properties": {"status": {"const": "no_running_task"}, "state_recovery_kind": {"const": "none"}}},
+        "private": {"type": "object", "additionalProperties": false, "required": ["worker_prefix", "worker_count", "application_prefix", "application_count", "inventory_sha256"], "properties": {"worker_prefix": {"const": "hpr-"}, "worker_count": {"const": 0}, "application_prefix": {"const": "le-hpr-"}, "application_count": {"const": 0}, "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+      }
+    },
+    "readbacks": {"type": "object", "additionalProperties": false, "required": ["github_variables_sha256", "github_review_refs_sha256", "cloudflare_worker_services_sha256", "cloudflare_container_applications_sha256"], "properties": {"github_variables_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "github_review_refs_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "cloudflare_worker_services_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "cloudflare_container_applications_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "temporary_workflows": {"const": [".github/workflows/historical-final-delta-activation.yml", ".github/workflows/historical-final-delta-archive-migration.yml", ".github/workflows/historical-final-delta-packet.yml", ".github/workflows/historical-final-delta-plans.yml", ".github/workflows/historical-final-delta-public-decisions.yml", ".github/workflows/historical-final-delta-state.yml", ".github/workflows/promote-historical-final-delta-archive-migration.yml"]}
+  }
+}

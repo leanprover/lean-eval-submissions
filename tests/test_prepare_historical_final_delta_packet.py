@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,14 +15,18 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from inventory_historical_replay import canonical_inventory_bytes, inventory
 from prepare_historical_final_delta_packet import (
     FinalDeltaError,
+    _verify_results_checkout,
     build_packet,
     canonical,
     entry_sha256,
     write_exclusive,
 )
+from prepare_historical_final_delta_public_decisions import (
+    PublicDecisionError,
+    build_decisions,
+)
 from reconcile_historical_replay_inventory_delta import canonical_delta_bytes, reconcile
 from results_schema import canonical_file_bytes, result_id
-
 
 INVENTORY_SCHEMA = json.loads(
     (ROOT / "schemas" / "historical-replay-inventory-v1.schema.json").read_text(
@@ -86,15 +91,21 @@ class Fixture:
         public_available = record(
             "public", "b", public=True, benchmark=self.public_benchmark
         )
-        public_unavailable = record(
-            "public", "c", public=True, benchmark="4" * 40
-        )
+        public_unavailable = record("public", "c", public=True, benchmark="4" * 40)
         private_legacy = record(
             "private", "d", public=False, benchmark=self.private_benchmark
         )
         private_migrated = record(
             "private", "e", public=False, benchmark=self.private_benchmark
         )
+        server_native = record(
+            "server", "f", public=True, benchmark=self.public_benchmark
+        )
+        server_native["intake"] = {
+            "kind": "server",
+            "submission_id": "01a00000-0000-7000-8000-000000000006",
+        }
+        self.server_result = server_native["result_id"]
         self.ids = {
             "public_available": public_available["result_id"],
             "public_unavailable": public_unavailable["result_id"],
@@ -108,17 +119,29 @@ class Fixture:
             canonical_file_bytes(document("old", [old]))
         )
         (self.results / "public.json").write_bytes(
-            canonical_file_bytes(document("public", [public_available, public_unavailable]))
+            canonical_file_bytes(
+                document("public", [public_available, public_unavailable])
+            )
         )
         (self.results / "private.json").write_bytes(
-            canonical_file_bytes(document("private", [private_legacy, private_migrated]))
+            canonical_file_bytes(
+                document("private", [private_legacy, private_migrated])
+            )
+        )
+        (self.results / "server.json").write_bytes(
+            canonical_file_bytes(document("server", [server_native]))
         )
         baseline = inventory(self.baseline_results, "a" * 40)
         current = inventory(self.results, self.source_commit)
         baseline_raw = canonical_inventory_bytes(baseline)
         current_raw = canonical_inventory_bytes(current)
         delta = reconcile(
-            baseline, baseline_raw, current, current_raw, INVENTORY_SCHEMA
+            baseline,
+            baseline_raw,
+            current,
+            current_raw,
+            INVENTORY_SCHEMA,
+            self.results,
         )
         delta_raw = canonical_delta_bytes(delta)
         self.baseline_path.write_bytes(baseline_raw)
@@ -137,6 +160,9 @@ class Fixture:
                 [
                     {
                         "result_id": public_available["result_id"],
+                        "request_id": "prr_" + "1" * 64,
+                        "workflow_run_identity_sha256": "2" * 64,
+                        "source_kind": "github_repo",
                         "source_repository": public_available["submission"]["repo"],
                         "source_commit": public_available["submission"]["ref"],
                         "source_tree": "5" * 40,
@@ -144,11 +170,20 @@ class Fixture:
                     },
                     {
                         "result_id": public_unavailable["result_id"],
+                        "request_id": "prr_" + "3" * 64,
+                        "workflow_run_identity_sha256": "4" * 64,
+                        "source_kind": "github_repo",
                         "source_repository": public_unavailable["submission"]["repo"],
                         "source_commit": public_unavailable["submission"]["ref"],
                         "classification": "source_ref_permanently_unavailable",
                         "review_status": "reviewed",
-                        "evidence_sha256": "6" * 64,
+                        "candidate_entry_sha256": "6" * 64,
+                        "disposition_path": "evidence/public-replay/unavailability-dispositions-v1/"
+                        + "7" * 64
+                        + ".json",
+                        "disposition_sha256": "7" * 64,
+                        "reason_code": "source_ref_permanently_unavailable",
+                        "rationale_code": "accepted_immutable_source_ref_unavailable_without_archive",
                     },
                 ],
                 key=lambda item: item["result_id"],
@@ -214,11 +249,166 @@ class Fixture:
             private_crosswalk_schema_path=ROOT
             / "schemas"
             / "historical-private-archive-crosswalk-v1.schema.json",
+            authority_commit=self.source_commit,
             verify_git=False,
         )
 
 
 class HistoricalFinalDeltaPacketTests(unittest.TestCase):
+    def test_post_cutoff_server_append_preserves_logical_issue_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            results = root / "results"
+            results.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main", root], check=True)
+            subprocess.run(
+                ["git", "-C", root, "config", "user.name", "test"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", root, "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    root,
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/leanprover/lean-eval-submissions.git",
+                ],
+                check=True,
+            )
+            issue = record("issue", "a", public=True, benchmark="1" * 40)
+            (results / "issue.json").write_bytes(
+                canonical_file_bytes(document("issue", [issue]))
+            )
+            subprocess.run(["git", "-C", root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", root, "commit", "-q", "-m", "cutoff"], check=True
+            )
+            cutoff = subprocess.run(
+                ["git", "-C", root, "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            server = record("server", "b", public=True, benchmark="1" * 40)
+            server["intake"] = {
+                "kind": "server",
+                "submission_id": "01a00000-0000-7000-8000-000000000007",
+            }
+            (results / "server.json").write_bytes(
+                canonical_file_bytes(document("server", [server]))
+            )
+            subprocess.run(["git", "-C", root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", root, "commit", "-q", "-m", "server append"],
+                check=True,
+            )
+
+            _verify_results_checkout(results, cutoff)
+
+    def test_post_cutoff_issue_change_or_malformed_server_is_rejected(self) -> None:
+        for tamper in ("issue", "server_mutation", "malformed_server"):
+            with self.subTest(tamper=tamper), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                results = root / "results"
+                results.mkdir()
+                subprocess.run(
+                    ["git", "init", "-q", "-b", "main", root], check=True
+                )
+                subprocess.run(
+                    ["git", "-C", root, "config", "user.name", "test"], check=True
+                )
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        root,
+                        "config",
+                        "user.email",
+                        "test@example.com",
+                    ],
+                    check=True,
+                )
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        root,
+                        "remote",
+                        "add",
+                        "origin",
+                        "https://github.com/leanprover/lean-eval-submissions",
+                    ],
+                    check=True,
+                )
+                issue = record("issue", "a", public=True, benchmark="1" * 40)
+                (results / "issue.json").write_bytes(
+                    canonical_file_bytes(document("issue", [issue]))
+                )
+                cutoff_server = record(
+                    "server", "b", public=True, benchmark="1" * 40
+                )
+                cutoff_server["intake"] = {
+                    "kind": "server",
+                    "submission_id": "01a00000-0000-7000-8000-000000000008",
+                }
+                (results / "server.json").write_bytes(
+                    canonical_file_bytes(document("server", [cutoff_server]))
+                )
+                subprocess.run(["git", "-C", root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", root, "commit", "-q", "-m", "cutoff"],
+                    check=True,
+                )
+                cutoff = subprocess.run(
+                    ["git", "-C", root, "rev-parse", "HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                if tamper == "issue":
+                    added = record("issue", "c", public=True, benchmark="1" * 40)
+                    (results / "issue.json").write_bytes(
+                        canonical_file_bytes(document("issue", [issue, added]))
+                    )
+                elif tamper == "server_mutation":
+                    cutoff_server["accepted_at"] = "2026-09-30T00:00:01Z"
+                    (results / "server.json").write_bytes(
+                        canonical_file_bytes(document("server", [cutoff_server]))
+                    )
+                else:
+                    (results / "other.json").write_text("{}\n", encoding="utf-8")
+                subprocess.run(["git", "-C", root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", root, "commit", "-q", "-m", "tamper"],
+                    check=True,
+                )
+
+                with self.assertRaises(FinalDeltaError):
+                    _verify_results_checkout(results, cutoff)
+
+    def test_public_decision_producer_closes_exact_reviewed_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            reviewed = json.loads(fixture.decisions_path.read_text())
+            reviewed["kind"] = "historical_final_delta_public_authority"
+            reviewed_path = fixture.root / "reviewed-public-authority.json"
+            reviewed_path.write_bytes(canonical(reviewed))
+            produced = build_decisions(fixture.delta_path, reviewed_path)
+            self.assertEqual(
+                produced["kind"], "historical_final_delta_public_source_decisions"
+            )
+            self.assertEqual(produced["entries"], reviewed["entries"])
+
+            reviewed["entries"] = reviewed["entries"][:-1]
+            reviewed_path.write_bytes(canonical(reviewed))
+            with self.assertRaisesRegex(PublicDecisionError, "exactly cover"):
+                build_decisions(fixture.delta_path, reviewed_path)
+
     def test_packet_closes_delta_and_reports_only_required_work(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Fixture(pathlib.Path(temporary))
@@ -231,7 +421,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             },
         )
         self.assertEqual(packet["archive_migration"]["legacy_unique_archive_count"], 1)
-        self.assertEqual(packet["archive_migration"]["migrated_unique_archive_count"], 1)
+        self.assertEqual(
+            packet["archive_migration"]["migrated_unique_archive_count"], 1
+        )
         self.assertEqual(
             packet["image_requirements"],
             [
@@ -250,17 +442,25 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             ],
         )
         self.assertEqual(packet["image_requirement_count"], 2)
-        self.assertEqual(packet["activation_status"], "blocked_pending_exact_profiles_and_state_append")
+        self.assertEqual(packet["cutoff"]["delta_counts"]["server_native_excluded"], 1)
+        self.assertEqual(
+            [entry["result_id"] for entry in packet["server_exclusions"]],
+            [fixture.server_result],
+        )
+        self.assertEqual(
+            packet["activation_status"],
+            "blocked_pending_exact_profiles_and_state_append",
+        )
         for entry in packet["entries"]:
             expected = dict(entry)
             recorded = expected.pop("packet_entry_sha256")
             self.assertEqual(recorded, entry_sha256(expected))
             if entry["source_visibility"] == "private":
                 self.assertNotIn("source", entry)
-        validator = Draft202012Validator(
-            PACKET_SCHEMA, format_checker=FormatChecker()
+        validator = Draft202012Validator(PACKET_SCHEMA, format_checker=FormatChecker())
+        errors = sorted(
+            validator.iter_errors(packet), key=lambda error: list(error.path)
         )
-        errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
         self.assertEqual(errors, [])
 
     def test_changed_delta_fails_exact_reconciliation(self) -> None:
@@ -269,7 +469,22 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             changed = json.loads(fixture.delta_path.read_bytes())
             changed["entries"][0]["problem_id"] = "changed"
             fixture.delta_path.write_bytes(canonical(changed))
-            with self.assertRaisesRegex(FinalDeltaError, "exact append-only reconciliation"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "exact append-only reconciliation"
+            ):
+                fixture.build()
+
+    def test_tampered_server_exclusion_fails_exact_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            changed = json.loads(fixture.delta_path.read_bytes())
+            changed["server_exclusions"][0]["submission_id"] = (
+                "01a00000-0000-7000-8000-000000000099"
+            )
+            fixture.delta_path.write_bytes(canonical(changed))
+            with self.assertRaisesRegex(
+                FinalDeltaError, "exact append-only reconciliation"
+            ):
                 fixture.build()
 
     def test_public_decisions_must_be_complete_and_reviewed(self) -> None:
@@ -316,7 +531,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
                 "archive_metadata_conflict": 0,
             }
             fixture.crosswalk_path.write_bytes(canonical(crosswalk))
-            with self.assertRaisesRegex(FinalDeltaError, "unresolved archive classification"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "unresolved archive classification"
+            ):
                 fixture.build()
 
     def test_crosswalk_must_cover_all_current_private_results(self) -> None:
@@ -327,7 +544,9 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             crosswalk["private_result_count"] = 1
             crosswalk["classification_counts"]["bound"] = 1
             fixture.crosswalk_path.write_bytes(canonical(crosswalk))
-            with self.assertRaisesRegex(FinalDeltaError, "identity is invalid|exactly cover"):
+            with self.assertRaisesRegex(
+                FinalDeltaError, "identity is invalid|exactly cover"
+            ):
                 fixture.build()
 
     def test_output_is_exclusive(self) -> None:

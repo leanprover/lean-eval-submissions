@@ -74,9 +74,12 @@ Issue intake remains open during the server-intake overlap, so the first
 reviewed inventory is a baseline rather than a promise that the Results store
 will stay at 1,301 entries. `reconcile_historical_replay_inventory_delta.py`
 compares a later full inventory with that exact baseline. It rejects deletion
-or mutation of any baseline entry and emits only newly accepted, source-free
-entries, binding both source commits, Results-store digests, full-inventory
-digests, and counts. The output contract is
+or mutation of any baseline entry, partitions every new entry by its exact
+canonical intake identity, and emits the issue-intake entries as the historical
+delta. Its separate source-free server exclusion set binds every post-baseline
+server Result to its submission, Result file, and Result-tree digest. Both
+source commits, Results-store digests, full-inventory digests, and counts remain
+bound. The output contract is
 `schemas/historical-replay-inventory-delta-v1.schema.json`.
 
 Set `confirm_append_only_delta` on the protected inventory workflow to build
@@ -88,13 +91,13 @@ issue-intake cutoff, the Results-only protected-main commit enters the
 reviewer-gated, deployment-free immutable-tag promotion workflow. Approve that
 exact commit only after its protected-main CI succeeds, then dispatch the
 inventory workflow from the resulting `lean-eval-dispatch/<full-commit>` tag.
-Commit and review both the full inventory and its delta, then feed every delta
-entry into the same public/private classification and terminal replay gates as
-the baseline corpus. Retain the legacy issue-intake decryption authority until
-that final delta has closed.
+Commit and review both the full inventory and its delta, then feed every
+issue-intake delta entry into the same public/private classification and
+terminal replay gates as the baseline corpus. Before activation, require every
+excluded server Result to have one matching `result.recorded` event in exact
+validated State. Retain the legacy issue-intake decryption authority until that
+final delta has closed.
 
-At protected source `7eb77aa8c2ef7f4d598c77240ea9effbb248dce2`,
-the deterministic comparison finds exactly three post-baseline entries, all
-public-source pending and none private-archive pending. This observation does
-not freeze the final delta; later issue acceptances must be included by rerunning
-the workflow at the actual cutoff.
+The observed counts before cutoff do not freeze the final delta. Later issue
+acceptances must be included by rerunning the workflow at the actual cutoff;
+later server-native Results remain outside the historical replay corpus.

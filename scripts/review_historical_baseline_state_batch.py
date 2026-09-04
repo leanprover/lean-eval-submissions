@@ -418,14 +418,18 @@ def summarize(
             for event in candidate_events
             if event.get("event_type") == expectation["lanes"][lane]["qualification_event_type"]
         }
+        lane_event_types = {
+            expectation["lanes"][lane]["authority_event_type"],
+            expectation["lanes"][lane]["qualification_event_type"],
+        }
+        if "unavailable_event_type" in expectation["lanes"][lane]:
+            lane_event_types.add(
+                expectation["lanes"][lane]["unavailable_event_type"]
+            )
         lane_events[lane] = [
             event
             for event in candidate_events
-            if event.get("event_type")
-            in {
-                expectation["lanes"][lane]["authority_event_type"],
-                expectation["lanes"][lane]["qualification_event_type"],
-            }
+            if event.get("event_type") in lane_event_types
             or (
                 event.get("event_type") == expectation["lanes"][lane]["enqueue_event_type"]
                 and event.get("causation_event_id") in qualification_ids

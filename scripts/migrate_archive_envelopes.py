@@ -51,6 +51,7 @@ CANONICAL_SELECTED_INVENTORY_DIGEST = (
     "a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4"
 )
 AUDIT_REVIEW_BRANCH = "refs/heads/archive-file-key-rewrap-v1"
+FINAL_DELTA_AUDIT_REVIEW_BRANCH = "refs/heads/historical-final-delta-archive-rewrap-v1"
 AUDIT_MAIN_REF = "refs/remotes/origin/main"
 AUDIT_ORIGINS = {
     "git@github.com:leanprover/lean-eval-audit.git",
@@ -146,20 +147,20 @@ def count_archive_ciphertexts_in_tree(root: pathlib.Path, tree: str) -> int:
     if COMMIT.fullmatch(tree) is None:
         raise MigrationError("audit tree identity must be a full Git object ID")
     output = _git(root, "ls-tree", "-r", "--name-only", "-z", tree).stdout
-    return sum(
-        path.endswith(b".tar.age")
-        for path in output.split(b"\0")
-        if path
-    )
+    return sum(path.endswith(b".tar.age") for path in output.split(b"\0") if path)
 
 
-def _require_remote_review_branch_absent(root: pathlib.Path) -> None:
+def _require_remote_review_branch_absent(
+    root: pathlib.Path, review_branch: str = AUDIT_REVIEW_BRANCH
+) -> None:
+    if review_branch not in {AUDIT_REVIEW_BRANCH, FINAL_DELTA_AUDIT_REVIEW_BRANCH}:
+        raise MigrationError("audit migration review branch is outside the closed set")
     result = _git(
         root,
         "ls-remote",
         "--exit-code",
         "origin",
-        AUDIT_REVIEW_BRANCH,
+        review_branch,
         check=False,
     )
     if result.returncode == 0:
@@ -194,6 +195,7 @@ def preflight_audit_checkout(
     root: pathlib.Path,
     source_commit: str,
     plan: dict[str, Any],
+    review_branch: str = AUDIT_REVIEW_BRANCH,
 ) -> dict[str, Any]:
     if COMMIT.fullmatch(source_commit) is None:
         raise MigrationError("audit source commit must be a full commit ID")
@@ -204,7 +206,7 @@ def preflight_audit_checkout(
         raise MigrationError("audit checkout is not at the selected source commit")
     if _git(root, "status", "--porcelain").stdout:
         raise MigrationError("audit source checkout is not clean")
-    _require_remote_review_branch_absent(root)
+    _require_remote_review_branch_absent(root, review_branch)
     _git(
         root,
         "fetch",
@@ -238,11 +240,7 @@ def preflight_audit_checkout(
         "-z",
         f"{source_commit}..{main_commit}",
     ).stdout
-    changed = {
-        path.decode("utf-8")
-        for path in changed_raw.split(b"\0")
-        if path
-    }
+    changed = {path.decode("utf-8") for path in changed_raw.split(b"\0") if path}
     touched = _migration_touched_paths(plan)
     overlap = sorted(changed & touched)
     if overlap:
@@ -263,10 +261,14 @@ def preflight_audit_checkout(
 
 
 def _timestamp_milliseconds(value: Any) -> int:
-    if not isinstance(value, str) or re.fullmatch(
-        r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",
-        value,
-    ) is None:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(
+            r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",
+            value,
+        )
+        is None
+    ):
         raise MigrationError("legacy archived_at must use canonical UTC seconds")
     try:
         parsed = dt.datetime.fromisoformat(value[:-1] + "+00:00")
@@ -368,13 +370,17 @@ def build_plan(
         if schema == 3:
             envelope = validate_envelope(sidecar.get("key_envelope"))
             if envelope["archive_ciphertext_sha256"] != _sha256(ciphertext_path):
-                raise MigrationError("retained schema-version-3 envelope digest mismatch")
-            retained.append({
-                "source_path": relative_ciphertext,
-                "submission_id": envelope["submission_id"],
-                "ciphertext_sha256": envelope["archive_ciphertext_sha256"],
-                "sidecar_sha256": _sha256(sidecar_path),
-            })
+                raise MigrationError(
+                    "retained schema-version-3 envelope digest mismatch"
+                )
+            retained.append(
+                {
+                    "source_path": relative_ciphertext,
+                    "submission_id": envelope["submission_id"],
+                    "ciphertext_sha256": envelope["archive_ciphertext_sha256"],
+                    "sidecar_sha256": _sha256(sidecar_path),
+                }
+            )
             seen_targets.add(relative_ciphertext)
             continue
         _validate_source_sidecar(sidecar, schema, ciphertext_path)
@@ -391,16 +397,18 @@ def build_plan(
         if target_path in seen_targets:
             raise MigrationError(f"duplicate migration target: {target_path}")
         seen_targets.add(target_path)
-        entries.append({
-            "source_path": relative_ciphertext,
-            "source_schema_version": schema,
-            "source_ciphertext_sha256": sidecar["sha256_ciphertext"],
-            "source_sidecar_sha256": _sha256(sidecar_path),
-            "plaintext_sha256": sidecar["sha256_plaintext_tar"],
-            "plaintext_size_bytes": sidecar["size_bytes_plaintext_tar"],
-            "submission_id": submission_id,
-            "target_path": target_path,
-        })
+        entries.append(
+            {
+                "source_path": relative_ciphertext,
+                "source_schema_version": schema,
+                "source_ciphertext_sha256": sidecar["sha256_ciphertext"],
+                "source_sidecar_sha256": _sha256(sidecar_path),
+                "plaintext_sha256": sidecar["sha256_plaintext_tar"],
+                "plaintext_size_bytes": sidecar["size_bytes_plaintext_tar"],
+                "submission_id": submission_id,
+                "target_path": target_path,
+            }
+        )
     if not entries:
         raise MigrationError("audit inventory has no shared-recipient objects")
     plan_core = {
@@ -593,6 +601,14 @@ def _load_plan(path: pathlib.Path) -> dict[str, Any]:
     return plan
 
 
+def _load_selection(path: pathlib.Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if path.is_symlink() or not path.is_file():
+        raise MigrationError("final-delta migration binding must be one regular file")
+    return _read_json(path, "final-delta migration binding")
+
+
 def _extract_file_key(
     helper: pathlib.Path, identity: pathlib.Path, ciphertext: pathlib.Path
 ) -> bytes:
@@ -677,7 +693,56 @@ def _wrap_file_key(
     )
 
 
-def _require_canonical_selection(plan: dict[str, Any]) -> None:
+def _require_canonical_selection(
+    plan: dict[str, Any], selection: dict[str, Any] | None = None
+) -> None:
+    if selection is not None:
+        required = {
+            "schema_version",
+            "kind",
+            "preparation_repository",
+            "preparation_commit",
+            "preparation_path",
+            "preparation_sha256",
+            "source_audit_commit",
+            "source_audit_tree",
+            "crosswalk_path",
+            "crosswalk_sha256",
+            "migration_plan_sha256",
+            "migration_inventory_digest",
+            "migration_count",
+            "review_branch",
+        }
+        plan_raw = (
+            json.dumps(plan, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        if (
+            not isinstance(selection, dict)
+            or set(selection) != required
+            or selection.get("schema_version") != 1
+            or selection.get("kind")
+            != "historical_final_delta_archive_migration_binding"
+            or selection.get("preparation_repository")
+            != "leanprover/lean-eval-submissions"
+            or COMMIT.fullmatch(str(selection.get("preparation_commit"))) is None
+            or DIGEST.fullmatch(str(selection.get("preparation_sha256"))) is None
+            or COMMIT.fullmatch(str(selection.get("source_audit_commit"))) is None
+            or COMMIT.fullmatch(str(selection.get("source_audit_tree"))) is None
+            or DIGEST.fullmatch(str(selection.get("crosswalk_sha256"))) is None
+            or DIGEST.fullmatch(str(selection.get("migration_plan_sha256"))) is None
+            or selection.get("migration_plan_sha256")
+            != hashlib.sha256(plan_raw).hexdigest()
+            or selection.get("source_audit_commit") != plan.get("source_commit")
+            or selection.get("migration_inventory_digest")
+            != plan.get("inventory_digest")
+            or selection.get("migration_count") != plan.get("migration_count")
+            or plan.get("retained_count") != 0
+            or plan.get("retained") != []
+            or selection.get("review_branch")
+            != FINAL_DELTA_AUDIT_REVIEW_BRANCH.removeprefix("refs/heads/")
+        ):
+            raise MigrationError("application requires the exact final-delta selection")
+        return
     if (
         plan.get("source_commit") != CANONICAL_AUDIT_COMMIT
         or plan.get("inventory_digest") != CANONICAL_SELECTED_INVENTORY_DIGEST
@@ -698,18 +763,24 @@ def migrate_one(
     file_key_helper: pathlib.Path,
     adapter_executable: pathlib.Path,
     source_path: str,
+    selection: dict[str, Any] | None = None,
 ) -> None:
-    _require_canonical_selection(plan)
+    _require_canonical_selection(plan, selection)
     if output_root.is_symlink() or (output_root.exists() and not output_root.is_dir()):
         raise MigrationError("migration output root must be a real directory")
-    matches = [entry for entry in plan["entries"] if entry.get("source_path") == source_path]
+    matches = [
+        entry for entry in plan["entries"] if entry.get("source_path") == source_path
+    ]
     if len(matches) != 1:
         raise MigrationError("source path must identify exactly one migration entry")
     entry = matches[0]
     source_ciphertext = source_root.joinpath(*source_path.split("/"))
     source_sidecar_path = source_ciphertext.with_suffix("").with_suffix(".json")
     source_sidecar = _read_json(source_sidecar_path, "source sidecar")
-    if _sha256(source_ciphertext) != entry["source_ciphertext_sha256"] or _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]:
+    if (
+        _sha256(source_ciphertext) != entry["source_ciphertext_sha256"]
+        or _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]
+    ):
         raise MigrationError("source object changed after the migration plan")
     target_ciphertext = output_root.joinpath(*entry["target_path"].split("/"))
     target_sidecar = target_ciphertext.with_suffix("").with_suffix(".json")
@@ -732,13 +803,15 @@ def migrate_one(
             for key in PRESERVED_FIELDS
             if key in source_sidecar
         }
-        migrated.update({
-            "schema_version": 3,
-            "submission_id": entry["submission_id"],
-            "sha256_ciphertext": entry["source_ciphertext_sha256"],
-            "size_bytes_ciphertext": source_ciphertext.stat().st_size,
-            "key_envelope": envelope,
-        })
+        migrated.update(
+            {
+                "schema_version": 3,
+                "submission_id": entry["submission_id"],
+                "sha256_ciphertext": entry["source_ciphertext_sha256"],
+                "size_bytes_ciphertext": source_ciphertext.stat().st_size,
+                "key_envelope": envelope,
+            }
+        )
         shutil.copyfile(source_ciphertext, target_ciphertext)
         target_ciphertext.chmod(0o600)
         target_sidecar.write_text(
@@ -769,9 +842,12 @@ def _files_equal(first: pathlib.Path, second: pathlib.Path) -> bool:
 
 
 def validate_output(
-    plan: dict[str, Any], source_root: pathlib.Path, output_root: pathlib.Path
+    plan: dict[str, Any],
+    source_root: pathlib.Path,
+    output_root: pathlib.Path,
+    selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    _require_canonical_selection(plan)
+    _require_canonical_selection(plan, selection)
     if source_root.is_symlink() or not source_root.is_dir():
         raise MigrationError("migration source root must be a real directory")
     if output_root.is_symlink() or not output_root.is_dir():
@@ -839,9 +915,7 @@ def validate_output(
             or sidecar.get("size_bytes_plaintext_tar") != entry["plaintext_size_bytes"]
         ):
             raise MigrationError("migrated plaintext evidence changed")
-        expected_fields = {
-            key for key in PRESERVED_FIELDS if key in source_sidecar
-        } | {
+        expected_fields = {key for key in PRESERVED_FIELDS if key in source_sidecar} | {
             "schema_version",
             "submission_id",
             "sha256_ciphertext",
@@ -882,6 +956,10 @@ def main(argv: list[str] | None = None) -> int:
     inventory.add_argument("--source-commit", required=True)
     inventory.add_argument("--crosswalk", required=True, type=pathlib.Path)
     inventory.add_argument("--output", required=True, type=pathlib.Path)
+    full_inventory = commands.add_parser("full-inventory")
+    full_inventory.add_argument("--audit-root", required=True, type=pathlib.Path)
+    full_inventory.add_argument("--source-commit", required=True)
+    full_inventory.add_argument("--output", required=True, type=pathlib.Path)
     migrate = commands.add_parser("migrate-one")
     migrate.add_argument("--plan", required=True, type=pathlib.Path)
     migrate.add_argument("--source-root", required=True, type=pathlib.Path)
@@ -890,15 +968,18 @@ def main(argv: list[str] | None = None) -> int:
     migrate.add_argument("--file-key-helper", required=True, type=pathlib.Path)
     migrate.add_argument("--adapter-executable", required=True, type=pathlib.Path)
     migrate.add_argument("--source-path", required=True)
+    migrate.add_argument("--selection-binding", type=pathlib.Path)
     validate = commands.add_parser("validate-output")
     validate.add_argument("--plan", required=True, type=pathlib.Path)
     validate.add_argument("--source-root", required=True, type=pathlib.Path)
     validate.add_argument("--output-root", required=True, type=pathlib.Path)
     validate.add_argument("--output", required=True, type=pathlib.Path)
+    validate.add_argument("--selection-binding", type=pathlib.Path)
     preflight = commands.add_parser("preflight-audit")
     preflight.add_argument("--audit-root", required=True, type=pathlib.Path)
     preflight.add_argument("--source-commit", required=True)
     preflight.add_argument("--plan", required=True, type=pathlib.Path)
+    preflight.add_argument("--review-branch", default=AUDIT_REVIEW_BRANCH)
     count = commands.add_parser("count-archive-ciphertexts")
     count.add_argument("--audit-root", required=True, type=pathlib.Path)
     count.add_argument("--tree", required=True)
@@ -910,6 +991,11 @@ def main(argv: list[str] | None = None) -> int:
                 args.output,
                 select_bound_schema1_archives(full_plan, args.crosswalk.resolve()),
             )
+        elif args.command == "full-inventory":
+            _write(
+                args.output,
+                build_plan(args.audit_root.resolve(), args.source_commit),
+            )
         elif args.command == "migrate-one":
             migrate_one(
                 _load_plan(args.plan),
@@ -919,6 +1005,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.file_key_helper.resolve(),
                 args.adapter_executable.resolve(),
                 args.source_path,
+                _load_selection(args.selection_binding),
             )
         elif args.command == "validate-output":
             _write(
@@ -927,6 +1014,7 @@ def main(argv: list[str] | None = None) -> int:
                     _load_plan(args.plan),
                     args.source_root.resolve(),
                     args.output_root.resolve(),
+                    _load_selection(args.selection_binding),
                 ),
             )
         elif args.command == "preflight-audit":
@@ -936,6 +1024,7 @@ def main(argv: list[str] | None = None) -> int:
                         args.audit_root.resolve(),
                         args.source_commit,
                         _load_plan(args.plan),
+                        args.review_branch,
                     ),
                     ensure_ascii=True,
                     separators=(",", ":"),
@@ -944,9 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(
-                count_archive_ciphertexts_in_tree(
-                    args.audit_root.resolve(), args.tree
-                )
+                count_archive_ciphertexts_in_tree(args.audit_root.resolve(), args.tree)
             )
     except (MigrationError, OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"error: {error}", file=sys.stderr)

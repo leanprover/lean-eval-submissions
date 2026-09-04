@@ -7,14 +7,25 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
+import subprocess
 import sys
 from typing import Any
 
+from build_result_receipt import result_tree_digest
 from inventory_historical_replay import canonical_inventory_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
+from results_schema import (
+    ResultsSchemaError,
+    canonical_file_bytes,
+    canonical_store_digest,
+    validate_v2,
+)
 
 MAX_DELTA_BYTES = 16 * 1024 * 1024
+MAX_RESULTS_BYTES = 32 * 1024 * 1024
+MAX_RESULTS = 10_000
 
 
 class InventoryDeltaError(ValueError):
@@ -96,12 +107,144 @@ def _identity(value: dict[str, Any], raw: bytes) -> dict[str, Any]:
     }
 
 
+def _git_bytes(root: pathlib.Path, *arguments: str) -> bytes:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), *arguments],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise InventoryDeltaError("cannot read the exact Results commit") from error
+    if len(completed.stdout) > MAX_RESULTS_BYTES:
+        raise InventoryDeltaError("exact Results Git output exceeds its bound")
+    return completed.stdout
+
+
+def result_documents(
+    results_root: pathlib.Path, source_commit: str | None = None
+) -> list[tuple[str, dict[str, Any], bytes]]:
+    if results_root.is_symlink() or not results_root.is_dir():
+        raise InventoryDeltaError("Results root must be one real directory")
+    sources: list[tuple[str, bytes]] = []
+    if source_commit is None:
+        for path in sorted(results_root.iterdir(), key=lambda item: item.name):
+            if path.name == ".gitkeep":
+                continue
+            if path.is_symlink() or not path.is_file() or path.suffix != ".json":
+                raise InventoryDeltaError("Results contains a noncanonical root entry")
+            sources.append((f"results/{path.name}", path.read_bytes()))
+    else:
+        repository_root = pathlib.Path(
+            _git_bytes(results_root, "rev-parse", "--show-toplevel").decode().strip()
+        ).resolve()
+        if results_root.resolve() != repository_root / "results":
+            raise InventoryDeltaError("Results root is not the canonical results subtree")
+        entries = _git_bytes(
+            repository_root,
+            "ls-tree",
+            "-r",
+            source_commit,
+            "--",
+            "results",
+        ).decode("utf-8").splitlines()
+        for tree_entry in entries:
+            try:
+                metadata, relative = tree_entry.split("\t", 1)
+                mode, object_kind, object_id = metadata.split(" ")
+            except ValueError as error:
+                raise InventoryDeltaError(
+                    "exact Results commit has an invalid tree entry"
+                ) from error
+            if relative == "results/.gitkeep":
+                continue
+            if (
+                mode != "100644"
+                or object_kind != "blob"
+                or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", object_id) is None
+                or not relative.startswith("results/")
+                or pathlib.PurePosixPath(relative).parent.as_posix() != "results"
+                or not relative.endswith(".json")
+            ):
+                raise InventoryDeltaError("exact Results commit has a noncanonical entry")
+            sources.append(
+                (
+                    relative,
+                    _git_bytes(repository_root, "cat-file", "blob", object_id),
+                )
+            )
+    documents: list[tuple[str, dict[str, Any], bytes]] = []
+    total_bytes = 0
+    for relative, raw in sources:
+        total_bytes += len(raw)
+        if total_bytes > MAX_RESULTS_BYTES:
+            raise InventoryDeltaError("Results store exceeds its byte bound")
+        try:
+            document = validate_v2(json.loads(raw), context=relative)
+        except (UnicodeError, json.JSONDecodeError, ResultsSchemaError) as error:
+            raise InventoryDeltaError("Results store is invalid") from error
+        if canonical_file_bytes(document) != raw:
+            raise InventoryDeltaError("Results store is not canonical schema version 2")
+        documents.append((relative, document, raw))
+    return documents
+
+
+def _result_intakes(
+    results_root: pathlib.Path,
+    current: dict[str, Any],
+    source_commit: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    documents = result_documents(results_root, source_commit)
+    intakes: dict[str, dict[str, Any]] = {}
+    for relative, document, raw in documents:
+        file_sha256 = hashlib.sha256(raw).hexdigest()
+        tree_digest = result_tree_digest(relative, raw)
+        for record in document["results"]:
+            result_id = record["result_id"]
+            if result_id in intakes or len(intakes) >= MAX_RESULTS:
+                raise InventoryDeltaError("Results identity inventory is invalid")
+            intake = record["intake"]
+            if intake["kind"] == "issue":
+                binding = {
+                    "kind": "issue",
+                    "issue_number": intake["issue_number"],
+                }
+            elif intake["kind"] == "server":
+                binding = {
+                    "kind": "server",
+                    "submission_id": intake["submission_id"],
+                }
+            else:  # The v2 reader currently closes this, but fail locally too.
+                raise InventoryDeltaError("Result intake kind is invalid")
+            intakes[result_id] = {
+                **binding,
+                "results_path": relative,
+                "result_file_sha256": file_sha256,
+                "result_tree_digest": tree_digest,
+            }
+    try:
+        store_digest = canonical_store_digest(
+            [(relative, document) for relative, document, _ in documents]
+        )
+    except (ResultsSchemaError, UnicodeError, ValueError) as error:
+        raise InventoryDeltaError("Results store digest cannot be reproduced") from error
+    if store_digest != current["results_store_sha256"]:
+        raise InventoryDeltaError("Results store differs from the current inventory")
+    current_ids = {entry["result_id"] for entry in current["entries"]}
+    if set(intakes) != current_ids:
+        raise InventoryDeltaError("Results identities differ from the current inventory")
+    return intakes
+
+
 def reconcile(
     baseline: dict[str, Any],
     baseline_raw: bytes,
     current: dict[str, Any],
     current_raw: bytes,
     inventory_schema: dict[str, Any],
+    results_root: pathlib.Path | None = None,
+    results_commit: str | None = None,
 ) -> dict[str, Any]:
     _validate_inventory(baseline, inventory_schema, "baseline inventory")
     _validate_inventory(current, inventory_schema, "current inventory")
@@ -117,12 +260,41 @@ def reconcile(
             raise InventoryDeltaError(
                 f"current inventory changed baseline result {result_id}"
             )
-    delta_entries = [
+    all_delta_entries = [
         entry
         for result_id, entry in current_entries.items()
         if result_id not in baseline_entries
     ]
+    if results_root is None:
+        # Retain the pure inventory helper for old callers and focused tests.
+        # Canonical cutoff production always supplies the exact Results root.
+        delta_entries = all_delta_entries
+        server_exclusions: list[dict[str, Any]] = []
+    else:
+        intakes = _result_intakes(results_root, current, results_commit)
+        delta_entries = []
+        server_exclusions = []
+        for entry in all_delta_entries:
+            result_id = entry["result_id"]
+            intake = intakes[result_id]
+            if intake["kind"] == "issue":
+                delta_entries.append(entry)
+            else:
+                server_exclusions.append(
+                    {
+                        "result_id": result_id,
+                        "submission_id": intake["submission_id"],
+                        "results_path": intake["results_path"],
+                        "result_file_sha256": intake["result_file_sha256"],
+                        "result_tree_digest": intake["result_tree_digest"],
+                    }
+                )
     delta_entries.sort(key=lambda entry: entry["result_id"])
+    server_exclusions.sort(key=lambda entry: entry["result_id"])
+    if current["result_count"] != (
+        baseline["result_count"] + len(delta_entries) + len(server_exclusions)
+    ):
+        raise InventoryDeltaError("issue and server delta partition is incomplete")
     public_count = sum(
         entry["source"]["readiness"] == "public_source_probe_pending"
         for entry in delta_entries
@@ -138,7 +310,9 @@ def reconcile(
             "result_count": len(delta_entries),
             "public_source_probe_pending": public_count,
             "private_archive_migration_pending": private_count,
+            "server_native_excluded": len(server_exclusions),
         },
+        "server_exclusions": server_exclusions,
         "entries": delta_entries,
     }
 
@@ -168,6 +342,8 @@ def main() -> int:
     parser.add_argument("--baseline", required=True, type=pathlib.Path)
     parser.add_argument("--current", required=True, type=pathlib.Path)
     parser.add_argument("--inventory-schema", required=True, type=pathlib.Path)
+    parser.add_argument("--results-root", required=True, type=pathlib.Path)
+    parser.add_argument("--results-commit")
     parser.add_argument("--output", required=True, type=pathlib.Path)
     args = parser.parse_args()
     try:
@@ -176,7 +352,15 @@ def main() -> int:
         current, current_raw = _read_canonical_json(args.current, "current inventory")
         write_exclusive(
             args.output,
-            reconcile(baseline, baseline_raw, current, current_raw, schema),
+            reconcile(
+                baseline,
+                baseline_raw,
+                current,
+                current_raw,
+                schema,
+                args.results_root.resolve(),
+                args.results_commit,
+            ),
         )
     except (InventoryDeltaError, OSError, ValueError) as error:
         print(f"historical-replay-inventory-delta: {error}", file=sys.stderr)

@@ -1,0 +1,121 @@
+name: Prepare final historical delta replay plans
+
+on:
+  workflow_dispatch:
+    inputs:
+      authority_commit: {description: Exact protected commit containing preparation and profiles, required: true, type: string}
+      preparation_sha256: {description: Exact committed final-delta preparation digest, required: true, type: string}
+      public_profile_sha256_json: {description: JSON array of exact public profile digests, required: true, type: string}
+      private_profile_sha256_json: {description: JSON array of exact private profile digests, required: true, type: string}
+      confirmation: {description: Exact confirmation prepare-reviewed-final-delta-plans, required: true, type: string}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-historical-final-delta-plans
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require exact protected authority and closed inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORITY: ${{ inputs.authority_commit }}
+          PREPARATION: ${{ inputs.preparation_sha256 }}
+          PUBLIC_PROFILES: ${{ inputs.public_profile_sha256_json }}
+          PRIVATE_PROFILES: ${{ inputs.private_profile_sha256_json }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$CONFIRMATION" = prepare-reviewed-final-delta-plans
+          [[ "$AUTHORITY" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PREPARATION" =~ ^[0-9a-f]{64}$ ]]
+          test "$AUTHORITY" = "$GITHUB_SHA"
+          test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .commit.sha)" = "$AUTHORITY"
+          for value in "$PUBLIC_PROFILES" "$PRIVATE_PROFILES"; do
+            jq -e 'type == "array" and length <= 2000 and all(.[]; type == "string" and test("^[0-9a-f]{64}$")) and (unique | length) == length' <<< "$value" >/dev/null
+          done
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {fetch-depth: 0, persist-credentials: false}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          path: benchmark
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with: {python-version: '3.11.10'}
+
+      - name: Install exact profile-validation dependency
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Build exact plans or one closed qualification blocker twice
+        env:
+          AUTHORITY: ${{ inputs.authority_commit }}
+          PREPARATION: ${{ inputs.preparation_sha256 }}
+          PUBLIC_PROFILES: ${{ inputs.public_profile_sha256_json }}
+          PRIVATE_PROFILES: ${{ inputs.private_profile_sha256_json }}
+        run: |
+          set -euo pipefail
+          preparation="evidence/historical-replay/final-delta-preparations/$PREPARATION.json"
+          test "$(git hash-object "$preparation")" = "$(git rev-parse "$AUTHORITY:$preparation")"
+          crosswalk_commit=$(jq -er .classification_inputs.private_crosswalk.commit "$preparation")
+          public_args=()
+          while IFS= read -r digest; do
+            path="evidence/public-replay/profiles/$digest.json"
+            test "$(sha256sum "$path" | cut -d' ' -f1)" = "$digest"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$AUTHORITY:$path")"
+            public_args+=(--public-profile "$path")
+          done < <(jq -r '.[]' <<< "$PUBLIC_PROFILES")
+          private_args=()
+          while IFS= read -r digest; do
+            path="evidence/private-replay/profiles/$digest.json"
+            test "$(sha256sum "$path" | cut -d' ' -f1)" = "$digest"
+            test "$(git hash-object "$path")" = "$(git rev-parse "$AUTHORITY:$path")"
+            private_args+=(--private-profile "$path")
+          done < <(jq -r '.[]' <<< "$PRIVATE_PROFILES")
+          for suffix in one two; do
+            mkdir "$RUNNER_TEMP/$suffix"
+            args=(--preparation "$preparation" --preparation-commit "$AUTHORITY" --crosswalk-commit "$crosswalk_commit" --public-profile-commit "$AUTHORITY" --private-profile-commit "$AUTHORITY" --benchmark-root benchmark --requirements-output "$RUNNER_TEMP/$suffix/requirements.json" --public-plan-output "$RUNNER_TEMP/$suffix/public-plan.json" --private-plan-output "$RUNNER_TEMP/$suffix/private-plan.json")
+            args+=("${public_args[@]}" "${private_args[@]}")
+            python scripts/prepare_historical_final_delta_activation.py "${args[@]}"
+          done
+          cmp "$RUNNER_TEMP/one/requirements.json" "$RUNNER_TEMP/two/requirements.json"
+          status=$(jq -er .activation_status "$RUNNER_TEMP/one/requirements.json")
+          if [ "$status" = blocked ]; then
+            test ! -e "$RUNNER_TEMP/one/public-plan.json"
+            test ! -e "$RUNNER_TEMP/one/private-plan.json"
+          else
+            test "$status" = ready
+            cmp "$RUNNER_TEMP/one/public-plan.json" "$RUNNER_TEMP/two/public-plan.json"
+            cmp "$RUNNER_TEMP/one/private-plan.json" "$RUNNER_TEMP/two/private-plan.json"
+            python scripts/prepare_historical_final_delta_state.py expectation \
+              --public-plan "$RUNNER_TEMP/one/public-plan.json" \
+              --private-plan "$RUNNER_TEMP/one/private-plan.json" \
+              --output "$RUNNER_TEMP/one/historical-final-delta-state-batch-v1.json"
+          fi
+          mv "$RUNNER_TEMP/one" "$RUNNER_TEMP/historical-final-delta-plans"
+
+      - name: Upload only canonical source-free outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-final-delta-plans-${{ github.sha }}
+          path: ${{ runner.temp }}/historical-final-delta-plans
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove checkout and output scratch
+        if: always()
+        run: rm -rf -- benchmark "$RUNNER_TEMP/one" "$RUNNER_TEMP/two" "$RUNNER_TEMP/historical-final-delta-plans"

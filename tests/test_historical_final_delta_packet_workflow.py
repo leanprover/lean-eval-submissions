@@ -4,7 +4,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
     ROOT / ".github" / "workflows" / "historical-final-delta-packet.yml"
@@ -55,6 +54,8 @@ class HistoricalFinalDeltaPacketWorkflowTests(unittest.TestCase):
         self.assertIn('git rev-parse "$GITHUB_SHA:$path"', WORKFLOW)
 
     def test_recomputes_validates_and_uploads_only_blocked_packet(self) -> None:
+        self.assertIn("expected_server_native_excluded_count:", WORKFLOW)
+        self.assertIn('len(packet["server_exclusions"])', WORKFLOW)
         self.assertEqual(
             WORKFLOW.count("python scripts/prepare_historical_final_delta_packet.py"),
             1,

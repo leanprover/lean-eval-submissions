@@ -8,7 +8,9 @@ packet, plans, matrices, or State workflow.
 
 After new issue-intake acceptance is frozen at the announced cutoff and every
 pre-cutoff run has settled, but before the final form is removed, select the
-exact protected submissions commit whose `results/` tree is the final corpus.
+exact protected submissions commit whose issue-intake Results are the final
+historical corpus. Server-intake Results are outside the historical replay
+delta and continue through their ordinary lifecycle.
 From that commit:
 
 1. build and review the complete historical inventory;
@@ -24,23 +26,40 @@ The accepted paths are:
 
 - `evidence/historical-replay/inventories/<sha256>.json`;
 - `evidence/historical-replay/deltas/<sha256>.json`;
+- `evidence/historical-replay/public-authorities/<sha256>.json`;
 - `evidence/historical-replay/public-source-decisions/<sha256>.json`; and
-- `evidence/historical-replay/private-crosswalks/<sha256>.json`.
+- `evidence/historical-replay/private-crosswalks/<sha256>.json`;
+- `evidence/historical-replay/final-delta-preparations/<sha256>.json`;
+- `evidence/historical-replay/final-delta-archive-migrations/<sha256>.json`;
+- `evidence/historical-replay/final-delta-qualification-requirements/<sha256>.json`;
+- `evidence/historical-replay/final-delta-activations/<sha256>.json`;
+- `evidence/historical-replay/final-delta-executor-absence/<sha256>.json`;
+- `evidence/historical-replay/final-delta-terminals/<sha256>.json`;
+- `evidence/public-replay/plans/<sha256>.json`; and
+- `evidence/private-replay/plans/<sha256>.json`.
 
-The packet commit may be a documentation/data-only descendant of the cutoff
-commit, but its `results/` tree must be byte-identical to the cutoff commit.
+The packet commit may be a descendant of the cutoff commit. Its logical
+issue-intake corpus must be byte-identical to the cutoff commit. Later
+canonical server-intake Results may be appended without blocking preparation;
+malformed Results and any issue-intake addition, deletion, or mutation fail
+closed, as does deletion or mutation of a server Result already present at the
+cutoff.
 
 ## Preparation packet
 
 Dispatch `Prepare final historical delta packet` from the immutable
 `lean-eval-dispatch/<packet-commit>` tag with the exact four input digests and
-public, private, and total delta counts. The workflow:
+public, private, total issue-delta, and excluded server-native counts. The
+workflow:
 
 - requires that tag to equal current protected `main`;
 - reads only committed content-addressed inputs;
-- independently rederives the append-only delta;
+- independently rederives the append-only issue-intake delta and the complete
+  post-baseline server-intake exclusion set;
 - binds every delta entry to the exact canonical Result;
 - requires complete reviewed public-source decisions;
+- carries the reviewed request and workflow-run identity required by State for
+  every public Result, without inventing either identity;
 - requires the complete current private crosswalk and rejects ambiguous or
   conflicting delta entries;
 - omits private source locators;
@@ -65,6 +84,9 @@ final delta can enter State, a later compact execution binding must add:
 - one exact current production State parent and create-only event set;
 - independent validation that every delta Result is represented exactly once
   by a replay task or reviewed unavailable event; and
+- independent validation that every excluded server-native Result is already
+  represented by one exact `result.recorded` event in that validated State,
+  with matching submission and Result-tree identities; and
 - the existing two-phase State review/promotion and bounded two-lane replay
   controls.
 
@@ -73,3 +95,54 @@ review branch. It must not reuse the retained-baseline fixed counts, matrices,
 promotion binding, or review branch. Delete the temporary final-delta workflow
 after all delta Results have terminal dispositions and the migration identity
 has been retired.
+
+Run `prepare_historical_final_delta_activation.py` before State staging. Its
+qualification-requirements output is the only authority to request conditional
+one-shot image qualification: if any exact image is missing, activation stays
+blocked and no replay plan is emitted. It creates no persistent qualification
+controller. `historical-final-delta-plans.yml` invokes that producer twice and
+emits either the closed blocker alone or byte-identical public/private plans
+and the dynamic State expectation.
+
+Legacy archives are selected by
+`prepare_historical_final_delta_archive_migration.py`, staged only on audit
+branch `historical-final-delta-archive-rewrap-v1`, and promoted only through
+`promote-historical-final-delta-archive-migration.yml`. The State candidate is
+staged only on `historical-final-delta-state-v1` through
+`historical-final-delta-state.yml`. The archive and State branches, bindings,
+and dynamically derived counts are independent of the retained-baseline lane.
+
+After the State candidate has been staged, commit its source-free promotion
+binding and run the `activation` operation of
+`historical-final-delta-activation.yml`. The resulting content-addressed
+activation binding independently reconciles the preparation packet, both
+plans, every staged replay task and reviewed unavailability, the accepted
+inventory and delta counts, every server-native exclusion against exact State,
+and the exact audit and State commits and trees.
+Commit that binding before promoting State and enabling the bounded lanes. The
+State `promote` operation requires its content-addressed activation digest and
+rejects an activation that does not bind the exact promotion summary, candidate
+commit and tree, or audit commit and tree.
+
+After both final-delta queues are empty, disable both historical controller
+variables. The `absence` operation reads back those absent GitHub variables,
+both absent final-delta review refs, an idle public controller, and zero
+`hpr-` Workers or `le-hpr-` applications from authenticated live Cloudflare
+inventory. Commit its source-free, content-addressed output, then run the
+`terminal` operation. The terminal producer validates the complete State
+repository, requires the activated State candidate to be an ancestor of the
+exact terminal head, repeats the authenticated live controller, review-ref,
+queue, recovery, and Cloudflare executor absence reads, and reconciles one
+nonretryable terminal outcome or reviewed unavailability for every accepted
+delta Result. The terminal binding carries this second live readback so the
+earlier committed absence artifact cannot be replayed after an executor or
+controller has been recreated.
+
+The terminal binding is the retirement authority. It names only audit
+`refs/heads/historical-final-delta-archive-rewrap-v1` and State
+`refs/heads/historical-final-delta-state-v1` as temporary execution refs. The
+audit feature branch `feat/final-delta-review-branch` is only the ordinary
+development branch for the reusable audit promotion contract, not an
+execution ref. The reusable public and private replay controllers remain
+available for later replays and are not members of the final-delta workflow
+retirement set.
