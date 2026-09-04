@@ -364,6 +364,48 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("HISTORICAL_REPLAY_JOB_STARTED_EPOCH", WORKFLOW)
         self.assertNotIn("--max-time 20400", executor)
 
+    def test_executor_rpc_failures_are_consecutive_bounded_and_cleaned_up(self) -> None:
+        executor = WORKFLOW.split(
+            "Invoke the exact executor without Cloudflare or State write authority", 1
+        )[1].split("Append the exact reported historical terminal outcome", 1)[0]
+        accepted = executor.split('if [ "$poll_status" = 202 ]', 1)[1].split(
+            'if [ "$poll_status" = 500 ]', 1
+        )[0]
+        rpc_failure = executor.split('if [ "$poll_status" = 500 ]', 1)[1].split(
+            'mv "$RUNNER_TEMP/executor-poll-response.json"', 1
+        )[0]
+        cleanup = executor.split(
+            'if [ ! -f "$RUNNER_TEMP/executor-response.json" ]', 1
+        )[1]
+
+        self.assertIn("readonly max_consecutive_executor_rpc_failures=2", executor)
+        self.assertIn(
+            "Match the private replay lane's established tolerance",
+            executor,
+        )
+        self.assertIn("consecutive_executor_rpc_failures=0", accepted)
+        self.assertIn('.error == "executor_failed"', rpc_failure)
+        self.assertIn('.reason == "command_rpc_failed"', rpc_failure)
+        self.assertIn('.reason == "sandbox_destroy_failed"', rpc_failure)
+        self.assertIn(
+            "consecutive_executor_rpc_failures + 1",
+            rpc_failure,
+        )
+        self.assertIn(
+            '"$consecutive_executor_rpc_failures" -gt',
+            rpc_failure,
+        )
+        self.assertIn('"$max_consecutive_executor_rpc_failures"', rpc_failure)
+        self.assertIn("Public executor status retry::reason=", rpc_failure)
+        self.assertIn("Public executor status retry exhausted::reason=", rpc_failure)
+        self.assertIn("break", rpc_failure)
+        self.assertIn("$HISTORICAL_EXECUTOR_URL/cleanup", cleanup)
+        self.assertIn('touch "$RUNNER_TEMP/runner-loss-cleanup-confirmed"', cleanup)
+        self.assertLess(
+            executor.index('"$consecutive_executor_rpc_failures" -gt'),
+            executor.index('if [ ! -f "$RUNNER_TEMP/executor-response.json" ]'),
+        )
+
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", WORKFLOW)
         self.assertTrue(pins)

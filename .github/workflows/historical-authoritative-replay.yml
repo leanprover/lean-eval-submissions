@@ -527,6 +527,11 @@ jobs:
           job_deadline=$(( HISTORICAL_REPLAY_JOB_STARTED_EPOCH + 20880 ))
           deadline=$process_deadline
           if [ "$job_deadline" -lt "$deadline" ]; then deadline=$job_deadline; fi
+          consecutive_executor_rpc_failures=0
+          # Match the private replay lane's established tolerance: retry two
+          # exact executor RPC/destruction failures, but treat a third without
+          # an intervening authenticated running receipt as a lost runner.
+          readonly max_consecutive_executor_rpc_failures=2
           while [ "$(date +%s)" -lt "$deadline" ]; do
             sleep 15
             mint_oidc
@@ -546,6 +551,7 @@ jobs:
                   --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
                   '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
                   "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
+                consecutive_executor_rpc_failures=0
                 continue
               fi
               if [ "$poll_status" = 500 ] && jq -e \
@@ -553,7 +559,16 @@ jobs:
                  (.reason == "command_rpc_failed" or .reason == "sandbox_destroy_failed") and
                  (keys | sort) == ["error", "reason"]' \
                 "$RUNNER_TEMP/executor-poll-response.json" >/dev/null; then
+                consecutive_executor_rpc_failures=$((consecutive_executor_rpc_failures + 1))
+                executor_rpc_failure_reason=$(jq -er .reason \
+                  "$RUNNER_TEMP/executor-poll-response.json")
                 rm "$RUNNER_TEMP/executor-poll-response.json"
+                if [ "$consecutive_executor_rpc_failures" -gt \
+                  "$max_consecutive_executor_rpc_failures" ]; then
+                  echo "::notice title=Public executor status retry exhausted::reason=$executor_rpc_failure_reason failures=$consecutive_executor_rpc_failures"
+                  break
+                fi
+                echo "::notice title=Public executor status retry::reason=$executor_rpc_failure_reason retry=$consecutive_executor_rpc_failures/$max_consecutive_executor_rpc_failures"
                 continue
               fi
               mv "$RUNNER_TEMP/executor-poll-response.json" "$RUNNER_TEMP/executor-response.json"
