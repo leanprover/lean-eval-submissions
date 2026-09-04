@@ -49,6 +49,7 @@ from replay_orchestrator import (  # noqa: E402
 )
 
 DIGEST = re.compile(r"[0-9a-f]{64}")
+COMMIT = re.compile(r"[0-9a-f]{40}")
 MAX_JSON_BYTES = 512 * 1024
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
 MAX_IDENTITY_BYTES = 4096
@@ -189,7 +190,10 @@ def _validated_plan(plan_value: Any, queue_value: Any | None = None) -> dict[str
 
 
 def _validate_archive(
-    plan: dict[str, Any], sidecar_value: Any, ciphertext_path: pathlib.Path
+    plan: dict[str, Any],
+    sidecar_value: Any,
+    ciphertext_path: pathlib.Path,
+    expected_archive_benchmark_commit: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     request = plan["request"]
     source = request["source"]
@@ -214,12 +218,21 @@ def _validate_archive(
         raise ReplayControllerError("encrypted archive exceeds its size limit")
     actual_digest = _sha256(ciphertext_path)
     expected_submission = request["result"]["submission_id"]
+    expected_benchmark = (
+        request["benchmark"]["commit"]
+        if expected_archive_benchmark_commit is None
+        else _match(
+            COMMIT,
+            expected_archive_benchmark_commit,
+            "expected archive benchmark commit",
+        )
+    )
     if (
         sidecar.get("submission_id") != expected_submission
         or sidecar.get("sha256_ciphertext") != archive["archive_ciphertext_sha256"]
         or actual_digest != archive["archive_ciphertext_sha256"]
         or sidecar.get("size_bytes_ciphertext") != size
-        or sidecar.get("benchmark_commit") != request["benchmark"]["commit"]
+        or sidecar.get("benchmark_commit") != expected_benchmark
     ):
         raise ReplayControllerError(
             "archive, sidecar, and replay plan are not exactly bound"
@@ -251,9 +264,15 @@ def prepare_unwrap(
     *,
     request_random: bytes | None = None,
     runner_nonce: str | None = None,
+    expected_archive_benchmark_commit: str | None = None,
 ) -> dict[str, Any]:
     plan = _validated_plan(plan_value)
-    _, envelope = _validate_archive(plan, sidecar_value, ciphertext_path)
+    _, envelope = _validate_archive(
+        plan,
+        sidecar_value,
+        ciphertext_path,
+        expected_archive_benchmark_commit,
+    )
     current = _parse_timestamp(trusted_now, "trusted_now")
     request = plan["request"]
     archive = request["source"]["archive"]
@@ -298,9 +317,16 @@ def build_executor_request(
     ciphertext_path: pathlib.Path,
     unwrap_value: Any,
     key_material_path: pathlib.Path,
+    *,
+    expected_archive_benchmark_commit: str | None = None,
 ) -> dict[str, Any]:
     plan = _validated_plan(plan_value)
-    sidecar, envelope = _validate_archive(plan, sidecar_value, ciphertext_path)
+    sidecar, envelope = _validate_archive(
+        plan,
+        sidecar_value,
+        ciphertext_path,
+        expected_archive_benchmark_commit,
+    )
     unwrap = _object(unwrap_value, "unwrap request")
     if set(unwrap) != UNWRAP_FIELDS or (
         unwrap.get("schema_version") != 1

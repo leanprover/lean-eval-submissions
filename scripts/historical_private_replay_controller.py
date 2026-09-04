@@ -63,8 +63,11 @@ from historical_replay_controller import (
 )
 from key_capability_contract import validate_envelope
 from prepare_historical_private_replay import (
+    PrivateReplayPlanError,
+    _closed_crosswalk,
     canonical_compact,
     entry_sha256,
+    validate_archive_benchmark_relation,
 )
 from replay_controller import (
     _write_bytes,
@@ -133,6 +136,11 @@ RECONFIGURATION_FIELDS = {
     "reconfiguration_event_id", "reconfigured_at", "superseded_qualification_event_id",
     "reconfiguration_repository", "reconfiguration_commit", "reconfiguration_path",
     "reconfiguration_sha256",
+}
+CROSSWALK_ENTRY_FIELDS = {
+    "result_id", "classification", "submission_id",
+    "archive_plan_entry_sha256", "archive_schema_version",
+    "archive_result_evidence", "benchmark_relation",
 }
 PLAN_ENTRY_FIELDS = {
     "result_id", "historical_accepted_at", "owner_login", "declared_model",
@@ -989,8 +997,97 @@ def load_reviewed_inputs(
     return authority, authority_raw, profile, profile_raw
 
 
+def load_reviewed_crosswalk_entry(
+    repository_root: pathlib.Path,
+    audit_root: pathlib.Path,
+    task_value: Any,
+) -> dict[str, Any]:
+    """Load the exact reviewed archive/result relation for one queued task."""
+
+    task = _validate_task(task_value, 0)
+    _verify_checkout(repository_root, "leanprover/lean-eval-submissions")
+    _verify_ancestor_of_upstream(
+        repository_root, task["crosswalk_commit"], "crosswalk_commit"
+    )
+    _verify_ancestor(
+        repository_root, task["crosswalk_commit"], task["authority_commit"]
+    )
+    raw = _git_blob(
+        repository_root, task["crosswalk_commit"], task["crosswalk_path"]
+    )
+    if sha256_bytes(raw) != task["crosswalk_sha256"]:
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk Git blob differs from locator"
+        )
+    crosswalk = _parse_canonical(raw, "exact private archive crosswalk Git blob")
+    try:
+        entries = _closed_crosswalk(
+            crosswalk,
+            raw,
+            task["crosswalk_commit"],
+            pathlib.Path(task["crosswalk_path"]),
+        )
+    except (AttributeError, KeyError, PrivateReplayPlanError, TypeError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk is not the closed retained corpus"
+        ) from error
+    if not isinstance(entries, list):
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk is not the closed retained corpus"
+        )
+    if (
+        crosswalk.get("results_repository") != task["results_repository"]
+        or crosswalk.get("results_commit") != task["results_commit"]
+        or crosswalk.get("audit_repository") != task["archive_repository"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk roots differ"
+        )
+    crosswalk_audit_commit = _match(
+        COMMIT,
+        crosswalk.get("audit_commit"),
+        "private archive crosswalk audit_commit",
+    )
+    _verify_checkout(audit_root, "leanprover/lean-eval-audit")
+    _verify_ancestor(audit_root, crosswalk_audit_commit, task["archive_commit"])
+    selected = [
+        entry for entry in entries
+        if isinstance(entry, dict) and entry.get("result_id") == task["result_id"]
+    ]
+    if len(selected) != 1:
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk selection is ambiguous"
+        )
+    entry = _object(selected[0], "private archive crosswalk entry")
+    _fields(entry, CROSSWALK_ENTRY_FIELDS, "private archive crosswalk entry")
+    if (
+        entry.get("classification") != "bound"
+        or entry.get("submission_id") != task["archive_submission_id"]
+        or entry.get("archive_plan_entry_sha256")
+        != task["archive_plan_entry_sha256"]
+        or type(entry.get("archive_schema_version")) is not int
+        or entry["archive_schema_version"] not in {1, 2, 3}
+        or entry.get("archive_result_evidence")
+        not in {"confirmed_pass", "legacy_unrecorded"}
+        or entry.get("benchmark_relation")
+        not in {"same", "archive_recorded_different"}
+        or (
+            entry["benchmark_relation"] == "archive_recorded_different"
+            and entry["archive_result_evidence"] != "confirmed_pass"
+        )
+        or sha256_bytes(canonical_compact(entry))
+        != task["crosswalk_entry_sha256"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private archive crosswalk entry differs from queue"
+        )
+    return entry
+
+
 def load_archive_inputs(
-    audit_root: pathlib.Path, task_value: Any
+    audit_root: pathlib.Path,
+    task_value: Any,
+    crosswalk_entry_value: Any | None = None,
 ) -> tuple[dict[str, Any], bytes, bytes, dict[str, Any]]:
     """Load and prove one immutable audit archive binding from protected Git."""
 
@@ -1015,10 +1112,20 @@ def load_archive_inputs(
         ) from error
     ciphertext_sha256 = sha256_bytes(ciphertext)
     envelope_sha256 = sha256_bytes(canonical_compact(envelope))
+    archived_benchmark = sidecar.get("benchmark_commit")
+    try:
+        validate_archive_benchmark_relation(
+            archived_benchmark,
+            task["benchmark_commit"],
+            crosswalk_entry_value,
+        )
+    except PrivateReplayPlanError as error:
+        raise HistoricalPrivateReplayControllerError(
+            "audit archive benchmark differs from its reviewed relation"
+        ) from error
     expected = {
         "submission_id": task["archive_submission_id"],
         "schema_version": task["archive_schema_version"],
-        "benchmark_commit": task["benchmark_commit"],
         "sha256_ciphertext": task["archive_ciphertext_sha256"],
         "sha256_plaintext_tar": task["archive_plaintext_tar_sha256"],
         "size_bytes_plaintext_tar": task["archive_plaintext_tar_size"],
@@ -1187,7 +1294,12 @@ def plan_from_checkouts(
     authority, authority_raw, profile, profile_raw = load_reviewed_inputs(
         repository_root, task
     )
-    _, _, _, archive_binding = load_archive_inputs(audit_root, task)
+    crosswalk_entry = load_reviewed_crosswalk_entry(
+        repository_root, audit_root, task
+    )
+    _, _, _, archive_binding = load_archive_inputs(
+        audit_root, task, crosswalk_entry
+    )
     return _plan_next(
         queue,
         queue_raw,
@@ -1735,6 +1847,7 @@ def prepare_unwrap(
     plan_value: Any,
     state_root: pathlib.Path,
     started_candidate_value: Any,
+    repository_root: pathlib.Path,
     audit_root: pathlib.Path,
     trusted_now: str,
     *,
@@ -1744,7 +1857,12 @@ def prepare_unwrap(
     plan, _, _ = validate_started_history(
         plan_value, started_candidate_value, state_root
     )
-    sidecar, _, ciphertext, binding = load_archive_inputs(audit_root, plan["task"])
+    crosswalk_entry = load_reviewed_crosswalk_entry(
+        repository_root, audit_root, plan["task"]
+    )
+    sidecar, _, ciphertext, binding = load_archive_inputs(
+        audit_root, plan["task"], crosswalk_entry
+    )
     if binding != plan["archive_binding"]:
         raise HistoricalPrivateReplayControllerError(
             "live protected audit archive differs from execution plan"
@@ -1754,7 +1872,9 @@ def prepare_unwrap(
         _write_bytes(ciphertext_path, ciphertext)
         return prepare_private_unwrap(
             plan["execution_plan"], sidecar, ciphertext_path, trusted_now,
-            request_random=request_random, runner_nonce=runner_nonce,
+            request_random=request_random,
+            runner_nonce=runner_nonce,
+            expected_archive_benchmark_commit=sidecar["benchmark_commit"],
         )
 
 
@@ -1808,6 +1928,7 @@ def build_executor_request(
     plan_value: Any,
     state_root: pathlib.Path,
     started_candidate_value: Any,
+    repository_root: pathlib.Path,
     audit_root: pathlib.Path,
     unwrap_value: Any,
     identity_path: pathlib.Path,
@@ -1815,7 +1936,12 @@ def build_executor_request(
     plan, _, _ = validate_started_history(
         plan_value, started_candidate_value, state_root
     )
-    sidecar, _, ciphertext, binding = load_archive_inputs(audit_root, plan["task"])
+    crosswalk_entry = load_reviewed_crosswalk_entry(
+        repository_root, audit_root, plan["task"]
+    )
+    sidecar, _, ciphertext, binding = load_archive_inputs(
+        audit_root, plan["task"], crosswalk_entry
+    )
     if binding != plan["archive_binding"]:
         raise HistoricalPrivateReplayControllerError(
             "live protected audit archive differs from execution plan"
@@ -1824,7 +1950,12 @@ def build_executor_request(
         ciphertext_path = pathlib.Path(directory) / "archive.tar.age"
         _write_bytes(ciphertext_path, ciphertext)
         return build_private_executor_request(
-            plan["execution_plan"], sidecar, ciphertext_path, unwrap_value, identity_path
+            plan["execution_plan"],
+            sidecar,
+            ciphertext_path,
+            unwrap_value,
+            identity_path,
+            expected_archive_benchmark_commit=sidecar["benchmark_commit"],
         )
 
 
@@ -2033,14 +2164,17 @@ def parser() -> argparse.ArgumentParser:
     prewarm.add_argument("--plan", required=True, type=pathlib.Path)
     prewarm.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
-    for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
+    for name in (
+        "plan", "state-root", "started-candidate", "repository-root", "audit-root",
+        "output",
+    ):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
     unwrap.add_argument("--prewarm-request", required=True, type=pathlib.Path)
     unwrap.add_argument("--trusted-now", required=True)
     executor = commands.add_parser("build-executor-request")
     for name in (
-        "plan", "state-root", "started-candidate", "audit-root", "unwrap",
-        "identity", "output",
+        "plan", "state-root", "started-candidate", "repository-root", "audit-root",
+        "unwrap", "identity", "output",
     ):
         executor.add_argument(f"--{name}", required=True, type=pathlib.Path)
     identity = commands.add_parser("unwrap-identity")
@@ -2185,6 +2319,7 @@ def main() -> int:
                     plan,
                     args.state_root,
                     started,
+                    args.repository_root,
                     args.audit_root,
                     args.trusted_now,
                     runner_nonce=validate_prewarm_request(plan, prewarm),
@@ -2199,7 +2334,13 @@ def main() -> int:
             _write(
                 args.output,
                 build_executor_request(
-                    plan, args.state_root, started, args.audit_root, unwrap, args.identity
+                    plan,
+                    args.state_root,
+                    started,
+                    args.repository_root,
+                    args.audit_root,
+                    unwrap,
+                    args.identity,
                 ),
             )
         elif args.command == "unwrap-identity":

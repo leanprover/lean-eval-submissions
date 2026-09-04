@@ -32,7 +32,13 @@ def recursive_keys(value: object) -> set[str]:
 
 
 class Fixture:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        archived_benchmark: str | None = None,
+        benchmark_relation: str = "same",
+        archive_result_evidence: str = "confirmed_pass",
+    ) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.repository = pathlib.Path(self.temporary.name)
         subprocess.run(["git", "init", "-q", str(self.repository)], check=True)
@@ -55,6 +61,22 @@ class Fixture:
             "GIT_COMMITTER_NAME": "fixture",
             "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
         }
+        self.audit_temporary = tempfile.TemporaryDirectory()
+        self.audit = pathlib.Path(self.audit_temporary.name)
+        subprocess.run(["git", "init", "-q", str(self.audit)], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(self.audit), "remote", "add", "origin",
+                "https://github.com/leanprover/lean-eval-audit.git",
+            ],
+            check=True,
+        )
+        (self.audit / "README.md").write_text(
+            "historical audit fixture\n", encoding="utf-8"
+        )
+        self.crosswalk_audit_commit = self.commit_in(
+            self.audit, "Add closed archive inventory fixture"
+        )
         self.owner = "private-owner"
         self.model = "Archived Private Model"
         self.problem = "private_problem"
@@ -167,6 +189,48 @@ class Fixture:
             "replay_profile_status": "profile_qualified",
             "execution_profile_digest": self.profile_digest,
         }
+        self.crosswalk_entry = {
+            "result_id": self.result_id,
+            "classification": "bound",
+            "submission_id": self.archive_submission_id,
+            "archive_plan_entry_sha256": self.entry[
+                "archive_plan_entry_sha256"
+            ],
+            "archive_schema_version": 1,
+            "archive_result_evidence": archive_result_evidence,
+            "benchmark_relation": benchmark_relation,
+        }
+        self.entry["crosswalk_entry_sha256"] = controller.sha256_bytes(
+            controller.canonical_compact(self.crosswalk_entry)
+        )
+        self.crosswalk = {
+            "schema_version": 1,
+            "results_repository": "leanprover/lean-eval-submissions",
+            "results_commit": "9" * 40,
+            "results_store_sha256": "a" * 64,
+            "private_result_count": 668,
+            "audit_repository": "leanprover/lean-eval-audit",
+            "audit_commit": self.crosswalk_audit_commit,
+            "archive_inventory_digest": "c" * 64,
+            "archive_count": 439,
+            "classification_counts": {
+                "archive_identity_ambiguous": 0,
+                "archive_metadata_conflict": 0,
+                "archive_not_found": 29,
+                "bound": 639,
+            },
+            "entries": [self.crosswalk_entry],
+        }
+        self.crosswalk_raw = controller.canonical_bytes(self.crosswalk)
+        self.crosswalk_sha256 = controller.sha256_bytes(self.crosswalk_raw)
+        self.crosswalk_path = (
+            "evidence/historical-replay/private-crosswalks/"
+            f"{self.crosswalk_sha256}.json"
+        )
+        crosswalk_file = self.repository / self.crosswalk_path
+        crosswalk_file.parent.mkdir(parents=True)
+        crosswalk_file.write_bytes(self.crosswalk_raw)
+        self.crosswalk_commit = self.commit("Add exact private archive crosswalk")
         self.authority = {
             "schema_version": 1,
             "kind": "historical_private_replay_plan",
@@ -177,13 +241,9 @@ class Fixture:
             },
             "crosswalk": {
                 "repository": "leanprover/lean-eval-submissions",
-                "commit": "0" * 40,
-                "path": (
-                    "evidence/historical-replay/private-crosswalks/"
-                    + "e" * 64
-                    + ".json"
-                ),
-                "sha256": "e" * 64,
+                "commit": self.crosswalk_commit,
+                "path": self.crosswalk_path,
+                "sha256": self.crosswalk_sha256,
             },
             "classification_counts": {"archive_not_found": 0, "bound": 1},
             "replay_readiness_counts": {
@@ -225,16 +285,6 @@ class Fixture:
             check=True,
         )
 
-        self.audit_temporary = tempfile.TemporaryDirectory()
-        self.audit = pathlib.Path(self.audit_temporary.name)
-        subprocess.run(["git", "init", "-q", str(self.audit)], check=True)
-        subprocess.run(
-            [
-                "git", "-C", str(self.audit), "remote", "add", "origin",
-                "https://github.com/leanprover/lean-eval-audit.git",
-            ],
-            check=True,
-        )
         self.ciphertext = b"age-encryption.org/v1\nhistorical-private-fixture"
         self.ciphertext_sha256 = hashlib.sha256(self.ciphertext).hexdigest()
         self.sidecar = {
@@ -251,7 +301,11 @@ class Fixture:
             "size_bytes_ciphertext": len(self.ciphertext),
             "sha256_ciphertext": self.ciphertext_sha256,
             "archived_at": "2026-08-23T03:40:44Z",
-            "benchmark_commit": self.entry["benchmark_commit"],
+            "benchmark_commit": (
+                self.entry["benchmark_commit"]
+                if archived_benchmark is None
+                else archived_benchmark
+            ),
             "archiver_workflow_run": (
                 "https://github.com/leanprover/lean-eval-submissions/actions/runs/123"
             ),
@@ -302,9 +356,9 @@ class Fixture:
             "result_tree_digest": self.entry["result_tree_digest"],
             "source_visibility": "private",
             "crosswalk_repository": "leanprover/lean-eval-submissions",
-            "crosswalk_commit": "0" * 40,
+            "crosswalk_commit": self.crosswalk_commit,
             "crosswalk_path": self.authority["crosswalk"]["path"],
-            "crosswalk_sha256": "e" * 64,
+            "crosswalk_sha256": self.crosswalk_sha256,
             "crosswalk_entry_sha256": self.entry["crosswalk_entry_sha256"],
             "archive_plan_entry_sha256": self.entry["archive_plan_entry_sha256"],
             "archive_submission_id": self.archive_submission_id,
@@ -353,9 +407,17 @@ class Fixture:
             "source_digest": "6" * 64,
             "tasks": [self.task],
         }
-        self.archive_binding = controller.load_archive_inputs(
-            self.audit, self.task
-        )[3]
+        self.archive_binding = {
+            "repository": self.task["archive_repository"],
+            "commit": self.task["archive_commit"],
+            "archive_path": self.task["archive_path"],
+            "sidecar_path": self.task["archive_sidecar_path"],
+            "ciphertext_sha256": self.task["archive_ciphertext_sha256"],
+            "sidecar_sha256": self.task["archive_sidecar_sha256"],
+            "key_envelope_sha256": self.task["archive_key_envelope_sha256"],
+            "plaintext_tar_sha256": self.task["archive_plaintext_tar_sha256"],
+            "plaintext_tar_size": self.task["archive_plaintext_tar_size"],
+        }
 
         self.state_temporary = tempfile.TemporaryDirectory()
         self.state = pathlib.Path(self.state_temporary.name)
@@ -592,6 +654,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 "2026-10-21T07:00:00.000Z",
                 request_random=b"\x03" * 10,
@@ -734,6 +797,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 "2026-10-21T07:00:02.000Z",
             ),
@@ -741,6 +805,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 {},
                 pathlib.Path("unused-key-material"),
@@ -784,6 +849,47 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         )
         self.assertEqual(reviewed[0], self.fixture.authority)
         self.assertEqual(reviewed[2], self.fixture.profile)
+        self.assertEqual(
+            controller.load_reviewed_crosswalk_entry(
+                self.fixture.repository, self.fixture.audit, self.fixture.task
+            ),
+            self.fixture.crosswalk_entry,
+        )
+        with mock.patch.object(
+            controller,
+            "_closed_crosswalk",
+            side_effect=TypeError("malformed closed-corpus structure"),
+        ):
+            with self.assertRaisesRegex(
+                controller.HistoricalPrivateReplayControllerError,
+                "not the closed retained corpus",
+            ):
+                controller.load_reviewed_crosswalk_entry(
+                    self.fixture.repository, self.fixture.audit, self.fixture.task
+                )
+        for field, value in (
+            ("crosswalk_sha256", "0" * 64),
+            ("crosswalk_entry_sha256", "1" * 64),
+            ("archive_plan_entry_sha256", "2" * 64),
+            ("archive_submission_id", "019a0000-0000-7000-8000-000000000041"),
+        ):
+            with self.subTest(crosswalk_field=field):
+                changed = copy.deepcopy(self.fixture.task)
+                changed[field] = value
+                if field == "crosswalk_sha256":
+                    changed["crosswalk_path"] = (
+                        "evidence/historical-replay/private-crosswalks/"
+                        f"{value}.json"
+                    )
+                if field == "archive_submission_id":
+                    changed["archive_path"] = f"archives/01/{value}.tar.age"
+                    changed["archive_sidecar_path"] = f"archives/01/{value}.json"
+                with self.assertRaises(
+                    controller.HistoricalPrivateReplayControllerError
+                ):
+                    controller.load_reviewed_crosswalk_entry(
+                        self.fixture.repository, self.fixture.audit, changed
+                    )
         self.fixture.task["authority_path"] = (
             "evidence/private-replay/plans/" + "0" * 64 + ".json"
         )
@@ -826,6 +932,142 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         )
         self.assertEqual(plan, self.fixture.plan())
         self.assertEqual(plan["archive_binding"], self.fixture.archive_binding)
+
+    def test_reviewed_archive_benchmark_difference_is_accepted(self) -> None:
+        self.fixture.close()
+        self.fixture = Fixture(
+            archived_benchmark="a" * 40,
+            benchmark_relation="archive_recorded_different",
+            archive_result_evidence="confirmed_pass",
+        )
+        plan = controller.plan_from_checkouts(
+            self.fixture.state, self.fixture.repository, self.fixture.audit
+        )
+        self.assertEqual(plan["task"], self.fixture.task)
+        self.assertEqual(plan["archive_binding"], self.fixture.archive_binding)
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x0a" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        unwrap = controller.prepare_unwrap(
+            plan,
+            self.fixture.state,
+            started,
+            self.fixture.repository,
+            self.fixture.audit,
+            "2026-10-21T07:00:01.000Z",
+            runner_nonce="5" * 64,
+        )
+        current = dt.datetime.now(dt.timezone.utc)
+        unwrap["capability"]["issued_at"] = current.isoformat(
+            timespec="milliseconds"
+        ).replace("+00:00", "Z")
+        unwrap["capability"]["expires_at"] = (
+            (current + dt.timedelta(minutes=5))
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            identity = pathlib.Path(directory) / "file-key"
+            identity.write_bytes(b"k" * 16)
+            request = controller.build_executor_request(
+                plan,
+                self.fixture.state,
+                started,
+                self.fixture.repository,
+                self.fixture.audit,
+                unwrap,
+                identity,
+            )
+        self.assertEqual(unwrap["envelope"], self.fixture.sidecar["key_envelope"])
+        self.assertEqual(
+            request["request"]["replay_task_id"],
+            self.fixture.task["replay_task_id"],
+        )
+
+    def test_crosswalk_and_archive_ancestry_are_reproved(self) -> None:
+        original = controller._verify_ancestor
+        required = {
+            (
+                self.fixture.repository,
+                self.fixture.task["crosswalk_commit"],
+                self.fixture.task["authority_commit"],
+            ),
+            (
+                self.fixture.audit,
+                self.fixture.crosswalk_audit_commit,
+                self.fixture.task["archive_commit"],
+            ),
+        }
+        observed: set[tuple[pathlib.Path, str, str]] = set()
+
+        def record(root: pathlib.Path, ancestor: str, descendant: str) -> None:
+            observed.add((root, ancestor, descendant))
+            original(root, ancestor, descendant)
+
+        with mock.patch.object(controller, "_verify_ancestor", side_effect=record):
+            controller.load_reviewed_crosswalk_entry(
+                self.fixture.repository, self.fixture.audit, self.fixture.task
+            )
+        self.assertTrue(required <= observed)
+
+        for rejected in required:
+            with self.subTest(rejected=rejected):
+                def reject(
+                    root: pathlib.Path, ancestor: str, descendant: str
+                ) -> None:
+                    if (root, ancestor, descendant) == rejected:
+                        raise controller.HistoricalPrivateReplayControllerError(
+                            "private replay provenance ancestry is invalid"
+                        )
+                    original(root, ancestor, descendant)
+
+                with mock.patch.object(
+                    controller, "_verify_ancestor", side_effect=reject
+                ):
+                    with self.assertRaisesRegex(
+                        controller.HistoricalPrivateReplayControllerError,
+                        "provenance ancestry",
+                    ):
+                        controller.load_reviewed_crosswalk_entry(
+                            self.fixture.repository,
+                            self.fixture.audit,
+                            self.fixture.task,
+                        )
+
+    def test_archive_benchmark_relation_remains_strict(self) -> None:
+        cases = (
+            {
+                "archived_benchmark": "a" * 40,
+                "benchmark_relation": "same",
+                "archive_result_evidence": "confirmed_pass",
+            },
+            {
+                "archived_benchmark": "a" * 40,
+                "benchmark_relation": "archive_recorded_different",
+                "archive_result_evidence": "legacy_unrecorded",
+            },
+            {
+                "archived_benchmark": None,
+                "benchmark_relation": "archive_recorded_different",
+                "archive_result_evidence": "confirmed_pass",
+            },
+        )
+        for index, values in enumerate(cases):
+            with self.subTest(index=index):
+                self.fixture.close()
+                self.fixture = Fixture(**values)
+                with self.assertRaises(
+                    controller.HistoricalPrivateReplayControllerError
+                ):
+                    controller.plan_from_checkouts(
+                        self.fixture.state,
+                        self.fixture.repository,
+                        self.fixture.audit,
+                    )
 
     def test_raw_values_and_canonical_state_head_cannot_be_substituted(self) -> None:
         with self.assertRaisesRegex(
@@ -1009,6 +1251,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 substituted,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 "2026-10-21T07:00:01.000Z",
             )
@@ -1040,6 +1283,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 substituted,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 {},
                 pathlib.Path("unused-key-material"),
@@ -1505,6 +1749,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 "2026-10-21T07:00:00.000Z",
                 runner_nonce=controller.validate_prewarm_request(plan, prewarm),
@@ -1522,6 +1767,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 {"unwrap": "exact"},
                 pathlib.Path("identity.txt"),
@@ -1598,6 +1844,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 "2026-08-23T07:00:00.000Z",
                 request_random=b"\x06" * 10,
@@ -1630,6 +1877,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 plan,
                 self.fixture.state,
                 started,
+                self.fixture.repository,
                 self.fixture.audit,
                 unwrap,
                 material_path,
