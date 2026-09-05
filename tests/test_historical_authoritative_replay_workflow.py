@@ -297,6 +297,23 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn('destruction: "confirmed"', cleanup_step)
         self.assertNotIn("STATE_WRITE_KEY: ${{ secrets", cleanup_step)
 
+    def test_reservation_is_bounded_before_state_and_source(self) -> None:
+        reservation = WORKFLOW.split(
+            "Reserve exact cleanup identity before State can become running", 1
+        )[1].split("Append replay.started before fetching public source", 1)[0]
+        self.assertIn("scripts/reserve_historical_public_cleanup.py", reservation)
+        self.assertIn("--request", reservation)
+        self.assertIn("--plan", reservation)
+        self.assertIn("--confirmation-output", reservation)
+        self.assertIn("--github-sha \"$GITHUB_SHA\"", reservation)
+        self.assertIn("--reservation-url", reservation)
+        self.assertIn("--health-url", reservation)
+        self.assertIn("cleanup-reservation-confirmation.json", reservation)
+        self.assertIn("status: \"reserved\"", reservation)
+        self.assertIn("echo 'reserved=true'", reservation)
+        self.assertNotIn("STATE_WRITE_KEY: ${{ secrets", reservation)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", reservation)
+
     def test_timed_out_or_rejected_start_cannot_publish_without_cleanup(self) -> None:
         start_request = WORKFLOW.index("start_status=$(curl")
         status_rejected = WORKFLOW.index('test "$start_status" = 202')

@@ -293,6 +293,7 @@ jobs:
         if: steps.deploy.outputs.deployed == 'true'
         env:
           HISTORICAL_RESERVATION_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay/cleanup-reservation
+          HISTORICAL_HEALTH_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/healthz
         run: |
           set -euo pipefail
           umask 077
@@ -303,27 +304,13 @@ jobs:
                attempt: .started_transition.payload.attempt}' \
             "$RUNNER_TEMP/historical-replay-plan.json" \
             > "$RUNNER_TEMP/cleanup-reservation-request.json"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --max-time 15 --retry 3 --retry-max-time 60 --retry-all-errors \
-            --retry-delay 2 \
-            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
-            --output "$RUNNER_TEMP/historical-reservation-oidc.json"
-          historical_reservation_token=$(jq -er .value "$RUNNER_TEMP/historical-reservation-oidc.json")
-          trap 'unset historical_reservation_token; rm -f "$RUNNER_TEMP/historical-reservation-oidc.json"' EXIT
-          reservation_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-            --max-time 60 --retry 3 --retry-max-time 180 --retry-all-errors \
-            --retry-delay 2 \
-            --header "Authorization: Bearer $historical_reservation_token" \
-            --header 'Content-Type: application/json' --request POST \
-            --data-binary "@$RUNNER_TEMP/cleanup-reservation-request.json" \
-            "$HISTORICAL_RESERVATION_URL" \
-            --output "$RUNNER_TEMP/cleanup-reservation-confirmation.json" \
-            --write-out '%{http_code}')
-          unset historical_reservation_token
-          rm -f "$RUNNER_TEMP/historical-reservation-oidc.json"
-          trap - EXIT
-          test "$reservation_status" = 200
+          python scripts/reserve_historical_public_cleanup.py \
+            --request "$RUNNER_TEMP/cleanup-reservation-request.json" \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --confirmation-output "$RUNNER_TEMP/cleanup-reservation-confirmation.json" \
+            --github-sha "$GITHUB_SHA" \
+            --reservation-url "$HISTORICAL_RESERVATION_URL" \
+            --health-url "$HISTORICAL_HEALTH_URL"
           jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/cleanup-reservation-request.json")" \
             --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/cleanup-reservation-request.json")" \
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "reserved"}' \
