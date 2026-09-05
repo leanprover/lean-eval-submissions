@@ -60,6 +60,16 @@ class HistoricalPrivateReconfigurationPreparationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.fixture.close()
 
+    def test_state_inventory_accepts_state_canonical_unicode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            event_id = "01900000-0000-7000-8000-000000000012"
+            path = root / "events" / event_id[:2] / f"{event_id}.json"
+            path.parent.mkdir(parents=True)
+            event = {"event_id": event_id, "description": "accepted source — packaged"}
+            path.write_bytes(controller.state_canonical_bytes(event))
+            self.assertEqual(preparation._load_state_events(root), [event])
+
     def render_batch(self, root: pathlib.Path) -> pathlib.Path:
         args = argparse.Namespace(
             state_root=self.fixture.state,

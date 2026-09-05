@@ -265,11 +265,13 @@ jobs:
         if: steps.deploy.outputs.deployed == 'true'
         run: |
           set -euo pipefail
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --max-time 30 --retry 3 --retry-all-errors \
-            https://lean-eval-historical-public-replay.lean-eval.workers.dev/healthz \
-            --output "$RUNNER_TEMP/historical-health.json"
-          python - "$RUNNER_TEMP/historical-health.json" "$RUNNER_TEMP/historical-replay-plan.json" <<'PY'
+          exact_health=false
+          for health_attempt in $(seq 1 10); do
+            if curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 3 \
+              https://lean-eval-historical-public-replay.lean-eval.workers.dev/healthz \
+              --output "$RUNNER_TEMP/historical-health.json" && \
+              python - "$RUNNER_TEMP/historical-health.json" "$RUNNER_TEMP/historical-replay-plan.json" <<'PY'
           import json, os, pathlib, sys
           health = json.loads(pathlib.Path(sys.argv[1]).read_text())
           plan = json.loads(pathlib.Path(sys.argv[2]).read_text())
@@ -287,6 +289,14 @@ jobs:
           if health != expected:
               raise SystemExit("historical executor health differs from the exact plan")
           PY
+            then
+              exact_health=true
+              break
+            fi
+            echo "Waiting for exact historical executor health (attempt=$health_attempt/10)" >&2
+            sleep 2
+          done
+          test "$exact_health" = true
 
       - name: Reserve exact cleanup identity before State can become running
         id: reserve
