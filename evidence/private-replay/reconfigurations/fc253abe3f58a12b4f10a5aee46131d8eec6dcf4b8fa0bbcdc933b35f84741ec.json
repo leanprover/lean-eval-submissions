@@ -1,0 +1,34 @@
+{
+  "entries": [
+    {
+      "attempt": 3,
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "checker": "nanoda",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
+      "replacement_qualification": {
+        "commit": "bbf46c348055fc0f22b5d549564b879734de64ab",
+        "execution_profile_digest": "33b4495a1db6c838938bc663f1f32a681aa796142e1728c3cbfa5cadf20dca11",
+        "path": "evidence/private-replay/profiles/33b4495a1db6c838938bc663f1f32a681aa796142e1728c3cbfa5cadf20dca11.json",
+        "repository": "leanprover/lean-eval-submissions",
+        "sha256": "99f0e99210edb666d38114badf44a836d6caa646a8394cb6889d99fe9efed648"
+      },
+      "replay_task_id": "rt1_06f5e1cc8896337e56cbabcae49d672b10ea9e8789f0e5c6c96740dfc4bbc05b",
+      "result_id": "r2_cf48e195817a3757dfa215faa0bcc5bbf3c70c3a589c85bce0c93e5ec3c19a21",
+      "superseded_qualification": {
+        "commit": "c3c2a3b1617f4f90b8b2cae86738abad7dca3f0c",
+        "event_id": "01a0652a-c158-7f72-84f3-093e3dd6875b",
+        "execution_profile_digest": "85d96cbbb364299714911e662655f9b08f544867aa7b95a2c3e92933c091be05",
+        "path": "evidence/private-replay/profiles/85d96cbbb364299714911e662655f9b08f544867aa7b95a2c3e92933c091be05.json",
+        "repository": "leanprover/lean-eval-submissions",
+        "sha256": "c3d3477486ea8de897875778e06a0123ff110e8d03e1fb34edc6dbd4034ea19d"
+      },
+      "toolchain": "leanprover/lean4:v4.30.0-rc2"
+    }
+  ],
+  "kind": "historical_private_replay_profile_reconfiguration",
+  "reason_code": "profile_execution_unavailable",
+  "schema_version": 1,
+  "selection": "failed_canary",
+  "task_count": 1
+}
