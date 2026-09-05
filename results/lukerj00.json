@@ -3219,6 +3219,69 @@
         "ref": "048689343f7b1c3a81bed1f7ad9751140d8375c2",
         "repo": "lukerj00/tau-lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-05T18:50:43Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1689,
+        "kind": "issue"
+      },
+      "problem_id": "annals_fractal_uncertainty",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8d85193ba8e1c8e2919ca2b4f2a9f0aa5b71ad409adea348b49f3beaa6765caa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "def1aa3f38ad46ef44636d472c111c6db69131a1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T18:50:43Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1689,
+        "kind": "issue"
+      },
+      "problem_id": "weak_morse_inequality",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_59b3ff5b8c42a7d3606c8872ae8fc9cbc0b346cbc98a691e24adfa4b73f7db8c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "def1aa3f38ad46ef44636d472c111c6db69131a1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T18:50:43Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1689,
+        "kind": "issue"
+      },
+      "problem_id": "wieferich_g_three",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_edb4ecc6f498101db5b2e7b4d9419b98fe8deee2c3110ecee9474b36dbd19780",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "def1aa3f38ad46ef44636d472c111c6db69131a1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
