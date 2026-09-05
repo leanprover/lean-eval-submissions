@@ -2547,6 +2547,111 @@
         "ref": "1800b17662406d06d965a508f280b86613ec316c",
         "repo": "lukerj00/tau-lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-05T17:53:13Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1681,
+        "kind": "issue"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e953703c1c724bb47a68e70150b1598ffae409ca52a5c36b129c6760e4984756",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb8ead0518f14b277ad897f27f5969b6d41365b2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T17:53:13Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1681,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d59be713617a322a6287f03190c37782d35dea1f115bbdf350f1f6fb510c36b1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb8ead0518f14b277ad897f27f5969b6d41365b2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T17:53:13Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1681,
+        "kind": "issue"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3a101e3e2a8544edc430ce9ce6ad4e40c96008bfd8978798c0d154ff0f897f53",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb8ead0518f14b277ad897f27f5969b6d41365b2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T17:53:13Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1681,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rademacher_enflo_type",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d02ae64a57e30607f850bb02e4cffca2315ccd0eaf7f1aac3426b8550948e864",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb8ead0518f14b277ad897f27f5969b6d41365b2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-05T17:53:13Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1681,
+        "kind": "issue"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_fb9d0cd39ec1db938ed7f2f7637d3b28df710448d8f514baa26aef3db58f6840",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb8ead0518f14b277ad897f27f5969b6d41365b2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
