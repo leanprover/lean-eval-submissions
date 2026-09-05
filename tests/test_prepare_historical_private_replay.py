@@ -58,6 +58,17 @@ def recursive_keys(value: object) -> set[str]:
     return set()
 
 
+def frozen_private_profile_paths(
+    plan: dict[str, object], root: pathlib.Path = ROOT
+) -> list[pathlib.Path]:
+    profiles = plan["profiles"]
+    assert isinstance(profiles, dict)
+    return [
+        root / profile["private_profile"]["path"]
+        for _, profile in sorted(profiles.items())
+    ]
+
+
 def envelope(submission_id: str, ciphertext: bytes) -> dict[str, object]:
     recipient = "age1" + "q" * 40
     return {
@@ -539,12 +550,32 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                     crosswalk_path=CROSSWALK,
                     crosswalk_commit=CROSSWALK_COMMIT,
                     results_root=results,
-                    private_profiles=sorted(
-                        (ROOT / private_replay.PRIVATE_PROFILE_PREFIX).glob("*.json")
-                    ),
+                    private_profiles=frozen_private_profile_paths(self.plan),
                     private_profile_commit=PRIVATE_PROFILE_COMMIT,
                 )
         self.assertEqual(private_replay.canonical(rebuilt), self.raw)
+
+    def test_frozen_plan_selection_ignores_unreferenced_future_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            unrelated = (
+                root
+                / private_replay.PRIVATE_PROFILE_PREFIX
+                / f"{'f' * 64}.json"
+            )
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_text("{}\n", encoding="utf-8")
+
+            selected = frozen_private_profile_paths(self.plan, root)
+
+        self.assertNotIn(unrelated, selected)
+        self.assertEqual(
+            {path.relative_to(root).as_posix() for path in selected},
+            {
+                profile["private_profile"]["path"]
+                for profile in self.plan["profiles"].values()
+            },
+        )
 
     def test_candidates_pass_the_exact_protected_state_contract(self) -> None:
         repository = os.environ.get("LEAN_EVAL_PROTECTED_STATE_REPOSITORY")
