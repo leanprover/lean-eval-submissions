@@ -65,6 +65,64 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A selected cutoff is activated by creating the repository variable
+  # ISSUE_INTAKE_CUTOFF with one canonical UTC-second timestamp. Admission is
+  # bound to the original run's immutable creation time, or to run_started_at
+  # for a rerun attempt, and cached here. A pre-cutoff first attempt may finish
+  # even if the variable is created while it is queued or executing, but a
+  # post-cutoff rerun cannot inherit the original timestamp. The reusable
+  # archive_server job never depends on this issue-only job.
+  issue_intake_admission:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      allowed: ${{ steps.classify.outputs.allowed }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Cache issue-intake admission at the run boundary
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          ISSUE_INTAKE_REQUIRE_ALLOWED: 'false'
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/issue_intake_cutoff_guard.sh >> "$GITHUB_OUTPUT"
+
+      - name: Explain frozen issue intake
+        if: steps.classify.outputs.allowed == 'false'
+        run: |
+          echo '::notice title=Issue intake frozen::This issue event is at or after the selected cutoff and was not processed. Use the submission service.'
+          printf '%s\n' \
+            '## Issue intake frozen' \
+            '' \
+            'This issue event is at or after the selected cutoff and was not processed.' \
+            'Use the submission service linked from the Issue Form.' \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain fail-closed admission error
+        if: failure()
+        run: |
+          echo '::error title=Issue admission failed closed::No issue intake processing was allowed.'
+          printf '%s\n' \
+            '## Issue admission failed closed' \
+            '' \
+            'No issue intake processing was allowed.' \
+            >> "$GITHUB_STEP_SUMMARY"
+
   # The web Issue Form applies `submission` itself. GitHub's issue API drops
   # labels requested by authors without triage permission, so an API-created
   # issue arrives unlabeled. For opened issues only, validate the current form
@@ -72,13 +130,16 @@ jobs:
   # evaluate it. GITHUB_TOKEN-authored events do not recursively start another
   # workflow run, hence the explicit output consumed by `evaluate` below.
   intake:
+    needs: issue_intake_admission
     if: >-
+      needs.issue_intake_admission.outputs.allowed == 'true' &&
       github.event.action == 'opened' &&
       startsWith(github.event.issue.title, '[submission]') &&
       !contains(github.event.issue.labels.*.name, 'submission')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       issues: write
     outputs:
@@ -93,6 +154,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
+
+      - name: Recheck issue-intake cutoff before intake
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/issue_intake_cutoff_guard.sh >/dev/null
 
       # Issue Form labels can land just after the opened event. Query current
       # state so the UI's ordinary labeled-event run remains the sole evaluator.
@@ -152,6 +222,7 @@ jobs:
     # + `rm -rf .git` on BOTH before lake runs ensures no checkout token
     # persists into the lake runtime either.
     permissions:
+      actions: read
       contents: read
       issues: write
     # The archive job freezes the benchmark and source identities before this
@@ -191,6 +262,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Recheck issue-intake cutoff before evaluation
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/issue_intake_cutoff_guard.sh >/dev/null
+
       # The benchmark repo: supplies generated/, manifests/, the Lean CLI.
       # Scored against main HEAD; persist-credentials:false because this
       # tree shares the runner with the untrusted build.
@@ -220,11 +306,6 @@ jobs:
           fi
           echo "sha=$actual_commit" >> "$GITHUB_OUTPUT"
           echo "toolchain=$actual_toolchain" >> "$GITHUB_OUTPUT"
-
-      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.11.10'
 
       - name: Extract source owner from issue body
         id: owner
@@ -484,15 +565,18 @@ jobs:
     # source, and persists it to lean-eval-audit. It never runs untrusted Lean.
     # This is the compatibility lane for Issue Form submissions. Server intake
     # uses the isolated KMS-backed reusable workflow below.
-    needs: intake
+    needs: [issue_intake_admission, intake]
     if: >-
       always() &&
+      needs.issue_intake_admission.result == 'success' &&
+      needs.issue_intake_admission.outputs.allowed == 'true' &&
       github.event_name == 'issues' &&
       ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: read
       contents: read
       issues: write
     outputs:
@@ -534,6 +618,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Recheck issue-intake cutoff before archival
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/issue_intake_cutoff_guard.sh >/dev/null
+
       # Freeze the benchmark before archiving. Evaluation checks out this
       # exact commit rather than independently racing lean-eval@main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -548,11 +646,6 @@ jobs:
         run: |
           echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "toolchain=$(cat lean-eval/lean-toolchain)" >> "$GITHUB_OUTPUT"
-
-      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.11.10'
 
       # Parse and validate only user-supplied fields before any authenticated
       # source access. This keeps impossible dates and malformed form values
@@ -802,7 +895,6 @@ jobs:
     # A reusable job is a hard authority boundary: only server dispatch enters
     # the environment carrying the Encrypt-only AWS role. The legacy issue
     # lane above never receives OIDC permission or KMS configuration.
-    needs: intake
     if: always() && github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
@@ -822,11 +914,13 @@ jobs:
   archive:
     # Normalize the mutually exclusive issue/server archive lanes into the
     # single output and result contract consumed by evaluation and callbacks.
-    needs: [intake, archive_issue, archive_server]
+    needs: [issue_intake_admission, intake, archive_issue, archive_server]
     if: >-
       always() &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'issues' &&
+        needs.issue_intake_admission.result == 'success' &&
+        needs.issue_intake_admission.outputs.allowed == 'true' &&
         ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
          (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))))
     runs-on: ubuntu-latest
@@ -1167,6 +1261,7 @@ jobs:
       RESULTS_STORE_WRITER_GROUP: results-store-writer
       RESULTS_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.callback_environment == 'staging' && 'staging-results' || 'main' }}
     permissions:
+      actions: read
       contents: read
       issues: write
     outputs:
@@ -1189,6 +1284,16 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
+
+      - name: Recheck issue-intake cutoff before recording
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash code/scripts/issue_intake_cutoff_guard.sh >/dev/null
 
       # actions/download-artifact pinned to 3e5f45b2 (= refs/tags/v8.0.1 as of 2026-07-30).
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -1558,10 +1663,12 @@ jobs:
   # do not duplicate those dedicated archive-job comments. A pre-fetch
   # infrastructure failure remains operator-visible.
   notify:
-    needs: [intake, evaluate, archive, record]
+    needs: [issue_intake_admission, intake, evaluate, archive, record]
     if: |
       always()
       && github.event_name == 'issues'
+      && needs.issue_intake_admission.result == 'success'
+      && needs.issue_intake_admission.outputs.allowed == 'true'
       && (
         (github.event.action == 'labeled' && github.event.label.name == 'submission')
         || (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true')
@@ -1592,6 +1699,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
+
+      - name: Recheck issue-intake cutoff before notification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash scripts/issue_intake_cutoff_guard.sh >/dev/null
 
       # Work out what actually went wrong before telling the submitter
       # anything. A failing `evaluate` job is never the plain compile error
