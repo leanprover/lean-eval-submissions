@@ -263,7 +263,7 @@ def _load_state_events(state_root: pathlib.Path) -> list[dict[str, Any]]:
         relative = path.relative_to(state_root).as_posix()
         if EVENT_PATH.fullmatch(relative) is None or path.is_symlink():
             _error("protected State event path is invalid")
-        event, _ = controller._load_canonical(path, "protected State event")
+        event, _ = controller._load_state_canonical(path, "protected State event")
         event_id = controller._match(
             controller.UUID7, event.get("event_id"), "protected State event_id"
         )

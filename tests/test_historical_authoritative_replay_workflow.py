@@ -131,6 +131,8 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("reviewed_execution_profile_digest", WORKFLOW)
         self.assertIn("reviewed_measurement_config_digest", WORKFLOW)
         self.assertIn("reviewed_vm_image_digest", WORKFLOW)
+        self.assertIn("for health_attempt in $(seq 1 10)", WORKFLOW)
+        self.assertIn('test "$exact_health" = true', WORKFLOW)
 
     def test_production_rollout_uses_the_replay_owned_strict_helper(self) -> None:
         deployment = WORKFLOW.split(
