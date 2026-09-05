@@ -268,6 +268,36 @@ class HistoricalPublicCleanupReservationTests(unittest.TestCase):
             )
         )
 
+    def test_http_client_uses_fixed_non_browser_user_agent(self) -> None:
+        class Response:
+            status = 200
+
+            def read(self, _limit: int) -> bytes:
+                return b"{}"
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                pass
+
+        opener = mock.Mock()
+        opener.open.return_value = Response()
+        with mock.patch.object(
+            reservation.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            reservation.request_http(
+                "POST",
+                RESERVATION_URL,
+                {"User-Agent": "caller-controlled"},
+                b"{}",
+                1,
+            )
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_header("User-agent"), reservation.USER_AGENT)
+
     def test_http_error_body_transport_failure_is_ambiguous(self) -> None:
         class BrokenBody:
             def read(self, _limit: int) -> bytes:

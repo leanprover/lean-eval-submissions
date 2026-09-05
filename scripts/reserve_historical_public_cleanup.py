@@ -33,6 +33,7 @@ REPLAY_TASK_ID = re.compile(r"rt1_[0-9a-f]{64}")
 BASE64URL = re.compile(r"[A-Za-z0-9_-]+")
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_TOKEN_BYTES = 8192
+USER_AGENT = "lean-eval-historical-public-replay/1"
 
 
 class ReservationError(ValueError):
@@ -79,6 +80,10 @@ def request_http(
     body: bytes | None,
     timeout_seconds: float,
 ) -> HttpResponse:
+    headers = {
+        key: value for key, value in headers.items() if key.lower() != "user-agent"
+    }
+    headers["User-Agent"] = USER_AGENT
     request = urllib.request.Request(
         url,
         data=body,
