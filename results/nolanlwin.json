@@ -24,6 +24,31 @@
         "ref": "c1a049be4d9d780b73b1a2552ebb764e67497f49",
         "repo": "nolanlwin/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-07T02:14:38Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Forall (Astrio)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a07975-2721-731f-bf03-3e8a0696bcc4"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6 Astra"
+        ],
+        "credit_identity": "Forall (Astrio)",
+        "notes": "Forall (Astrio), using GPT-6 Astra at max reasoning for proof actors and fresh reviewers. Iterative proof development with compiler feedback, resumed checkpoints, and operator/assistant strategic guidance; not a one-shot or fully unassisted solve. All six CoC benchmark obligations passed local fresh review and Docker comparator, Nanoda, and Lean kernel verification. See PROVENANCE.md in the submitted repository for details."
+      },
+      "result_id": "r2_732771614811222400754deef0442a7fb14a3a46492d1ce05eacb8c8575298fc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1a049be4d9d780b73b1a2552ebb764e67497f49",
+        "repo": "nolanlwin/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
