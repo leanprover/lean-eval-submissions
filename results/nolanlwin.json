@@ -1,0 +1,31 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-07T02:09:39Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Forall (Astrio)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a07976-d8b9-70af-9778-20e51195cca0"
+      },
+      "problem_id": "rcf_quantifier_elimination",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6 Astra"
+        ],
+        "credit_identity": "Forall (Astrio)",
+        "notes": "Forall (Astrio), using GPT-6 Astra at max reasoning for proof actors and fresh reviewers. Started from the pristine benchmark starter without seeding the earlier Sol solution. Iterative proof development with compiler feedback and operator/assistant infrastructure recovery. Two actor rounds were followed by a verification-only third round with no proof changes. All four RCF benchmark obligations passed local fresh review and Docker comparator, Nanoda, and Lean kernel verification, without fixed degree or formula-depth restrictions. An optional reviewer safety-metadata diagnostic remained unfinished and is not claimed to have passed. See PROVENANCE.md in the submitted repository for details."
+      },
+      "result_id": "r2_7169edb2e72df795354da3061487053e0e95185d7e0b83f95adeb078cd7b9d17",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1a049be4d9d780b73b1a2552ebb764e67497f49",
+        "repo": "nolanlwin/lean-eval"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "nolanlwin"
+}
