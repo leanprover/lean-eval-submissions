@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-07T16:30:35Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "OpenAI Codex (GPT-6 + GPT-5.6 Sol)",
+      "intake": {
+        "issue_number": 1696,
+        "kind": "issue"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "production_description": "Developed under human direction in OpenAI Codex using GPT-6 and GPT-5.6 Sol. This submission adapts the completed formalization at https://github.com/lixiang90/chen_theorem/tree/3264ad6acafa64ada18a309f48350d9acfd261ef and specializes its fixed-even-shift theorem to shift 2, proving the benchmark's exact prime-or-semiprime predicate.\r\n\r\nThe original Lean 4.32.2 project passed its full build and a transitive axiom audit of all 9,571 declarations across 415 local modules. This exact submission now also passes the complete `lake build Solution` under the benchmark's fixed Lean 4.33.0 and Mathlib revision (9,120 Lake jobs). Both `Submission.chen_theorem` and the trusted `Solution` theorem `chen_theorem` were audited with `#print axioms`, and each depends only on propext, Classical.choice, and Quot.sound. Official comparator and independent nanoda verification is requested for this exact snapshot.\r\n\r\nAll local helpers are included under Submission/. Prior work includes Mathlib and selected Apache-2.0 PNT, Mertens, and Perron proofs from PrimeNumberTheoremAnd commit c6c73610b406689c4b58325cbe1342ecca25d755, with notices and provenance retained. The sieve and Dirichlet zero-free-region proof chain, including the final ineffective real Siegel bound, is included locally. No first-proof or first-submission priority is claimed.\r\n\r\nThis is a corrected resubmission of https://github.com/leanprover/lean-eval-submissions/issues/1695. Seven module-level version compatibility adjustments are recorded in COMPATIBILITY.json and hashed in PROVENANCE.json. They update proof steps for the pinned library without changing theorem statements or adding assumptions. The trusted benchmark files remain byte-for-byte unchanged.",
+        "solution_publication_date": "2026-09-07",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_400ee78cd1c3e9a73dcf5fa28a8a990cc341be154739206f52b328fb463c12a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "947f7990ef9b9a0f1bd021f5ed489020d42e0d5b",
+        "repo": "lixiang90/chen_theorem"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "lixiang90"
+}
