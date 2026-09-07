@@ -3954,6 +3954,27 @@
         "ref": "cd44c892f10378838da5b4bdf34944c378b22385",
         "repo": "lukerj00/tau-lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-07T11:08:35Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 1692,
+        "kind": "issue"
+      },
+      "problem_id": "coherent_cohomology_finite_dimensional",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3516c93ec6ebb4909ae3a79538147fc086c0f48596b5e19255bcccd9b324050c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "20938bf9a376adcbca224a011ca0f704181f9859",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
