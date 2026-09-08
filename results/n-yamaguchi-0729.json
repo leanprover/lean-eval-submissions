@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-08T09:35:02Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "GPT-5.6 Sol",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a07f92-f6c9-7314-9ea2-8d8434e950d1"
+      },
+      "problem_id": "martinet_totally_real_towers",
+      "production_metadata": {
+        "component_models": [
+          "GPT-5.6 Sol",
+          "GPT-6 (OpenAI Codex)"
+        ],
+        "credit_identity": "Naganori Yamaguchi",
+        "harness": "OpenAI Codex",
+        "human_involvement": "Human-directed formalization with AI assistance, reusing previously developed Lean libraries.",
+        "notes": "Direct corollary of the previously developed Sawin totally real tower theorem; required source files are vendored with rewritten import paths. Fresh source build, official Comparator with NanoDa and default Lean kernel, and official Lean 4.33 dependency replay passed on 2026-09-08. Author-reported proof model: GPT-5.6 Sol (Pro mode). Author confirmation on 2026-09-08; historical prompts, model proportions, and cost are not reconstructed. OpenAI Codex (GPT-6) assisted with the corollary, packaging, and local verification."
+      },
+      "result_id": "r2_988fee187ebe791506b055a5692f74d79cd9144c9609e1c67a92b5b89739b1bf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a78063cde1b1ee70d84fbe6787b7cc759045d437",
+        "repo": "n-yamaguchi-0729/LeanEvalSubmissions"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "n-yamaguchi-0729"
+}
