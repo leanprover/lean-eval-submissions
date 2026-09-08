@@ -27,6 +27,34 @@
         "ref": "a78063cde1b1ee70d84fbe6787b7cc759045d437",
         "repo": "n-yamaguchi-0729/LeanEvalSubmissions"
       }
+    },
+    {
+      "accepted_at": "2026-09-08T09:58:50Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "GPT-5.6 Sol",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a07f93-b631-71f0-93e2-14017a510548"
+      },
+      "problem_id": "shafarevich_relation_rank_bound",
+      "production_metadata": {
+        "component_models": [
+          "GPT-5.6 Sol",
+          "GPT-6 (OpenAI Codex)"
+        ],
+        "credit_identity": "Naganori Yamaguchi",
+        "harness": "OpenAI Codex",
+        "human_involvement": "Human-directed formalization with AI assistance, reusing previously developed Lean libraries.",
+        "notes": "Previously developed Shafarevich relation-rank proof; all 980 solver files are byte-identical to the previously verified submission. Comparator, NanoDa, and official Lean kernel passed on 2026-08-31. The unchanged solver and trusted problem files were compared again for this preparation. Author-reported proof model: GPT-5.6 Sol (Pro mode). Author confirmation on 2026-09-08; historical prompts, model proportions, and cost are not reconstructed. OpenAI Codex (GPT-6) assisted with packaging and verification review; the previously verified proof is unchanged."
+      },
+      "result_id": "r2_2fe042fc941c05a564ef6bd7f4b158b08c3669b7a9e452ce454e18da387ac15f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a78063cde1b1ee70d84fbe6787b7cc759045d437",
+        "repo": "n-yamaguchi-0729/LeanEvalSubmissions"
+      }
     }
   ],
   "schema_version": 2,
