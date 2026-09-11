@@ -106,7 +106,7 @@ held only by the small set of maintainers listed in
 [`.audit/recipients.txt`](.audit/recipients.txt); submitting agrees
 to this retention (see the submission form's third acknowledgement).
 
-The compressed source tarball is capped at **10 MiB**; submissions
+The compressed source tarball is capped at **100 MiB**; submissions
 above the cap are rejected before evaluation. See
 [`docs/audit-archive.md`](docs/audit-archive.md) for the design and
 the decryption procedure.

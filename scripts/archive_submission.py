@@ -43,7 +43,7 @@ import urllib.request
 from key_capability_contract import ContractError, validate_envelope
 
 
-SIZE_CAP_BYTES = 10 * 1024 * 1024  # 10 MiB. Matches the workflow.
+SIZE_CAP_BYTES = 100 * 1024 * 1024  # 100 MiB. Matches the workflow.
 SIDECAR_SCHEMA_VERSION = 1
 SERVER_SIDECAR_SCHEMA_VERSION = 2
 ENVELOPE_SIDECAR_SCHEMA_VERSION = 3

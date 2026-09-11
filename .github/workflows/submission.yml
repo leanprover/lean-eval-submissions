@@ -693,10 +693,10 @@ jobs:
         if: steps.archive_fetch.outcome == 'success'
         run: |
           SIZE_BYTES=$(stat -c %s /tmp/archive-fetch/source.tar.gz)
-          CAP_BYTES=$((10 * 1024 * 1024))
-          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 10 MiB)"
+          CAP_BYTES=$((100 * 1024 * 1024))
+          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 100 MiB)"
           if [ "$SIZE_BYTES" -gt "$CAP_BYTES" ]; then
-            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (10 MiB) audit cap"
+            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (100 MiB) audit cap"
             exit 1
           fi
 
@@ -720,7 +720,7 @@ jobs:
           SIZE_KB=$(( $(stat -c %s /tmp/archive-fetch/source.tar.gz) / 1024 ))
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
-            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_KB} KiB, over the 10240 KiB (10 MiB) audit-archive cap. The source was not archived or evaluated. Trim build artifacts, large fixtures, or unrelated files before resubmitting."
+            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_KB} KiB, over the 102400 KiB (100 MiB) audit-archive cap. The source was not archived or evaluated. Trim build artifacts, large fixtures, or unrelated files before resubmitting."
           gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
 
       - name: Install age for audit encryption
