@@ -28,5 +28,5 @@
   "state_event_schema_version": 1,
   "state_main_commit": "235a96c96462438c7680e6fb90fa0e6044ec1774",
   "state_repository": "leanprover/lean-eval-state",
-  "wrangler_version": "4.124.0"
+  "wrangler_version": "4.131.0"
 }
