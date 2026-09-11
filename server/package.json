@@ -30,9 +30,7 @@
     "@cloudflare/sandbox": "0.12.7"
   },
   "overrides": {
-    "@cloudflare/vitest-pool-workers": {
-      "miniflare": "5.20260910.0-alpha",
-      "wrangler": "4.131.0"
-    }
+    "miniflare": "5.20260910.0-alpha",
+    "wrangler": "$wrangler"
   }
 }
