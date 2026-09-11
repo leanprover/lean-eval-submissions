@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-11T21:54:51Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0924a-1239-7080-9275-7f646b11c265"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_40b05b34c0f5c53aced7c0f10c593c4e5ba2094104cc5e7ceb5d4559d0a83d21",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0b8bded8121a87d48df389315924490125312c9b",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "skidanovalex"
+}
