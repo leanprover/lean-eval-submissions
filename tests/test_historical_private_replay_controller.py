@@ -830,6 +830,21 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 lane_count=4,
             )
 
+    def test_four_lane_partition_is_disjoint_and_complete(self) -> None:
+        task_ids = [f"rt1_{index:064x}" for index in range(1, 65)]
+        partitions = [
+            {
+                task_id
+                for task_id in task_ids
+                if controller.private_replay_lane(task_id, 4) == lane_index
+            }
+            for lane_index in range(4)
+        ]
+        self.assertEqual(set().union(*partitions), set(task_ids))
+        for left in range(4):
+            for right in range(left + 1, 4):
+                self.assertTrue(partitions[left].isdisjoint(partitions[right]))
+
     def test_prewarm_request_is_exact_and_contains_no_private_material(self) -> None:
         plan = self.fixture.plan()
         request = controller.prepare_prewarm_request(
