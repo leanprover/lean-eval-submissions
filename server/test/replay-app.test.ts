@@ -81,7 +81,8 @@ async function authoritativeInput(
 }
 
 async function historicalPublicInput(): Promise<Record<string, unknown>> {
-  const sourceArchive = new TextEncoder().encode("historical public source archive");
+  const sourceText = "historical public source archive".repeat(6_000);
+  const sourceArchive = new TextEncoder().encode(sourceText);
   const archiveHash = await crypto.subtle.digest("SHA-256", sourceArchive);
   const archiveDigest = [...new Uint8Array(archiveHash)]
     .map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -126,7 +127,7 @@ async function historicalPublicInput(): Promise<Record<string, unknown>> {
     measurement_config_digest: MEASUREMENT_DIGEST,
     vm_image_digest: VM_IMAGE_DIGEST,
     handoff,
-    source_archive_base64: btoa(String.fromCharCode(...sourceArchive)),
+    source_archive_base64: btoa(sourceText),
   };
 }
 
@@ -522,6 +523,7 @@ describe("Cloudflare replay executor", () => {
   it("idempotently starts and polls one historical handoff through confirmed destruction", async () => {
     const body = await historicalPublicInput();
     const writes = new Map<string, string>();
+    const archiveChunkSizes: number[] = [];
     const commands: string[] = [];
     const processIds: string[] = [];
     let processStarted = false;
@@ -560,8 +562,26 @@ describe("Cloudflare replay executor", () => {
       },
     };
     const sandbox = {
-      writeFile: (path: string, contents: string) => {
-        writes.set(path, contents);
+      writeFile: async (
+        path: string,
+        contents: string | ReadableStream<Uint8Array>,
+      ) => {
+        let text: string;
+        if (typeof contents === "string") {
+          text = contents;
+        } else {
+          const reader = contents.getReader();
+          const decoder = new TextDecoder();
+          text = "";
+          let chunk = await reader.read();
+          while (!chunk.done) {
+            archiveChunkSizes.push(chunk.value.byteLength);
+            text += decoder.decode(chunk.value, { stream: true });
+            chunk = await reader.read();
+          }
+          text += decoder.decode();
+        }
+        writes.set(path, text);
         return Promise.resolve({ success: true, path, timestamp: "fixture" });
       },
       exec: () => { throw new Error("blocking exec must remain unreachable"); },
@@ -607,6 +627,8 @@ describe("Cloudflare replay executor", () => {
       .toBe(canonicalHistoricalPublicHandoff(body.handoff));
     expect(writes.get("/workspace/historical-public-source.tar.gz.b64"))
       .toBe(body.source_archive_base64);
+    expect(archiveChunkSizes.length).toBeGreaterThan(1);
+    expect(Math.max(...archiveChunkSizes)).toBeLessThanOrEqual(64 * 1024);
     expect(claimedBinding).toMatchObject(historicalProcessBindingInput(body));
     expect(typeof (claimedBinding as Record<string, unknown>).retained_until_epoch_ms)
       .toBe("number");

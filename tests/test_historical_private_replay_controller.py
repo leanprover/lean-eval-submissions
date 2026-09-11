@@ -763,6 +763,31 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.fixture.close()
 
+    def test_problem_set_filter_is_exact_by_problem_and_revision(self) -> None:
+        pair = (
+            self.fixture.task["problem_id"],
+            self.fixture.task["statement_revision"],
+        )
+        selected = controller._plan_next(
+            self.fixture.queue,
+            controller.state_canonical_bytes(self.fixture.queue),
+            self.fixture.state_head,
+            self.fixture.authority,
+            self.fixture.authority_raw,
+            self.fixture.profile,
+            self.fixture.profile_raw,
+            self.fixture.archive_binding,
+            problem_members=frozenset({pair}),
+        )
+        self.assertEqual(selected["task"], self.fixture.task)
+        empty = controller._plan_next(
+            self.fixture.queue,
+            controller.state_canonical_bytes(self.fixture.queue),
+            self.fixture.state_head,
+            problem_members=frozenset({(pair[0], pair[1] + 1)}),
+        )
+        self.assertEqual(empty["kind"], "empty")
+
     def test_prewarm_request_is_exact_and_contains_no_private_material(self) -> None:
         plan = self.fixture.plan()
         request = controller.prepare_prewarm_request(
