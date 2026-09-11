@@ -69,7 +69,9 @@ jobs:
               jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
                 --arg head "$GITHUB_SHA" '
                   .status == "ahead" and .base_commit.sha == $base and
-                  .merge_base_commit.sha == $base and .head_commit.sha == $head and
+                  .merge_base_commit.sha == $base and
+                  (.commits | length) > 0 and .commits[-1].sha == $head and
+                  .ahead_by > 0 and
                   .ahead_by == .total_commits and
                   .ahead_by == (.commits | length) and
                   (.files | length) > 0 and (.files | length) < 300 and
@@ -909,7 +911,9 @@ jobs:
               "repos/$GITHUB_REPOSITORY/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$head")
             jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" --arg head "$head" '
               .status == "ahead" and .base_commit.sha == $base and
-              .merge_base_commit.sha == $base and .head_commit.sha == $head and
+              .merge_base_commit.sha == $base and
+              (.commits | length) > 0 and .commits[-1].sha == $head and
+              .ahead_by > 0 and
               .ahead_by == .total_commits and .ahead_by == (.commits | length) and
               (.files | length) > 0 and (.files | length) < 300 and
               all(.files[];
@@ -930,6 +934,13 @@ jobs:
               reviewed_implementation_commit: env.REVIEWED_IMPLEMENTATION_COMMIT
             }
           }' > "$request"
-          timeout 30s gh api --method POST \
+          dispatch_error=$(mktemp)
+          trap 'rm -f "$request" "$dispatch_error"' EXIT
+          if ! timeout 30s gh api --method POST \
             "repos/$GITHUB_REPOSITORY/actions/workflows/historical-authoritative-replay.yml/dispatches" \
-            --input "$request"
+            --input "$request" 2>"$dispatch_error"; then
+            sed -E 's/(token|authorization|credential)[^[:space:]]*/[redacted]/Ig' \
+              "$dispatch_error" >&2
+            echo "Public replay successor dispatch failed" >&2
+            exit 1
+          fi
