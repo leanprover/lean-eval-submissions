@@ -193,6 +193,19 @@ esac
 
 
 class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
+    def test_replay_is_limited_to_the_exact_frozen_v1_manifest(self) -> None:
+        self.assertIn(
+            "leanprover/lean-eval/6b4b87b672f5301f24983a12fda65dac608453ce/"
+            "manifests/sets/v1.toml",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "546706914389696b93653189ba870550e9853a4ac653664f482ba8d4d9eb9492",
+            WORKFLOW,
+        )
+        self.assertEqual(WORKFLOW.count("--problem-set"), 9)
+        self.assertIn("non-v1 tasks remain deferred", WORKFLOW)
+
     def run_executor_status_500_classifier(
         self, responses: list[bytes]
     ) -> list[tuple[str, int, str]]:

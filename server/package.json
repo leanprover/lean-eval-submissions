@@ -24,9 +24,13 @@
     "typescript": "5.9.2",
     "typescript-eslint": "8.67.0",
     "vitest": "4.1.11",
-    "wrangler": "4.124.0"
+    "wrangler": "4.131.0"
   },
   "dependencies": {
     "@cloudflare/sandbox": "0.12.7"
+  },
+  "overrides": {
+    "miniflare": "5.20260910.0-alpha",
+    "wrangler": "$wrangler"
   }
 }

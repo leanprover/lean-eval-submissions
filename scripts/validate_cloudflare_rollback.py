@@ -44,7 +44,7 @@ QUALIFICATION_FIXED = {
     "state_event_schema_version": 1,
     "state_repository": "leanprover/lean-eval-state",
     "state_event_schema_path": "schema/state-event-v1.schema.json",
-    "wrangler_version": "4.124.0",
+    "wrangler_version": "4.131.0",
 }
 QUALIFICATION_FIELDS = set(QUALIFICATION_FIXED) | {
     "state_main_commit",

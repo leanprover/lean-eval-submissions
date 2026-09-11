@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts.historical_public_runner import canonical_document_bytes
 from scripts.historical_replay_controller import (
@@ -24,6 +25,7 @@ from scripts.historical_replay_controller import (
     bind_handoff,
     build_executor_request,
     canonical_bytes,
+    load_v1_problem_set,
     load_reviewed_inputs,
     plan_next,
     rebind_execution_plan,
@@ -63,6 +65,28 @@ def loaded_git(commit: str, path: pathlib.Path) -> tuple[dict, bytes]:
 
 
 class HistoricalReplayInputTests(unittest.TestCase):
+    def test_v1_problem_set_is_digest_bound_and_revision_exact(self) -> None:
+        raw = b'''schema_version = 2\nid = "v1"\nfrozen = true\nmembers = [\n  { problem_id = "example", statement_revision = 3 },\n]\n'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "v1.toml"
+            path.write_bytes(raw)
+            with (
+                mock.patch(
+                    "scripts.historical_replay_controller.V1_PROBLEM_SET_SHA256",
+                    hashlib.sha256(raw).hexdigest(),
+                ),
+                mock.patch(
+                    "scripts.historical_replay_controller.V1_PROBLEM_SET_MEMBER_COUNT",
+                    1,
+                ),
+            ):
+                self.assertEqual(load_v1_problem_set(path), {("example", 3)})
+                path.write_bytes(raw + b"\n")
+                with self.assertRaisesRegex(
+                    HistoricalReplayControllerError, "digest differs"
+                ):
+                    load_v1_problem_set(path)
+
     def test_duplicate_keys_nonfinite_numbers_and_oversize_fail_closed(self) -> None:
         cases = (
             b'{\n  "schema_version": 1,\n  "schema_version": 1\n}\n',
@@ -421,6 +445,32 @@ class HistoricalReplayPlanTests(unittest.TestCase):
                     "queue_source_digest": "1" * 64,
                 },
             },
+        )
+
+    def test_problem_set_filter_is_exact_by_problem_and_revision(self) -> None:
+        pair = (
+            self.fixture.task["problem_id"],
+            self.fixture.task["statement_revision"],
+        )
+        plan = plan_next(
+            self.fixture.queue,
+            self.fixture.authority,
+            self.fixture.authority_raw,
+            self.fixture.profile,
+            self.fixture.profile_raw,
+            self.fixture.matrix,
+            self.fixture.matrix_raw,
+            self.fixture.contract,
+            self.fixture.contract_raw,
+            frozenset({pair}),
+        )
+        self.assertEqual(plan["task"], self.fixture.task)
+        self.assertEqual(
+            plan_next(
+                self.fixture.queue,
+                problem_members=frozenset({(pair[0], pair[1] + 1)}),
+            )["kind"],
+            "empty",
         )
 
     def test_retry_attempt_is_monotone(self) -> None:

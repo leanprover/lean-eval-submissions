@@ -24,6 +24,7 @@ import secrets
 import stat
 import subprocess
 import sys
+import tomllib
 from typing import Any
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parent
@@ -62,6 +63,8 @@ QUALIFICATION_CONTRACT_PATH = "historical-public-qualification/contract-v1.json"
 TRANSPORT_CONTRACT = "historical_public_executor_v1"
 ATTEMPT_LIMIT_REASON = "historical_public_attempt_limit_reached"
 ATTEMPT_BINDING_REASON = "historical_public_attempt_binding_required"
+V1_PROBLEM_SET_SHA256 = "546706914389696b93653189ba870550e9853a4ac653664f482ba8d4d9eb9492"
+V1_PROBLEM_SET_MEMBER_COUNT = 128
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -226,6 +229,43 @@ def state_canonical_bytes(value: Any) -> bytes:
 
 def sha256_bytes(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def load_v1_problem_set(path: pathlib.Path) -> frozenset[tuple[str, int]]:
+    """Load the exact frozen LeanEval v1 problem/revision set."""
+    raw = _read_regular(path, MAX_JSON_BYTES, "v1 problem set")
+    if sha256_bytes(raw) != V1_PROBLEM_SET_SHA256:
+        raise HistoricalReplayControllerError("v1 problem set digest differs")
+    try:
+        value = tomllib.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise HistoricalReplayControllerError("v1 problem set is invalid TOML") from error
+    document = _object(value, "v1 problem set")
+    if (
+        document.get("schema_version") != 2
+        or document.get("id") != "v1"
+        or document.get("frozen") is not True
+    ):
+        raise HistoricalReplayControllerError("v1 problem set identity differs")
+    members = document.get("members")
+    if not isinstance(members, list) or len(members) != V1_PROBLEM_SET_MEMBER_COUNT:
+        raise HistoricalReplayControllerError("v1 problem set member count differs")
+    result: set[tuple[str, int]] = set()
+    for index, member_value in enumerate(members):
+        member = _object(member_value, f"v1 problem set member {index}")
+        _fields(
+            member,
+            {"problem_id", "statement_revision"},
+            f"v1 problem set member {index}",
+        )
+        pair = (
+            _match(PROBLEM, member["problem_id"], "v1 problem id"),
+            _integer(member["statement_revision"], "v1 statement revision", 1),
+        )
+        if pair in result:
+            raise HistoricalReplayControllerError("v1 problem set contains a duplicate member")
+        result.add(pair)
+    return frozenset(result)
 
 
 def _object(value: Any, label: str) -> dict[str, Any]:
@@ -856,9 +896,25 @@ def _task_blocker(task: dict[str, Any]) -> tuple[str, str] | None:
     return None
 
 
-def _next_eligible_task(queue: dict[str, Any]) -> dict[str, Any] | None:
+def _task_in_problem_set(
+    task: dict[str, Any], problem_members: frozenset[tuple[str, int]] | None
+) -> bool:
+    return problem_members is None or (
+        task["problem_id"], task["statement_revision"]
+    ) in problem_members
+
+
+def _next_eligible_task(
+    queue: dict[str, Any],
+    problem_members: frozenset[tuple[str, int]] | None = None,
+) -> dict[str, Any] | None:
     return next(
-        (task for task in queue["tasks"] if _task_blocker(task) is None),
+        (
+            task
+            for task in queue["tasks"]
+            if _task_in_problem_set(task, problem_members)
+            and _task_blocker(task) is None
+        ),
         None,
     )
 
@@ -873,6 +929,7 @@ def plan_next(
     matrix_raw: bytes | None = None,
     contract_value: dict[str, Any] | None = None,
     contract_raw: bytes | None = None,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
     bindings = {
@@ -880,15 +937,18 @@ def plan_next(
         "queue_source_event_count": queue["source_event_count"],
         "queue_source_digest": queue["source_digest"],
     }
-    if not queue["tasks"]:
+    selected_tasks = [
+        task for task in queue["tasks"] if _task_in_problem_set(task, problem_members)
+    ]
+    if not selected_tasks:
         return {
             "schema_version": 1,
             "kind": "empty",
             "transport": _transport(),
             "queue": bindings,
         }
-    eligible_task = _next_eligible_task(queue)
-    task = queue["tasks"][0] if eligible_task is None else eligible_task
+    eligible_task = _next_eligible_task(queue, problem_members)
+    task = selected_tasks[0] if eligible_task is None else eligible_task
     if any(
         value is None
         for value in (
@@ -1037,10 +1097,14 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     return plan
 
 
-def validate_plan_against_queue(plan_value: Any, queue_value: Any) -> dict[str, Any]:
+def validate_plan_against_queue(
+    plan_value: Any,
+    queue_value: Any,
+    problem_members: frozenset[tuple[str, int]] | None = None,
+) -> dict[str, Any]:
     plan = validate_execution_plan(plan_value)
     queue = validate_queue(queue_value)
-    task = _next_eligible_task(queue)
+    task = _next_eligible_task(queue, problem_members)
     expected_queue = {
         "queue_environment": queue["environment"],
         "queue_source_event_count": queue["source_event_count"],
@@ -1063,6 +1127,7 @@ def rebind_execution_plan(
     matrix_raw: bytes,
     contract_value: dict[str, Any],
     contract_raw: bytes,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Refresh only a plan's whole-State queue binding after unrelated appends."""
     original = validate_execution_plan(plan_value)
@@ -1076,6 +1141,7 @@ def rebind_execution_plan(
         matrix_raw,
         contract_value,
         contract_raw,
+        problem_members,
     )
     if refreshed.get("kind") != "execution":
         raise HistoricalReplayControllerError(
@@ -1101,8 +1167,9 @@ def started_event(
     trusted_now: str,
     *,
     random_bytes: bytes | None = None,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
-    plan = validate_plan_against_queue(plan_value, queue_value)
+    plan = validate_plan_against_queue(plan_value, queue_value, problem_members)
     transition = plan["started_transition"]
     occurred = _event_time(trusted_now, plan["task"]["occurred_at"])
     return {
@@ -2292,6 +2359,7 @@ def parser() -> argparse.ArgumentParser:
     plan = commands.add_parser("plan")
     plan.add_argument("--queue", required=True, type=pathlib.Path)
     plan.add_argument("--repository-root", required=True, type=pathlib.Path)
+    plan.add_argument("--problem-set", type=pathlib.Path)
     plan.add_argument("--output", required=True, type=pathlib.Path)
     bind = commands.add_parser("bind-handoff")
     for name in ("plan", "handoff", "source-archive", "repository-root", "output"):
@@ -2310,12 +2378,14 @@ def parser() -> argparse.ArgumentParser:
     event.add_argument("kind", choices=("started",))
     event.add_argument("--plan", required=True, type=pathlib.Path)
     event.add_argument("--queue", required=True, type=pathlib.Path)
+    event.add_argument("--problem-set", type=pathlib.Path)
     event.add_argument("--trusted-now", required=True)
     event.add_argument("--output", required=True, type=pathlib.Path)
     rebind = commands.add_parser("refresh-rebind-plan")
     rebind.add_argument("--plan", required=True, type=pathlib.Path)
     rebind.add_argument("--queue", required=True, type=pathlib.Path)
     rebind.add_argument("--repository-root", required=True, type=pathlib.Path)
+    rebind.add_argument("--problem-set", type=pathlib.Path)
     rebind.add_argument("--output", required=True, type=pathlib.Path)
     recover = commands.add_parser("recover")
     recover.add_argument("--events-root", required=True, type=pathlib.Path)
@@ -2339,11 +2409,23 @@ def main() -> int:
     try:
         if args.command == "plan":
             queue, _ = _load_state_canonical(args.queue, "historical replay queue")
-            if queue.get("tasks"):
+            problem_members = (
+                None
+                if args.problem_set is None
+                else load_v1_problem_set(args.problem_set)
+            )
+            if any(
+                _task_in_problem_set(task, problem_members)
+                for task in queue.get("tasks", [])
+            ):
                 validated_queue = validate_queue(queue)
-                selected = _next_eligible_task(validated_queue)
+                selected = _next_eligible_task(validated_queue, problem_members)
                 if selected is None:
-                    selected = validated_queue["tasks"][0]
+                    selected = next(
+                        task
+                        for task in validated_queue["tasks"]
+                        if _task_in_problem_set(task, problem_members)
+                    )
                 (
                     authority,
                     authority_raw,
@@ -2364,9 +2446,10 @@ def main() -> int:
                     matrix_raw,
                     contract,
                     contract_raw,
+                    problem_members,
                 )
             else:
-                planned = plan_next(queue)
+                planned = plan_next(queue, problem_members=problem_members)
             _write(args.output, planned)
         elif args.command == "bind-handoff":
             plan, _ = _load_canonical(args.plan, "historical execution plan")
@@ -2408,14 +2491,38 @@ def main() -> int:
         elif args.command == "state-event":
             plan, _ = _load_canonical(args.plan, "historical execution plan")
             queue, _ = _load_state_canonical(args.queue, "historical replay queue")
-            value = started_event(plan, queue, args.trusted_now)
+            value = started_event(
+                plan,
+                queue,
+                args.trusted_now,
+                problem_members=(
+                    None
+                    if args.problem_set is None
+                    else load_v1_problem_set(args.problem_set)
+                ),
+            )
             _write(args.output, value, state_canonical_bytes)
         elif args.command == "refresh-rebind-plan":
             plan, _ = _load_canonical(args.plan, "historical execution plan")
             queue, _ = _load_state_canonical(args.queue, "State queue")
             validated_queue = validate_queue(queue)
-            selected = _next_eligible_task(validated_queue)
-            if selected is None:
+            problem_members = (
+                None
+                if args.problem_set is None
+                else load_v1_problem_set(args.problem_set)
+            )
+            original = validate_execution_plan(plan)
+            selected = next(
+                (
+                    task
+                    for task in validated_queue["tasks"]
+                    if task["replay_task_id"] == original["task"]["replay_task_id"]
+                    and _task_in_problem_set(task, problem_members)
+                    and _task_blocker(task) is None
+                ),
+                None,
+            )
+            if selected is None or selected != original["task"]:
                 raise HistoricalReplayControllerError(
                     "historical plan is no longer an executable live queue task"
                 )
@@ -2433,6 +2540,7 @@ def main() -> int:
                     reviewed[5],
                     reviewed[6],
                     reviewed[7],
+                    problem_members,
                 ),
             )
         elif args.command == "terminal-event":

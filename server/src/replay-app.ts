@@ -1658,7 +1658,7 @@ export async function handleReplayRequest(
           await writeSandboxFile(
             sandbox,
             "/workspace/historical-public-source.tar.gz.b64",
-            input.source_archive_base64,
+            streamedText(input.source_archive_base64),
           );
         });
       } catch (error) {

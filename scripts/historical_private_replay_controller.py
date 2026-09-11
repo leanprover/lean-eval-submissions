@@ -55,6 +55,7 @@ from historical_replay_controller import (
     _write,
     canonical_bytes,
     current_historical_running,
+    load_v1_problem_set,
     sha256_bytes,
     state_canonical_bytes,
 )
@@ -1815,6 +1816,7 @@ def _plan_next(
     profile_raw: bytes | None = None,
     archive_binding_value: Any | None = None,
     authority_profile_value: Any | None = None,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
     if not isinstance(queue_raw, bytes) or state_canonical_bytes(queue) != queue_raw:
@@ -1828,7 +1830,13 @@ def _plan_next(
         "queue_source_event_count": queue["source_event_count"],
         "queue_source_digest": queue["source_digest"],
     }
-    if not queue["tasks"]:
+    selected_tasks = [
+        task
+        for task in queue["tasks"]
+        if problem_members is None
+        or (task["problem_id"], task["statement_revision"]) in problem_members
+    ]
+    if not selected_tasks:
         return {"schema_version": 1, "kind": "empty", "state": state}
     if any(
         value is None
@@ -1838,7 +1846,7 @@ def _plan_next(
         )
     ):
         raise HistoricalPrivateReplayControllerError("queued task requires exact reviewed inputs")
-    task = queue["tasks"][0]
+    task = selected_tasks[0]
     assert authority_raw is not None and profile_raw is not None
     if (
         sha256_bytes(authority_raw) != task["authority_sha256"]
@@ -1876,13 +1884,22 @@ def plan_from_checkouts(
     state_root: pathlib.Path,
     repository_root: pathlib.Path,
     audit_root: pathlib.Path,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Plan the first exact protected queue task from canonical checkouts."""
 
     queue, queue_raw, state_head = load_state_queue(state_root)
-    if not queue["tasks"]:
-        return _plan_next(queue, queue_raw, state_head)
-    task = queue["tasks"][0]
+    selected_tasks = [
+        task
+        for task in queue["tasks"]
+        if problem_members is None
+        or (task["problem_id"], task["statement_revision"]) in problem_members
+    ]
+    if not selected_tasks:
+        return _plan_next(
+            queue, queue_raw, state_head, problem_members=problem_members
+        )
+    task = selected_tasks[0]
     (
         authority,
         authority_raw,
@@ -1907,6 +1924,7 @@ def plan_from_checkouts(
         profile_raw,
         archive_binding,
         authority_profile,
+        problem_members,
     )
 
 
@@ -1990,6 +2008,9 @@ def _validate_plan_against_queue(
     queue_value: Any,
     queue_raw: bytes,
     state_head: str,
+    problem_members: frozenset[tuple[str, int]] | None = None,
+    *,
+    exact_plan_task: bool = False,
 ) -> dict[str, Any]:
     plan = validate_execution_plan(plan_value)
     queue = validate_queue(queue_value)
@@ -1997,7 +2018,20 @@ def _validate_plan_against_queue(
         raise HistoricalPrivateReplayControllerError(
             "live historical private queue raw bytes differ from its value"
         )
-    task = queue["tasks"][0] if queue["tasks"] else None
+    task = next(
+        (
+            queued
+            for queued in queue["tasks"]
+            if (
+                queued["replay_task_id"] == plan["task"]["replay_task_id"]
+                if exact_plan_task
+                else problem_members is None
+                or (queued["problem_id"], queued["statement_revision"])
+                in problem_members
+            )
+        ),
+        None,
+    )
     expected_state = {
         "repository": _state_repository(queue["environment"]),
         "expected_head": state_head,
@@ -2012,14 +2046,20 @@ def _validate_plan_against_queue(
 
 
 def validate_plan_against_state(
-    plan_value: Any, state_root: pathlib.Path
+    plan_value: Any,
+    state_root: pathlib.Path,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     queue, queue_raw, state_head = load_state_queue(state_root)
-    return _validate_plan_against_queue(plan_value, queue, queue_raw, state_head)
+    return _validate_plan_against_queue(
+        plan_value, queue, queue_raw, state_head, problem_members
+    )
 
 
 def rebind_plan_to_current_state(
-    plan_value: Any, state_root: pathlib.Path
+    plan_value: Any,
+    state_root: pathlib.Path,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Rebind only State CAS metadata after proving the exact task unchanged."""
 
@@ -2034,9 +2074,19 @@ def rebind_plan_to_current_state(
         historical_queue,
         historical_raw,
         plan["state"]["expected_head"],
+        problem_members,
     )
     queue, queue_raw, state_head = load_state_queue(state_root)
-    task = queue["tasks"][0] if queue["tasks"] else None
+    task = next(
+        (
+            queued
+            for queued in queue["tasks"]
+            if problem_members is None
+            or (queued["problem_id"], queued["statement_revision"])
+            in problem_members
+        ),
+        None,
+    )
     if task != plan["task"]:
         raise HistoricalPrivateReplayControllerError(
             "exact queued private replay changed while State advanced"
@@ -2050,7 +2100,9 @@ def rebind_plan_to_current_state(
         "queue_source_digest": queue["source_digest"],
         "task_sha256": sha256_bytes(state_canonical_bytes(task)),
     }
-    return _validate_plan_against_queue(rebound, queue, queue_raw, state_head)
+    return _validate_plan_against_queue(
+        rebound, queue, queue_raw, state_head, problem_members
+    )
 
 
 def _state_append_candidate(event_value: Any, environment: str, expected_head: str) -> dict[str, Any]:
@@ -2072,8 +2124,9 @@ def started_candidate(
     trusted_now: str,
     *,
     random_bytes: bytes | None = None,
+    problem_members: frozenset[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
-    plan = validate_plan_against_state(plan_value, state_root)
+    plan = validate_plan_against_state(plan_value, state_root, problem_members)
     transition = plan["execution_plan"]["started_transition"]
     occurred = _event_time(trusted_now, plan["task"]["occurred_at"])
     event = {
@@ -2105,7 +2158,11 @@ def validate_started_history(
         plan["state"]["repository"],
     )
     _validate_plan_against_queue(
-        plan, queue, queue_raw, plan["state"]["expected_head"]
+        plan,
+        queue,
+        queue_raw,
+        plan["state"]["expected_head"],
+        exact_plan_task=True,
     )
     started = _object(started_candidate_value, "started State append candidate")
     _fields(
@@ -2709,15 +2766,18 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--state-root", required=True, type=pathlib.Path)
     plan.add_argument("--repository-root", required=True, type=pathlib.Path)
     plan.add_argument("--audit-root", required=True, type=pathlib.Path)
+    plan.add_argument("--problem-set", type=pathlib.Path)
     plan.add_argument("--output", required=True, type=pathlib.Path)
     started = commands.add_parser("started-candidate")
     started.add_argument("--plan", required=True, type=pathlib.Path)
     started.add_argument("--state-root", required=True, type=pathlib.Path)
+    started.add_argument("--problem-set", type=pathlib.Path)
     started.add_argument("--trusted-now", required=True)
     started.add_argument("--output", required=True, type=pathlib.Path)
     rebind = commands.add_parser("refresh-rebind-plan")
     rebind.add_argument("--plan", required=True, type=pathlib.Path)
     rebind.add_argument("--state-root", required=True, type=pathlib.Path)
+    rebind.add_argument("--problem-set", type=pathlib.Path)
     rebind.add_argument("--output", required=True, type=pathlib.Path)
     refresh = commands.add_parser("refresh-state")
     refresh.add_argument("--state-root", required=True, type=pathlib.Path)
@@ -2800,17 +2860,34 @@ def main() -> int:
     args = parser().parse_args()
     try:
         if args.command == "plan":
+            problem_members = (
+                None
+                if args.problem_set is None
+                else load_v1_problem_set(args.problem_set)
+            )
             _write(
                 args.output,
                 plan_from_checkouts(
-                    args.state_root, args.repository_root, args.audit_root
+                    args.state_root,
+                    args.repository_root,
+                    args.audit_root,
+                    problem_members,
                 ),
             )
         elif args.command == "started-candidate":
             plan, _ = _load_canonical(args.plan, "historical private plan")
             _write(
                 args.output,
-                started_candidate(plan, args.state_root, args.trusted_now),
+                started_candidate(
+                    plan,
+                    args.state_root,
+                    args.trusted_now,
+                    problem_members=(
+                        None
+                        if args.problem_set is None
+                        else load_v1_problem_set(args.problem_set)
+                    ),
+                ),
                 state_canonical_bytes,
             )
         elif args.command == "refresh-rebind-plan":
@@ -2818,7 +2895,13 @@ def main() -> int:
             refresh_protected_state(args.state_root)
             _write(
                 args.output,
-                rebind_plan_to_current_state(plan, args.state_root),
+                rebind_plan_to_current_state(
+                    plan,
+                    args.state_root,
+                    None
+                    if args.problem_set is None
+                    else load_v1_problem_set(args.problem_set),
+                ),
             )
         elif args.command == "refresh-state":
             head = refresh_protected_state(args.state_root)

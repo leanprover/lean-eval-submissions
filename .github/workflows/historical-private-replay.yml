@@ -140,6 +140,18 @@ jobs:
         with:
           python-version: '3.11.10'
 
+      - name: Fetch the exact frozen v1 replay scope
+        run: |
+          set -euo pipefail
+          scope="$RUNNER_TEMP/lean-eval-v1.toml"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --retry 3 --retry-max-time 90 --retry-all-errors \
+            --output "$scope" \
+            'https://raw.githubusercontent.com/leanprover/lean-eval/6b4b87b672f5301f24983a12fda65dac608453ce/manifests/sets/v1.toml'
+          printf '%s  %s\n' \
+            '546706914389696b93653189ba870550e9853a4ac653664f482ba8d4d9eb9492' \
+            "$scope" | sha256sum --check -
+
       - name: Install exact source-only controller dependencies
         run: |
           set -euo pipefail
@@ -333,6 +345,7 @@ jobs:
           set -euo pipefail
           python scripts/historical_private_replay_controller.py plan \
             --state-root state --repository-root . --audit-root audit \
+            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/private-replay-plan.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/private-replay-plan.json")
           case "$kind" in
@@ -366,7 +379,7 @@ jobs:
                 "$RUNNER_TEMP/private-replay-plan.json")" != \
                 "sha256:$(printf '0%.0s' {1..64})"
               ;;
-            empty) echo 'The historical private replay queue is empty.' >> "$GITHUB_STEP_SUMMARY" ;;
+            empty) echo 'The private v1 replay scope is empty; non-v1 tasks remain deferred.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) exit 1 ;;
           esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
@@ -384,6 +397,7 @@ jobs:
           test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json"
           mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -457,6 +471,7 @@ jobs:
             fi
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --output "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json"
             mv "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json" \
               "$RUNNER_TEMP/private-replay-plan.json"
@@ -476,6 +491,7 @@ jobs:
           fi
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json"
           mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -498,6 +514,7 @@ jobs:
           config="$RUNNER_TEMP/historical-private-wrangler.json"
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/private-replay-plan.before-deploy.json"
           mv "$RUNNER_TEMP/private-replay-plan.before-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -533,6 +550,7 @@ jobs:
             ' "$RUNNER_TEMP/executor-health.json" >/dev/null
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/private-replay-plan.after-deploy.json"
           mv "$RUNNER_TEMP/private-replay-plan.after-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -559,6 +577,7 @@ jobs:
             rebound="$RUNNER_TEMP/private-replay-plan.reserve-$queued_proof_index.json"
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --output "$rebound"
             mv "$rebound" \
               "$RUNNER_TEMP/private-replay-plan.json"
@@ -665,9 +684,11 @@ jobs:
             publish_root="$RUNNER_TEMP/started-state-publish-$cas_attempt"
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --output "$plan"
             python scripts/historical_private_replay_controller.py started-candidate \
               --plan "$plan" --state-root state \
+              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$candidate"
             expected=$(jq -er .expected_head "$candidate")
