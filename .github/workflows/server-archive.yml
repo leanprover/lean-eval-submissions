@@ -131,7 +131,7 @@ jobs:
       - name: Enforce source size cap
         id: size_check
         if: steps.fetch.outcome == 'success'
-        run: test "$(stat -c %s /tmp/archive-fetch/source.tar.gz)" -le $((100 * 1024 * 1024))
+        run: test "$(stat -c %s /tmp/archive-fetch/source.tar.gz)" -le $((100 * 1000 * 1000))
 
       - name: Record size-cap status
         id: size_status

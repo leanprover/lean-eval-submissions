@@ -6,7 +6,7 @@ const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$
 
 // Replay carries the ciphertext base64-encoded inside one JSON body through a
 // Worker isolate, so its bound is set by that transport and is deliberately
-// independent of the 100 MiB audit-archive cap (docs/audit-archive.md).
+// independent of the 100 MB audit-archive cap (docs/audit-archive.md).
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 const MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024;
 const MAX_IDENTITY_BYTES = 4096;

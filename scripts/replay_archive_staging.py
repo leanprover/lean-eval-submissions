@@ -44,7 +44,7 @@ DIGEST = re.compile(r"[0-9a-f]{64}")
 MAX_JSON_BYTES = 64 * 1024
 # Replay carries the ciphertext base64-encoded inside one JSON body through a
 # Worker isolate, so its bound is set by that transport and is deliberately
-# independent of the 100 MiB audit-archive cap (docs/audit-archive.md).
+# independent of the 100 MB audit-archive cap (docs/audit-archive.md).
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
 MAX_IDENTITY_BYTES = 4096
 

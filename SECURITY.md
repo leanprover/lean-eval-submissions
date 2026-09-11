@@ -112,7 +112,7 @@ not something we actively probe. Submitters who require confidentiality
 should audit the workflow themselves before relying on this.
 
 **Audit retention.** Every successfully fetched submission has its
-compressed source tarball (≤ 100 MiB) `age`-encrypted to the recipient
+compressed source tarball (≤ 100 MB) `age`-encrypted to the recipient
 list in `.audit/recipients.txt` and pushed to the private
 `leanprover/lean-eval-audit` repo for indefinite retention. The
 ciphertext is decryptable only by holders of the matching SSH/age

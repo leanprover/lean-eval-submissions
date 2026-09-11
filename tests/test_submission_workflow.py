@@ -471,12 +471,15 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.compile(r"^\s+app-id:", re.MULTILINE),
         )
 
-    def test_size_cap_is_one_hundred_mib(self) -> None:
+    def test_size_cap_is_one_hundred_mb(self) -> None:
         # Surface the cap as a literal so a silent change has to update
-        # this test alongside the workflow. 100 MiB is GitHub's per-blob
-        # limit, so this is the ceiling of the Contents API archive design.
-        self.assertIn("100 * 1024 * 1024", self.text)
+        # this test alongside the workflow. GitHub refuses blobs over
+        # 100 MiB and the archived blob is the age ciphertext, which is
+        # ~26 KiB larger than the plaintext tar at this size, so the cap
+        # is 100 MB decimal to leave room. Do not "fix" it to MiB.
+        self.assertIn("100 * 1000 * 1000", self.text)
         self.assertNotIn("10 * 1024 * 1024", self.text)
+        self.assertNotIn("100 * 1024 * 1024", self.text)
 
     def test_evaluation_is_gated_on_durable_archive(self) -> None:
         # Encryption and persistence happen inside archive; only a successful
