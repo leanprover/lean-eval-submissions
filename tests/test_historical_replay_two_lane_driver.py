@@ -39,6 +39,7 @@ def exercise_dispatch(
     baseline: str = "1" * 40,
     head: str = "1" * 40,
     comparison: dict | None = None,
+    lane: str = "0",
 ) -> tuple[list[str], dict]:
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory)
@@ -90,6 +91,8 @@ def exercise_dispatch(
             "FAKE_COMPARISON": str(comparison_path),
             "FAKE_PAYLOAD": str(payload),
             "REVIEWED_IMPLEMENTATION_COMMIT": baseline,
+            "PRIVATE_REPLAY_LANE_INDEX": lane,
+            "PRIVATE_REPLAY_LANE_COUNT": "4",
             counter: str(value),
         }
         completed = subprocess.run(
@@ -117,7 +120,7 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
         self.assertNotIn("id-token: write", WORKFLOW)
         self.assertNotIn("actions/checkout", WORKFLOW)
 
-    def test_driver_starts_exactly_two_independent_lanes(self) -> None:
+    def test_driver_starts_one_public_and_exactly_four_private_lanes(self) -> None:
         self.assertEqual(WORKFLOW.count("permissions:\n      actions: write"), 2)
         self.assertEqual(WORKFLOW.count("      contents: read"), 2)
         self.assertEqual(WORKFLOW.count("actions/workflows/"), 2)
@@ -134,7 +137,17 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
             1,
         )
         self.assertIn("start-public-lane:", WORKFLOW)
-        self.assertIn("start-private-lane:", WORKFLOW)
+        self.assertIn("start-private-lanes:", WORKFLOW)
+        self.assertIn("private_lane_index: ['0', '1', '2', '3']", WORKFLOW)
+        self.assertIn("fail-fast: false", WORKFLOW)
+        self.assertIn(
+            "PRIVATE_REPLAY_LANE_INDEX: ${{ matrix.private_lane_index }}",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "private_lane_index: env.PRIVATE_REPLAY_LANE_INDEX", WORKFLOW
+        )
+        self.assertIn("default: 256", WORKFLOW)
 
     def test_each_lane_is_exact_main_only_and_hard_bounded(self) -> None:
         self.assertEqual(
@@ -209,6 +222,23 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
                     payload["inputs"]["reviewed_implementation_commit"],
                     "1" * 40,
                 )
+                if target == "historical-private-replay.yml":
+                    self.assertEqual(payload["inputs"]["private_lane_index"], "0")
+
+    def test_each_private_lane_dispatch_payload_is_bound_to_its_shard(self) -> None:
+        script = shell_step(
+            WORKFLOW, "Dispatch the first bounded private-lane run"
+        )
+        for lane in ("0", "1", "2", "3"):
+            with self.subTest(lane=lane):
+                _, payload = exercise_dispatch(
+                    script,
+                    counter="RUN_BUDGET",
+                    value=64,
+                    lane=lane,
+                )
+                self.assertEqual(payload["inputs"]["private_lane_index"], lane)
+                self.assertEqual(payload["inputs"]["remaining_runs"], "64")
 
     def test_successor_accepts_only_complete_results_only_descendants(self) -> None:
         baseline = "1" * 40
@@ -217,31 +247,38 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
             "status": "ahead",
             "base_commit": {"sha": baseline},
             "merge_base_commit": {"sha": baseline},
-            "head_commit": {"sha": head},
+            # The compare API can return null here even for a complete compare.
+            "head_commit": None,
             "ahead_by": 1,
             "total_commits": 1,
-            "commits": [{}],
+            "commits": [{"sha": head}],
             "files": [{"filename": "results/alice.json", "status": "added"}],
         }
-        script = shell_step(
-            PUBLIC, "Dispatch exactly one bounded public-lane successor"
-        )
-        _, payload = exercise_dispatch(
-            script,
-            counter="REMAINING_RUNS",
-            value=7,
-            baseline=baseline,
-            head=head,
-            comparison=comparison,
-        )
-        self.assertEqual(
-            payload["inputs"]["reviewed_implementation_commit"], baseline
-        )
+        for workflow, step_name in (
+            (PUBLIC, "Dispatch exactly one bounded public-lane successor"),
+            (PRIVATE, "Dispatch exactly one bounded private-lane successor"),
+        ):
+            with self.subTest(step=step_name):
+                script = shell_step(workflow, step_name)
+                _, payload = exercise_dispatch(
+                    script,
+                    counter="REMAINING_RUNS",
+                    value=7,
+                    baseline=baseline,
+                    head=head,
+                    comparison=comparison,
+                )
+                self.assertEqual(
+                    payload["inputs"]["reviewed_implementation_commit"], baseline
+                )
 
         comparison["files"][0]["filename"] = "scripts/changed.py"
         with self.assertRaises(AssertionError):
+            public_successor = shell_step(
+                PUBLIC, "Dispatch exactly one bounded public-lane successor"
+            )
             exercise_dispatch(
-                script,
+                public_successor,
                 counter="REMAINING_RUNS",
                 value=7,
                 baseline=baseline,

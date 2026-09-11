@@ -1,4 +1,5 @@
 name: Consume one historical private replay (dark)
+run-name: Private replay lane ${{ inputs.private_lane_index }} (${{ inputs.remaining_runs }} runs left)
 
 # Temporary migration machinery. Delete this workflow, the task-scoped Worker
 # entry, and its controller renderer after the protected historical-private
@@ -27,12 +28,22 @@ on:
         required: false
         type: string
         default: ''
+      private_lane_index:
+        description: Deterministic private replay shard (0-3)
+        required: true
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - '2'
+          - '3'
+        default: '0'
 
 permissions:
   contents: none
 
 concurrency:
-  group: lean-eval-historical-private-replay-controller
+  group: lean-eval-historical-private-replay-controller-${{ inputs.private_lane_index }}
   cancel-in-progress: false
 
 jobs:
@@ -47,6 +58,9 @@ jobs:
       preflight_kind: ${{ steps.preflight.outputs.kind }}
       plan_kind: ${{ steps.plan.outputs.kind }}
     environment: replay-production
+    env:
+      PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}
+      PRIVATE_REPLAY_LANE_COUNT: '4'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -63,6 +77,8 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
           test "$CONTROLLER_ENABLED" = true
+          [[ "$PRIVATE_REPLAY_LANE_INDEX" =~ ^[0-3]$ ]]
+          test "$PRIVATE_REPLAY_LANE_COUNT" = 4
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
           test "$branch" = "$GITHUB_SHA"$'\ttrue'
@@ -74,7 +90,8 @@ jobs:
               jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
                 --arg head "$GITHUB_SHA" '
                   .status == "ahead" and .base_commit.sha == $base and
-                  .merge_base_commit.sha == $base and .head_commit.sha == $head and
+                  .merge_base_commit.sha == $base and
+                  (.commits | length) > 0 and .commits[-1].sha == $head and
                   .ahead_by == .total_commits and
                   .ahead_by == (.commits | length) and
                   (.files | length) > 0 and (.files | length) < 300 and
@@ -187,6 +204,8 @@ jobs:
             --output "$RUNNER_TEMP/state-views"
           python scripts/historical_private_replay_controller.py recover \
             --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/recovery.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")
@@ -225,6 +244,8 @@ jobs:
               --state-root state --output "$refreshed"
             python scripts/historical_private_replay_controller.py recover \
               --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$proof"
             test "$(jq -er .kind "$proof")" = \
@@ -276,7 +297,7 @@ jobs:
         run: |
           set -euo pipefail
           published=false
-          for cas_attempt in $(seq 1 4); do
+          for cas_attempt in $(seq 1 12); do
             candidate="$RUNNER_TEMP/recovery-confirmed.cas-$cas_attempt.json"
             event="$RUNNER_TEMP/recovery-event.cas-$cas_attempt.json"
             publish_root="$RUNNER_TEMP/recovery-state-publish-$cas_attempt"
@@ -285,6 +306,8 @@ jobs:
               --output "$RUNNER_TEMP/refreshed-state-recovery-cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py recover \
               --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --cleanup-confirmation "$RUNNER_TEMP/recovery-cleanup-confirmation.json" \
               --output "$candidate"
@@ -302,6 +325,8 @@ jobs:
                 refresh-verify-recovery \
                 --recovery-candidate "$RUNNER_TEMP/recovery-confirmed.json" \
                 --state-root state \
+                --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+                --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
                 --output "$RUNNER_TEMP/recovery-committed-proof.json"
               git -C state merge-base --is-ancestor "$state_head" \
                 "$(jq -er .state_head "$RUNNER_TEMP/recovery-committed-proof.json")"
@@ -310,6 +335,9 @@ jobs:
                 "$(jq -er .event.event_id "$RUNNER_TEMP/recovery-confirmed.json")"
               published=true
               break
+            fi
+            if [ "$cas_attempt" -lt 12 ]; then
+              sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))
             fi
           done
           test "$published" = true
@@ -346,6 +374,8 @@ jobs:
           python scripts/historical_private_replay_controller.py plan \
             --state-root state --repository-root . --audit-root audit \
             --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --output "$RUNNER_TEMP/private-replay-plan.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/private-replay-plan.json")
           case "$kind" in
@@ -398,6 +428,8 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json"
           mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -472,6 +504,8 @@ jobs:
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
               --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json"
             mv "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json" \
               "$RUNNER_TEMP/private-replay-plan.json"
@@ -492,6 +526,8 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json"
           mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -515,6 +551,8 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --output "$RUNNER_TEMP/private-replay-plan.before-deploy.json"
           mv "$RUNNER_TEMP/private-replay-plan.before-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -551,6 +589,8 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --output "$RUNNER_TEMP/private-replay-plan.after-deploy.json"
           mv "$RUNNER_TEMP/private-replay-plan.after-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
@@ -578,6 +618,8 @@ jobs:
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
               --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$rebound"
             mv "$rebound" \
               "$RUNNER_TEMP/private-replay-plan.json"
@@ -677,7 +719,7 @@ jobs:
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           published=false
-          for cas_attempt in $(seq 1 4); do
+          for cas_attempt in $(seq 1 12); do
             plan="$RUNNER_TEMP/private-replay-plan.cas-$cas_attempt.json"
             candidate="$RUNNER_TEMP/started-candidate.cas-$cas_attempt.json"
             event="$RUNNER_TEMP/started-event.cas-$cas_attempt.json"
@@ -685,10 +727,14 @@ jobs:
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
               --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$plan"
             python scripts/historical_private_replay_controller.py started-candidate \
               --plan "$plan" --state-root state \
               --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$candidate"
             expected=$(jq -er .expected_head "$candidate")
@@ -706,6 +752,8 @@ jobs:
                 --plan "$RUNNER_TEMP/private-replay-plan.json" \
                 --started-candidate "$RUNNER_TEMP/started-candidate.json" \
                 --state-root state \
+                --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+                --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
                 --output "$RUNNER_TEMP/running-after-start.json"
               test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-start.json")" = \
                 "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
@@ -713,6 +761,9 @@ jobs:
                 "$(jq -er .state_head "$RUNNER_TEMP/running-after-start.json")"
               published=true
               break
+            fi
+            if [ "$cas_attempt" -lt 12 ]; then
+              sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))
             fi
           done
           test "$published" = true
@@ -727,7 +778,10 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --state-root state --output "$RUNNER_TEMP/running-before-unwrap.json"
+            --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+            --output "$RUNNER_TEMP/running-before-unwrap.json"
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-unwrap.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
 
@@ -741,6 +795,8 @@ jobs:
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --repository-root "$GITHUB_WORKSPACE" \
             --audit-root audit \
             --prewarm-request "$RUNNER_TEMP/prewarm-request.json" \
@@ -781,7 +837,10 @@ jobs:
             python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$proof"
+              --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --output "$proof"
             test "$(jq -er .started_event_id "$proof")" = \
               "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
@@ -818,12 +877,17 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --state-root state --output "$RUNNER_TEMP/running-after-kms.json"
+            --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+            --output "$RUNNER_TEMP/running-after-kms.json"
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-kms.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           python scripts/historical_private_replay_controller.py build-executor-request \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --repository-root "$GITHUB_WORKSPACE" --audit-root audit \
             --unwrap "$RUNNER_TEMP/unwrap-request.json" \
             --identity "$RUNNER_TEMP/archive-file-key" \
@@ -888,7 +952,10 @@ jobs:
             python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$proof"
+              --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --output "$proof"
             test "$(jq -er .started_event_id "$proof")" = \
               "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
@@ -1060,7 +1127,10 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --state-root state --output "$RUNNER_TEMP/running-before-cleanup.json"
+            --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+            --output "$RUNNER_TEMP/running-before-cleanup.json"
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-cleanup.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
@@ -1072,7 +1142,10 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --state-root state --output "$RUNNER_TEMP/running-after-cleanup-oidc.json"
+            --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+            --output "$RUNNER_TEMP/running-after-cleanup-oidc.json"
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-cleanup-oidc.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
@@ -1093,7 +1166,10 @@ jobs:
           python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --state-root state --output "$RUNNER_TEMP/running-after-cleanup.json"
+            --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+            --output "$RUNNER_TEMP/running-after-cleanup.json"
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-cleanup.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           echo 'confirmed=true' >> "$GITHUB_OUTPUT"
@@ -1107,6 +1183,8 @@ jobs:
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --verdict "$RUNNER_TEMP/replay-verdict.json" --state-root state \
+            --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+            --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/terminal-candidate.json"
           jq .event "$RUNNER_TEMP/terminal-candidate.json" \
@@ -1121,7 +1199,7 @@ jobs:
         run: |
           set -euo pipefail
           published=false
-          for cas_attempt in $(seq 1 4); do
+          for cas_attempt in $(seq 1 12); do
             candidate="$RUNNER_TEMP/terminal-candidate.cas-$cas_attempt.json"
             event="$RUNNER_TEMP/terminal-event.cas-$cas_attempt.json"
             publish_root="$RUNNER_TEMP/terminal-state-publish-$cas_attempt"
@@ -1130,11 +1208,15 @@ jobs:
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$RUNNER_TEMP/running-before-terminal.cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py terminal-candidate \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --verdict "$RUNNER_TEMP/replay-verdict.json" --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$candidate"
             expected=$(jq -er .expected_head "$candidate")
@@ -1152,11 +1234,16 @@ jobs:
                 --started-candidate "$RUNNER_TEMP/started-candidate.json" \
                 --terminal-candidate "$RUNNER_TEMP/terminal-candidate.json" \
                 --state-root state \
+                --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+                --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
                 --output "$RUNNER_TEMP/terminal-committed-proof.json"
               git -C state merge-base --is-ancestor "$state_head" \
                 "$(jq -er .state_head "$RUNNER_TEMP/terminal-committed-proof.json")"
               published=true
               break
+            fi
+            if [ "$cas_attempt" -lt 12 ]; then
+              sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))
             fi
           done
           test "$published" = true
@@ -1184,7 +1271,7 @@ jobs:
           fi
           reason=$(cat "$RUNNER_TEMP/failure-reason")
           published=false
-          for cas_attempt in $(seq 1 4); do
+          for cas_attempt in $(seq 1 12); do
             candidate="$RUNNER_TEMP/failure-candidate.cas-$cas_attempt.json"
             event="$RUNNER_TEMP/failure-event.cas-$cas_attempt.json"
             publish_root="$RUNNER_TEMP/failure-state-publish-$cas_attempt"
@@ -1193,11 +1280,15 @@ jobs:
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$RUNNER_TEMP/running-before-failure.cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py terminal-candidate \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --failure-reason "$reason" --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$candidate"
             expected=$(jq -er .expected_head "$candidate")
@@ -1215,11 +1306,16 @@ jobs:
                 --started-candidate "$RUNNER_TEMP/started-candidate.json" \
                 --terminal-candidate "$RUNNER_TEMP/failure-candidate.json" \
                 --state-root state \
+                --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+                --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
                 --output "$RUNNER_TEMP/failure-committed-proof.json"
               git -C state merge-base --is-ancestor "$state_head" \
                 "$(jq -er .state_head "$RUNNER_TEMP/failure-committed-proof.json")"
               published=true
               break
+            fi
+            if [ "$cas_attempt" -lt 12 ]; then
+              sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))
             fi
           done
           test "$published" = true
@@ -1315,6 +1411,8 @@ jobs:
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --terminal-candidate "$terminal_candidate" --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
               --output "$proof"
           }
           prove_terminal
@@ -1407,6 +1505,9 @@ jobs:
     permissions:
       actions: write
       contents: read
+    env:
+      PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}
+      PRIVATE_REPLAY_LANE_COUNT: '4'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -1420,6 +1521,8 @@ jobs:
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
+          [[ "$PRIVATE_REPLAY_LANE_INDEX" =~ ^[0-3]$ ]]
+          test "$PRIVATE_REPLAY_LANE_COUNT" = 4
           [[ "$REMAINING_RUNS" =~ ^[0-9]+$ ]]
           [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$REMAINING_RUNS" -ge 2
@@ -1433,7 +1536,8 @@ jobs:
               "repos/$GITHUB_REPOSITORY/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$head")
             jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" --arg head "$head" '
               .status == "ahead" and .base_commit.sha == $base and
-              .merge_base_commit.sha == $base and .head_commit.sha == $head and
+              .merge_base_commit.sha == $base and
+              (.commits | length) > 0 and .commits[-1].sha == $head and
               .ahead_by == .total_commits and .ahead_by == (.commits | length) and
               (.files | length) > 0 and (.files | length) < 300 and
               all(.files[];
@@ -1451,9 +1555,17 @@ jobs:
               confirm_historical_private_replay: "true",
               replenish_lane: "true",
               remaining_runs: $remaining,
-              reviewed_implementation_commit: env.REVIEWED_IMPLEMENTATION_COMMIT
+              reviewed_implementation_commit: env.REVIEWED_IMPLEMENTATION_COMMIT,
+              private_lane_index: env.PRIVATE_REPLAY_LANE_INDEX
             }
           }' > "$request"
-          timeout 30s gh api --method POST \
+          dispatch_error=$(mktemp)
+          trap 'rm -f "$request" "$dispatch_error"' EXIT
+          if ! timeout 30s gh api --method POST \
             "repos/$GITHUB_REPOSITORY/actions/workflows/historical-private-replay.yml/dispatches" \
-            --input "$request"
+            --input "$request" 2>"$dispatch_error"; then
+            sed -E 's/(token|authorization|credential)[^[:space:]]*/[redacted]/Ig' \
+              "$dispatch_error" >&2
+            echo "Private lane $PRIVATE_REPLAY_LANE_INDEX successor dispatch failed" >&2
+            exit 1
+          fi

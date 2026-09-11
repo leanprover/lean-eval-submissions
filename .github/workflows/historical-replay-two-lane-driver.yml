@@ -1,4 +1,4 @@
-name: Start bounded historical replay lanes (temporary)
+name: Start bounded v1 replay lanes (temporary)
 
 # Temporary retained-baseline machinery. Remove this workflow with the two
 # historical controllers after both queues are terminal and executor cleanup
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_two_lane_replay:
-        description: Start at most one public and one private replay lane
+        description: Start one public lane and exactly four private shards
         required: true
         type: boolean
         default: false
@@ -17,10 +17,10 @@ on:
         type: number
         default: 256
       private_run_budget:
-        description: Private runs including recovery passes (1-1024)
+        description: Per-private-shard runs including recovery passes (1-1024)
         required: true
         type: number
-        default: 768
+        default: 256
 
 permissions:
   contents: none
@@ -68,8 +68,12 @@ jobs:
             "repos/$GITHUB_REPOSITORY/actions/workflows/historical-authoritative-replay.yml/dispatches" \
             --input "$request"
 
-  start-private-lane:
+  start-private-lanes:
     if: inputs.confirm_two_lane_replay == true
+    strategy:
+      fail-fast: false
+      matrix:
+        private_lane_index: ['0', '1', '2', '3']
     permissions:
       actions: write
       contents: read
@@ -80,11 +84,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_BUDGET: ${{ inputs.private_run_budget }}
+          PRIVATE_REPLAY_LANE_INDEX: ${{ matrix.private_lane_index }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
+          [[ "$PRIVATE_REPLAY_LANE_INDEX" =~ ^[0-3]$ ]]
           [[ "$RUN_BUDGET" =~ ^[0-9]+$ ]]
           test "$RUN_BUDGET" -ge 1
           test "$RUN_BUDGET" -le 1024
@@ -99,7 +105,8 @@ jobs:
               confirm_historical_private_replay: "true",
               replenish_lane: "true",
               remaining_runs: $budget,
-              reviewed_implementation_commit: $baseline
+              reviewed_implementation_commit: $baseline,
+              private_lane_index: env.PRIVATE_REPLAY_LANE_INDEX
             }
           }' > "$request"
           timeout 30s gh api --method POST \
