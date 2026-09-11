@@ -59,7 +59,7 @@ preserves the submitter's `solution_publication_status` and optional
 Three ordered pieces live inside the existing `submission.yml`:
 
 1. **Trusted archive job.** It independently fetches the requested source and
-   the current benchmark, freezes their exact identities, enforces the 10 MiB
+   the current benchmark, freezes their exact identities, enforces the 100 MB
    compressed-source cap, encrypts the source, and pushes the ciphertext and
    provenance sidecar directly to `lean-eval-audit`. It mints the narrowly
    scoped archiver App token only after encryption. It runs no submitted code
@@ -210,15 +210,39 @@ mkdir /tmp/source && tar -xzf /tmp/source.tar.gz -C /tmp/source
 
 ## Size cap
 
-The 10 MiB cap is on the **compressed gzipped tar** of the
-post-`.git`-strip source tree, which is what the workflow uploads
-and what `du -h` will show for a typical generated workspace plus a
-modest Submission/ directory (well under 1 MiB for current
+The 100 MB (100,000,000-byte) cap is on the **compressed gzipped tar**
+of the post-`.git`-strip source tree, which is what the workflow
+uploads and what `du -h` will show for a typical generated workspace
+plus a modest Submission/ directory (well under 1 MiB for current
 submissions). The cap exists because the archive is permanent and
-public-repo-shaped (one file per submission, committed forever) and
-because nothing in the current submission shape needs more space; if
-a use case for >10 MiB submissions emerges, we bump the cap rather
-than special-case some submissions.
+public-repo-shaped (one file per submission, committed forever).
+
+The cap is the ceiling of this archive design, not a number chosen
+for headroom. The ciphertext is written to `lean-eval-audit` as a
+single Git blob through the Contents API (`archive_submission.py
+push`), and GitHub refuses individual files over 100 MiB
+(104,857,600 bytes). The blob is the age ciphertext, not the tar, and
+age adds a header plus 16 bytes per 64 KiB chunk (about 26 KiB at
+this size), so the cap is set in decimal megabytes to keep the
+largest permitted ciphertext under the limit. Raising the cap further
+means the archive can no longer be one content-addressed Git object
+at an immutable commit; it would have to move to Git LFS, release
+assets, or object storage, each of which weakens the "clone the repo
+and verify the blob" property the sidecar and locator depend on. The
+cap was 10 MiB until 2026-09; it was raised because no submission
+shape needed the tighter bound and the wider one costs nothing at
+the archive level.
+
+The cap is checked after the source has already been cloned, so it
+bounds what enters the archive, not the cost of fetching. It is not
+a fetch-side denial-of-service control.
+
+The encrypted replay path (`docs/replay.md`) has its own, separate
+ciphertext bound, currently 10 MiB, set by its transport: the
+controller ships the ciphertext base64-encoded inside one JSON body
+through a Worker isolate. Archives between 10 MiB and 100 MB are
+retained and evaluated normally but cannot yet be replayed through
+that path; widening replay is transport work, not a constant bump.
 
 A submission over the cap is rejected at the workflow level: the
 issue is commented and closed, no evaluation is run, no leaderboard

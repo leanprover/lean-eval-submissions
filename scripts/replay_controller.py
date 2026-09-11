@@ -51,6 +51,9 @@ from replay_orchestrator import (  # noqa: E402
 DIGEST = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 MAX_JSON_BYTES = 512 * 1024
+# Replay carries the ciphertext base64-encoded inside one JSON body through a
+# Worker isolate, so its bound is set by that transport and is deliberately
+# independent of the 100 MB audit-archive cap (docs/audit-archive.md).
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
 MAX_IDENTITY_BYTES = 4096
 AGE_FILE_KEY_BYTES = 16

@@ -43,7 +43,9 @@ import urllib.request
 from key_capability_contract import ContractError, validate_envelope
 
 
-SIZE_CAP_BYTES = 10 * 1024 * 1024  # 10 MiB. Matches the workflow.
+# 100 MB (decimal). Matches the workflow. Sits below GitHub's 100 MiB per-file
+# limit with room for the age envelope (~16 bytes per 64 KiB chunk plus header).
+SIZE_CAP_BYTES = 100 * 1000 * 1000
 SIDECAR_SCHEMA_VERSION = 1
 SERVER_SIDECAR_SCHEMA_VERSION = 2
 ENVELOPE_SIDECAR_SCHEMA_VERSION = 3

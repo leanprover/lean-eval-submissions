@@ -142,7 +142,7 @@ body:
           required: true
         - label: |
             I understand that an encrypted copy of the submission source
-            tree (compressed gzipped tar, ≤ 10 MiB) is retained
+            tree (compressed gzipped tar, ≤ 100 MB) is retained
             indefinitely in the private `leanprover/lean-eval-audit`
             repository for audit purposes, decryptable only by a small
             set of benchmark maintainers listed in `.audit/recipients.txt`.

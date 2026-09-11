@@ -4,6 +4,9 @@ const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
+// Replay carries the ciphertext base64-encoded inside one JSON body through a
+// Worker isolate, so its bound is set by that transport and is deliberately
+// independent of the 100 MB audit-archive cap (docs/audit-archive.md).
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 const MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024;
 const MAX_IDENTITY_BYTES = 4096;
