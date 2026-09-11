@@ -314,10 +314,27 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("portReadyTimeoutMS: 600_000", private_entry)
         self.assertNotIn("600_000", sandbox)
 
-    def test_lane_is_manual_dark_serialized_and_temporary(self) -> None:
+    def test_four_lanes_are_manual_dark_serialized_per_shard_and_temporary(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertNotIn("schedule:", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
+        self.assertIn(
+            "group: lean-eval-historical-private-replay-controller-"
+            "${{ inputs.private_lane_index }}",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "run-name: Private replay lane ${{ inputs.private_lane_index }}",
+            WORKFLOW,
+        )
+        self.assertIn("private_lane_index:", WORKFLOW)
+        for lane in range(4):
+            self.assertIn(f"          - '{lane}'", WORKFLOW)
+        self.assertIn(
+            "PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}",
+            WORKFLOW,
+        )
+        self.assertIn("PRIVATE_REPLAY_LANE_COUNT: '4'", WORKFLOW)
         self.assertIn("environment: replay-production", WORKFLOW)
         self.assertIn(
             "vars.HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED == 'true'",
@@ -351,6 +368,56 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn(
             "actions/workflows/historical-private-replay.yml/dispatches",
             replenish,
+        )
+        self.assertIn(
+            "private_lane_index: env.PRIVATE_REPLAY_LANE_INDEX", replenish
+        )
+
+    def test_every_state_sensitive_controller_call_is_lane_bound(self) -> None:
+        sensitive = {
+            "plan",
+            "started-candidate",
+            "refresh-rebind-plan",
+            "prove-running",
+            "refresh-prove-running",
+            "terminal-candidate",
+            "refresh-verify-terminal",
+            "refresh-verify-recovery",
+            "prepare-unwrap",
+            "build-executor-request",
+            "recover",
+        }
+        lines = WORKFLOW.splitlines()
+        commands: list[str] = []
+        index = 0
+        while index < len(lines):
+            if "python scripts/historical_private_replay_controller.py" not in lines[index]:
+                index += 1
+                continue
+            command = lines[index].strip()
+            while command.endswith("\\"):
+                index += 1
+                command += " " + lines[index].strip()
+            commands.append(command)
+            index += 1
+        checked = 0
+        for command in commands:
+            words = set(command.replace("\\", "").split())
+            if words.isdisjoint(sensitive):
+                continue
+            checked += 1
+            self.assertIn("--lane-index", command, command)
+            self.assertIn("--lane-count", command, command)
+        self.assertGreaterEqual(checked, 25)
+
+    def test_private_state_publication_has_contention_headroom_and_jitter(self) -> None:
+        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 4)
+        self.assertNotIn("for cas_attempt in $(seq 1 4)", WORKFLOW)
+        self.assertEqual(
+            WORKFLOW.count(
+                "sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))"
+            ),
+            4,
         )
 
     def test_only_exact_protected_main_can_run(self) -> None:
@@ -396,7 +463,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(WORKFLOW.count("--expected-head"), 4)
         self.assertGreaterEqual(WORKFLOW.count("state_head=$(scripts/publish_replay_state_event"), 4)
         self.assertGreaterEqual(WORKFLOW.count("git clone --quiet --no-hardlinks state"), 4)
-        self.assertGreaterEqual(WORKFLOW.count("for cas_attempt in $(seq 1 4)"), 4)
+        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 4)
         self.assertGreaterEqual(WORKFLOW.count("refresh-prove-running"), 8)
         self.assertNotIn("EXPECTED_STATE_HEAD", WORKFLOW)
         self.assertNotIn("STARTED_STATE_HEAD", WORKFLOW)

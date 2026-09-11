@@ -788,6 +788,63 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         )
         self.assertEqual(empty["kind"], "empty")
 
+    def test_deterministic_lane_selects_task_only_in_its_exact_lane(self) -> None:
+        task_id = self.fixture.task["replay_task_id"]
+        selected_lane = controller.private_replay_lane(task_id, 4)
+        selected = controller._plan_next(
+            self.fixture.queue,
+            controller.state_canonical_bytes(self.fixture.queue),
+            self.fixture.state_head,
+            self.fixture.authority,
+            self.fixture.authority_raw,
+            self.fixture.profile,
+            self.fixture.profile_raw,
+            self.fixture.archive_binding,
+            lane_index=selected_lane,
+            lane_count=4,
+        )
+        self.assertEqual(selected["task"], self.fixture.task)
+        self.assertEqual(selected["state"]["lane_index"], selected_lane)
+        self.assertEqual(selected["state"]["lane_count"], 4)
+
+        empty = controller._plan_next(
+            self.fixture.queue,
+            controller.state_canonical_bytes(self.fixture.queue),
+            self.fixture.state_head,
+            lane_index=(selected_lane + 1) % 4,
+            lane_count=4,
+        )
+        self.assertEqual(empty["kind"], "empty")
+        self.assertEqual(empty["state"]["lane_count"], 4)
+
+        self.assertEqual(controller.private_replay_lane(task_id, 4), selected_lane)
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "0 <= lane_index < lane_count",
+        ):
+            controller._plan_next(
+                self.fixture.queue,
+                controller.state_canonical_bytes(self.fixture.queue),
+                self.fixture.state_head,
+                lane_index=4,
+                lane_count=4,
+            )
+
+    def test_four_lane_partition_is_disjoint_and_complete(self) -> None:
+        task_ids = [f"rt1_{index:064x}" for index in range(1, 65)]
+        partitions = [
+            {
+                task_id
+                for task_id in task_ids
+                if controller.private_replay_lane(task_id, 4) == lane_index
+            }
+            for lane_index in range(4)
+        ]
+        self.assertEqual(set().union(*partitions), set(task_ids))
+        for left in range(4):
+            for right in range(left + 1, 4):
+                self.assertTrue(partitions[left].isdisjoint(partitions[right]))
+
     def test_prewarm_request_is_exact_and_contains_no_private_material(self) -> None:
         plan = self.fixture.plan()
         request = controller.prepare_prewarm_request(
@@ -1757,6 +1814,8 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 "replay_task_id": self.fixture.task["replay_task_id"],
                 "attempt": 1,
                 "started_event_id": started["event"]["event_id"],
+                "lane_index": 0,
+                "lane_count": 1,
             },
         )
         terminal = controller.terminal_candidate(
@@ -1778,6 +1837,86 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         ):
             controller.started_candidate(
                 stale_plan, self.fixture.state, "2026-10-21T07:00:00.000Z"
+            )
+
+    def test_running_validation_allows_other_lanes_and_rejects_same_lane(self) -> None:
+        lane_count = 4
+        lane_index = controller.private_replay_lane(
+            self.fixture.task["replay_task_id"], lane_count
+        )
+        plan = controller._plan_next(
+            self.fixture.queue,
+            controller.state_canonical_bytes(self.fixture.queue),
+            self.fixture.state_head,
+            self.fixture.authority,
+            self.fixture.authority_raw,
+            self.fixture.profile,
+            self.fixture.profile_raw,
+            self.fixture.archive_binding,
+            lane_index=lane_index,
+            lane_count=lane_count,
+        )
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x31" * 10,
+            lane_index=lane_index,
+            lane_count=lane_count,
+        )
+        self.fixture.commit_state_event(started["event"])
+        exact = {
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "status": "running",
+            "attempt": 1,
+            "event": started["event"],
+        }
+        other_lane = (lane_index + 1) % lane_count
+        other = {
+            "replay_task_id": f"rt1_{other_lane:064x}",
+            "status": "running",
+            "attempt": 1,
+            "event": {"event_id": "01900000-0000-7000-8000-000000000091"},
+        }
+        with mock.patch.object(
+            controller, "current_historical_running", return_value=[exact, other]
+        ):
+            proof = controller.current_running_proof(
+                plan,
+                started,
+                self.fixture.state,
+                lane_index,
+                lane_count,
+            )
+        self.assertEqual(proof["lane_index"], lane_index)
+
+        same_lane = {**other, "replay_task_id": f"rt1_{lane_index:064x}"}
+        with mock.patch.object(
+            controller,
+            "current_historical_running",
+            return_value=[exact, same_lane],
+        ), self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "unique current running private replay in its lane",
+        ):
+            controller.current_running_proof(
+                plan,
+                started,
+                self.fixture.state,
+                lane_index,
+                lane_count,
+            )
+
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "command lane differs from its exact plan",
+        ):
+            controller.current_running_proof(
+                plan,
+                started,
+                self.fixture.state,
+                other_lane,
+                lane_count,
             )
 
     def test_unrelated_remote_append_rebinds_only_latest_state_cas_metadata(self) -> None:
@@ -2028,6 +2167,89 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         self.assertEqual(
             proof["terminal_event_id"], recovery["append"]["event"]["event_id"]
         )
+
+    def test_recovery_is_lane_local_and_rejects_cross_lane_cleanup(self) -> None:
+        lane_count = 4
+
+        def running(task_id: str, suffix: int) -> dict[str, object]:
+            event = {
+                "schema_version": 1,
+                "event_id": f"01900000-0000-7000-8000-{suffix:012d}",
+                "event_type": "replay.started",
+                "occurred_at": "2026-10-21T06:00:00.000Z",
+                "subject_id": task_id,
+                "causation_event_id": "01900000-0000-7000-8000-000000000001",
+                "actor": {"kind": "system"},
+                "payload": {"attempt": 1, "runner_profile": "fixture"},
+            }
+            return {
+                "replay_task_id": task_id,
+                "status": "running",
+                "attempt": 1,
+                "event": event,
+            }
+
+        target_id = f"rt1_{2:064x}"
+        other_id = f"rt1_{3:064x}"
+        state_binding = ({"environment": "production"}, b"", "a" * 40)
+        confirmation = {
+            "schema_version": 1,
+            "replay_task_id": target_id,
+            "attempt": 1,
+            "destruction": "confirmed",
+        }
+        with mock.patch.object(
+            controller, "load_state_queue", return_value=state_binding
+        ), mock.patch.object(
+            controller,
+            "current_historical_running",
+            return_value=[running(target_id, 101), running(other_id, 102)],
+        ):
+            recovered = controller.recover_running(
+                self.fixture.state,
+                "2026-10-21T14:00:01.000Z",
+                cleanup_confirmation_value=confirmation,
+                random_bytes=b"\x41" * 10,
+                lane_index=2,
+                lane_count=lane_count,
+            )
+        self.assertEqual(recovered["append"]["event"]["subject_id"], target_id)
+
+        with mock.patch.object(
+            controller, "load_state_queue", return_value=state_binding
+        ), mock.patch.object(
+            controller,
+            "current_historical_running",
+            return_value=[running(target_id, 101)],
+        ), self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "does not belong to a running task in this lane",
+        ):
+            controller.recover_running(
+                self.fixture.state,
+                "2026-10-21T14:00:01.000Z",
+                cleanup_confirmation_value=confirmation,
+                lane_index=1,
+                lane_count=lane_count,
+            )
+
+        same_lane_id = f"rt1_{6:064x}"
+        with mock.patch.object(
+            controller, "load_state_queue", return_value=state_binding
+        ), mock.patch.object(
+            controller,
+            "current_historical_running",
+            return_value=[running(target_id, 101), running(same_lane_id, 103)],
+        ), self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "more than one historical private replay is running in this lane",
+        ):
+            controller.recover_running(
+                self.fixture.state,
+                "2026-10-21T14:00:01.000Z",
+                lane_index=2,
+                lane_count=lane_count,
+            )
 
     def test_fourth_attempt_is_terminal_and_fifth_attempt_is_refused(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)

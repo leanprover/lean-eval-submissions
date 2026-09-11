@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import datetime as dt
 import json
 import pathlib
 import re
@@ -33,6 +34,7 @@ from historical_replay_controller import (
     PROBLEM,
     REPLAY_ID,
     RESULT_ID,
+    RECOVERY_AFTER,
     RESULTS_PATH,
     TOOLCHAIN,
     UUID7,
@@ -47,6 +49,7 @@ from historical_replay_controller import (
     _match,
     _object,
     _parse_canonical,
+    _parse_timestamp,
     _read_regular,
     _reject_duplicate_pairs,
     _reject_nonfinite_constant,
@@ -58,9 +61,6 @@ from historical_replay_controller import (
     load_v1_problem_set,
     sha256_bytes,
     state_canonical_bytes,
-)
-from historical_replay_controller import (
-    recover_running as recover_historical_running,
 )
 from key_capability_contract import validate_envelope
 from prepare_historical_private_replay import (
@@ -1806,6 +1806,59 @@ def _state_repository(environment: str) -> str:
     )
 
 
+def _validate_lane(lane_index: Any, lane_count: Any) -> tuple[int, int]:
+    """Validate one zero-based lane within a fixed positive lane count."""
+
+    if (
+        isinstance(lane_index, bool)
+        or not isinstance(lane_index, int)
+        or isinstance(lane_count, bool)
+        or not isinstance(lane_count, int)
+        or lane_count < 1
+        or lane_index < 0
+        or lane_index >= lane_count
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay lane must satisfy 0 <= lane_index < lane_count"
+        )
+    return lane_index, lane_count
+
+
+def private_replay_lane(replay_id: Any, lane_count: int) -> int:
+    """Map one stable replay task identity to a deterministic lane."""
+
+    _, count = _validate_lane(0, lane_count)
+    task_id = _match(REPLAY_ID, replay_id, "private replay lane task id")
+    return int(task_id.removeprefix("rt1_"), 16) % count
+
+
+def _task_is_in_lane(
+    task: dict[str, Any], lane_index: int, lane_count: int
+) -> bool:
+    index, count = _validate_lane(lane_index, lane_count)
+    return private_replay_lane(task.get("replay_task_id"), count) == index
+
+
+def _plan_lane(plan: dict[str, Any]) -> tuple[int, int]:
+    state = _object(plan.get("state"), "private plan State binding")
+    return _validate_lane(state.get("lane_index"), state.get("lane_count"))
+
+
+def _require_plan_lane(
+    plan: dict[str, Any], lane_index: int, lane_count: int
+) -> tuple[int, int]:
+    requested = _validate_lane(lane_index, lane_count)
+    if _plan_lane(plan) != requested:
+        raise HistoricalPrivateReplayControllerError(
+            "private replay command lane differs from its exact plan"
+        )
+    if not _task_is_in_lane(plan["task"], *requested):
+        raise HistoricalPrivateReplayControllerError(
+            "private replay plan task is assigned to a different lane"
+        )
+    return requested
+
+
 def _plan_next(
     queue_value: Any,
     queue_raw: bytes,
@@ -1817,8 +1870,11 @@ def _plan_next(
     archive_binding_value: Any | None = None,
     authority_profile_value: Any | None = None,
     problem_members: frozenset[tuple[str, int]] | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
+    lane_index, lane_count = _validate_lane(lane_index, lane_count)
     if not isinstance(queue_raw, bytes) or state_canonical_bytes(queue) != queue_raw:
         raise HistoricalPrivateReplayControllerError(
             "historical private queue raw bytes differ from its canonical value"
@@ -1829,12 +1885,15 @@ def _plan_next(
         "queue_environment": queue["environment"],
         "queue_source_event_count": queue["source_event_count"],
         "queue_source_digest": queue["source_digest"],
+        "lane_index": lane_index,
+        "lane_count": lane_count,
     }
     selected_tasks = [
         task
         for task in queue["tasks"]
         if problem_members is None
         or (task["problem_id"], task["statement_revision"]) in problem_members
+        if _task_is_in_lane(task, lane_index, lane_count)
     ]
     if not selected_tasks:
         return {"schema_version": 1, "kind": "empty", "state": state}
@@ -1885,19 +1944,28 @@ def plan_from_checkouts(
     repository_root: pathlib.Path,
     audit_root: pathlib.Path,
     problem_members: frozenset[tuple[str, int]] | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     """Plan the first exact protected queue task from canonical checkouts."""
 
     queue, queue_raw, state_head = load_state_queue(state_root)
+    lane_index, lane_count = _validate_lane(lane_index, lane_count)
     selected_tasks = [
         task
         for task in queue["tasks"]
         if problem_members is None
         or (task["problem_id"], task["statement_revision"]) in problem_members
+        if _task_is_in_lane(task, lane_index, lane_count)
     ]
     if not selected_tasks:
         return _plan_next(
-            queue, queue_raw, state_head, problem_members=problem_members
+            queue,
+            queue_raw,
+            state_head,
+            problem_members=problem_members,
+            lane_index=lane_index,
+            lane_count=lane_count,
         )
     task = selected_tasks[0]
     (
@@ -1925,6 +1993,8 @@ def plan_from_checkouts(
         archive_binding,
         authority_profile,
         problem_members,
+        lane_index,
+        lane_count,
     )
 
 
@@ -1975,13 +2045,15 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     _fields(
         state,
         {"repository", "expected_head", "queue_environment", "queue_source_event_count",
-         "queue_source_digest", "task_sha256"},
+         "queue_source_digest", "task_sha256", "lane_index", "lane_count"},
         "private plan State binding",
     )
+    lane_index, lane_count = _plan_lane(plan)
     if (
         state["queue_environment"] not in {"staging", "production"}
         or state["repository"] != _state_repository(state["queue_environment"])
         or state["task_sha256"] != sha256_bytes(state_canonical_bytes(task))
+        or not _task_is_in_lane(task, lane_index, lane_count)
     ):
         raise HistoricalPrivateReplayControllerError("private plan State binding is invalid")
     _match(COMMIT, state["expected_head"], "expected State head")
@@ -2013,31 +2085,30 @@ def _validate_plan_against_queue(
     exact_plan_task: bool = False,
 ) -> dict[str, Any]:
     plan = validate_execution_plan(plan_value)
+    lane_index, lane_count = _plan_lane(plan)
     queue = validate_queue(queue_value)
     if state_canonical_bytes(queue) != queue_raw:
         raise HistoricalPrivateReplayControllerError(
             "live historical private queue raw bytes differ from its value"
         )
-    task = next(
-        (
-            queued
-            for queued in queue["tasks"]
-            if (
-                queued["replay_task_id"] == plan["task"]["replay_task_id"]
-                if exact_plan_task
-                else problem_members is None
-                or (queued["problem_id"], queued["statement_revision"])
-                in problem_members
-            )
-        ),
-        None,
-    )
+    def eligible(queued: dict[str, Any]) -> bool:
+        if not _task_is_in_lane(queued, lane_index, lane_count):
+            return False
+        if exact_plan_task:
+            return queued["replay_task_id"] == plan["task"]["replay_task_id"]
+        return problem_members is None or (
+            queued["problem_id"], queued["statement_revision"]
+        ) in problem_members
+
+    task = next((queued for queued in queue["tasks"] if eligible(queued)), None)
     expected_state = {
         "repository": _state_repository(queue["environment"]),
         "expected_head": state_head,
         "queue_environment": queue["environment"],
         "queue_source_event_count": queue["source_event_count"],
         "queue_source_digest": queue["source_digest"],
+        "lane_index": lane_index,
+        "lane_count": lane_count,
         **({} if task is None else {"task_sha256": sha256_bytes(state_canonical_bytes(task))}),
     }
     if task is None or task != plan["task"] or plan["state"] != expected_state:
@@ -2049,10 +2120,14 @@ def validate_plan_against_state(
     plan_value: Any,
     state_root: pathlib.Path,
     problem_members: frozenset[tuple[str, int]] | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
+    plan = validate_execution_plan(plan_value)
+    _require_plan_lane(plan, lane_index, lane_count)
     queue, queue_raw, state_head = load_state_queue(state_root)
     return _validate_plan_against_queue(
-        plan_value, queue, queue_raw, state_head, problem_members
+        plan, queue, queue_raw, state_head, problem_members
     )
 
 
@@ -2060,10 +2135,13 @@ def rebind_plan_to_current_state(
     plan_value: Any,
     state_root: pathlib.Path,
     problem_members: frozenset[tuple[str, int]] | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     """Rebind only State CAS metadata after proving the exact task unchanged."""
 
     plan = validate_execution_plan(plan_value)
+    lane_index, lane_count = _require_plan_lane(plan, lane_index, lane_count)
     historical_queue, historical_raw, _ = load_state_queue_at_commit(
         state_root,
         plan["state"]["expected_head"],
@@ -2084,6 +2162,7 @@ def rebind_plan_to_current_state(
             if problem_members is None
             or (queued["problem_id"], queued["statement_revision"])
             in problem_members
+            if _task_is_in_lane(queued, lane_index, lane_count)
         ),
         None,
     )
@@ -2098,6 +2177,8 @@ def rebind_plan_to_current_state(
         "queue_environment": queue["environment"],
         "queue_source_event_count": queue["source_event_count"],
         "queue_source_digest": queue["source_digest"],
+        "lane_index": lane_index,
+        "lane_count": lane_count,
         "task_sha256": sha256_bytes(state_canonical_bytes(task)),
     }
     return _validate_plan_against_queue(
@@ -2125,8 +2206,16 @@ def started_candidate(
     *,
     random_bytes: bytes | None = None,
     problem_members: frozenset[tuple[str, int]] | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
-    plan = validate_plan_against_state(plan_value, state_root, problem_members)
+    plan = validate_plan_against_state(
+        plan_value,
+        state_root,
+        problem_members,
+        lane_index,
+        lane_count,
+    )
     transition = plan["execution_plan"]["started_transition"]
     occurred = _event_time(trusted_now, plan["task"]["occurred_at"])
     event = {
@@ -2148,10 +2237,13 @@ def validate_started_history(
     plan_value: Any,
     started_candidate_value: Any,
     state_root: pathlib.Path,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     """Prove a post-start action belongs to the exact pre-start queue history."""
 
     plan = validate_execution_plan(plan_value)
+    lane_index, lane_count = _require_plan_lane(plan, lane_index, lane_count)
     queue, queue_raw, current_head = load_state_queue_at_commit(
         state_root,
         plan["state"]["expected_head"],
@@ -2196,13 +2288,18 @@ def validate_started_history(
         state_validated=True,
         authority_event_type=AUTHORITY_EVENT_TYPE,
     )
+    lane_running = [
+        item
+        for item in running
+        if private_replay_lane(item.get("replay_task_id"), lane_count) == lane_index
+    ]
     expected_attempt = plan["task"]["attempt"] + 1
     if (
-        len(running) != 1
-        or running[0].get("replay_task_id") != plan["task"]["replay_task_id"]
-        or running[0].get("status") != "running"
-        or running[0].get("attempt") != expected_attempt
-        or running[0].get("event") != event
+        len(lane_running) != 1
+        or lane_running[0].get("replay_task_id") != plan["task"]["replay_task_id"]
+        or lane_running[0].get("status") != "running"
+        or lane_running[0].get("attempt") != expected_attempt
+        or lane_running[0].get("event") != event
         or event.get("event_id") != started["event"].get("event_id")
         or event.get("payload") != {
             "attempt": expected_attempt,
@@ -2212,7 +2309,7 @@ def validate_started_history(
         }
     ):
         raise HistoricalPrivateReplayControllerError(
-            "supplied start is not the unique current running private replay"
+            "supplied start is not the unique current running private replay in its lane"
         )
     final_head = _verify_checkout(
         state_root,
@@ -2234,9 +2331,15 @@ def terminal_candidate(
     trusted_now: str,
     *,
     random_bytes: bytes | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     plan, started, state_head = validate_started_history(
-        plan_value, started_candidate_value, state_root
+        plan_value,
+        started_candidate_value,
+        state_root,
+        lane_index,
+        lane_count,
     )
     event = build_private_terminal_event(
         plan["execution_plan"],
@@ -2254,11 +2357,17 @@ def current_running_proof(
     plan_value: Any,
     started_candidate_value: Any,
     state_root: pathlib.Path,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     """Return a source-free proof of the one currently running exact task."""
 
     plan, started, state_head = validate_started_history(
-        plan_value, started_candidate_value, state_root
+        plan_value,
+        started_candidate_value,
+        state_root,
+        lane_index,
+        lane_count,
     )
     return {
         "schema_version": 1,
@@ -2268,6 +2377,8 @@ def current_running_proof(
         "replay_task_id": plan["task"]["replay_task_id"],
         "attempt": plan["task"]["attempt"] + 1,
         "started_event_id": started["event"]["event_id"],
+        "lane_index": lane_index,
+        "lane_count": lane_count,
     }
 
 
@@ -2276,10 +2387,13 @@ def terminal_committed_proof(
     started_candidate_value: Any,
     terminal_candidate_value: Any,
     state_root: pathlib.Path,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     """Prove one exact terminal candidate is in fresh protected State."""
 
     plan = validate_execution_plan(plan_value)
+    lane_index, lane_count = _require_plan_lane(plan, lane_index, lane_count)
     started = _object(started_candidate_value, "started State append candidate")
     terminal = _object(terminal_candidate_value, "terminal State append candidate")
     _fields(
@@ -2344,6 +2458,8 @@ def terminal_committed_proof(
         "terminal_event_id": event["event_id"],
         "replay_task_id": plan["task"]["replay_task_id"],
         "attempt": expected_attempt,
+        "lane_index": lane_index,
+        "lane_count": lane_count,
     }
 
 
@@ -2395,6 +2511,8 @@ def _verify_materialized_terminal_task(
 def recovery_committed_proof(
     recovery_candidate_value: Any,
     state_root: pathlib.Path,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     """Prove an exact abandoned-run terminal event in fresh protected State."""
 
@@ -2424,6 +2542,7 @@ def recovery_committed_proof(
     replay_task_id = _match(
         REPLAY_ID, event.get("subject_id"), "recovery replay task id"
     )
+    lane_index, lane_count = _validate_lane(lane_index, lane_count)
     attempt = _integer(payload.get("attempt"), "recovery attempt", 1)
     if (
         candidate["schema_version"] != 1
@@ -2440,6 +2559,7 @@ def recovery_committed_proof(
         or _timestamp(event.get("occurred_at"), "recovery occurred_at") is None
         or payload.get("reason_code") != "runner_lost"
         or payload.get("retryable") is not (attempt < MAX_REPLAY_ATTEMPTS)
+        or private_replay_lane(replay_task_id, lane_count) != lane_index
     ):
         raise HistoricalPrivateReplayControllerError(
             "recovery candidate is not an abandoned-run terminal event"
@@ -2482,6 +2602,8 @@ def recovery_committed_proof(
         "terminal_event_id": event["event_id"],
         "replay_task_id": replay_task_id,
         "attempt": attempt,
+        "lane_index": lane_index,
+        "lane_count": lane_count,
     }
 
 
@@ -2508,9 +2630,15 @@ def prepare_unwrap(
     *,
     request_random: bytes | None = None,
     runner_nonce: str | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     plan, _, _ = validate_started_history(
-        plan_value, started_candidate_value, state_root
+        plan_value,
+        started_candidate_value,
+        state_root,
+        lane_index,
+        lane_count,
     )
     crosswalk_entry = load_reviewed_crosswalk_entry(
         repository_root, audit_root, plan["task"]
@@ -2587,9 +2715,15 @@ def build_executor_request(
     audit_root: pathlib.Path,
     unwrap_value: Any,
     identity_path: pathlib.Path,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
     plan, _, _ = validate_started_history(
-        plan_value, started_candidate_value, state_root
+        plan_value,
+        started_candidate_value,
+        state_root,
+        lane_index,
+        lane_count,
     )
     crosswalk_entry = load_reviewed_crosswalk_entry(
         repository_root, audit_root, plan["task"]
@@ -2738,18 +2872,110 @@ def recover_running(
     *,
     cleanup_confirmation_value: Any | None = None,
     random_bytes: bytes | None = None,
+    lane_index: int = 0,
+    lane_count: int = 1,
 ) -> dict[str, Any]:
+    lane_index, lane_count = _validate_lane(lane_index, lane_count)
     queue, _, state_head = load_state_queue(state_root)
-    recovered = recover_historical_running(
-        state_root / "events",
-        trusted_now,
-        state_validated=True,
-        cleanup_confirmation_value=cleanup_confirmation_value,
-        random_bytes=random_bytes,
-        authority_event_type=AUTHORITY_EVENT_TYPE,
+    running = [
+        item
+        for item in current_historical_running(
+            state_root / "events",
+            state_validated=True,
+            authority_event_type=AUTHORITY_EVENT_TYPE,
+        )
+        if private_replay_lane(item.get("replay_task_id"), lane_count) == lane_index
+    ]
+    if not running:
+        if cleanup_confirmation_value is not None:
+            raise HistoricalPrivateReplayControllerError(
+                "sandbox cleanup confirmation does not belong to a running task in this lane"
+            )
+        return {"schema_version": 1, "kind": "none"}
+    if len(running) != 1:
+        raise HistoricalPrivateReplayControllerError(
+            "more than one historical private replay is running in this lane"
+        )
+    started = _object(running[0].get("event"), "running historical event")
+    _match(UUID7, started.get("event_id"), "running historical event_id")
+    task_id = _match(
+        REPLAY_ID, started.get("subject_id"), "running historical replay_task_id"
     )
-    if recovered["kind"] != "failed":
-        return recovered
+    started_at = _parse_timestamp(
+        started.get("occurred_at"), "running historical occurred_at"
+    )
+    now = _parse_timestamp(trusted_now, "trusted_now")
+    payload = _object(started.get("payload"), "running historical payload")
+    attempt = _integer(payload.get("attempt"), "running historical attempt", 1)
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalPrivateReplayControllerError(
+            "running historical attempt exceeds the limit"
+        )
+    if now - started_at < RECOVERY_AFTER:
+        if cleanup_confirmation_value is not None:
+            raise HistoricalPrivateReplayControllerError(
+                "sandbox cleanup confirmation was supplied before recovery was due"
+            )
+        return {
+            "schema_version": 1,
+            "kind": "busy",
+            "replay_task_id": task_id,
+            "attempt": attempt,
+            "started_event_id": started["event_id"],
+        }
+    if cleanup_confirmation_value is None:
+        return {
+            "schema_version": 1,
+            "kind": "cleanup_required",
+            "replay_task_id": task_id,
+            "attempt": attempt,
+        }
+    cleanup = _object(
+        cleanup_confirmation_value, "sandbox cleanup confirmation"
+    )
+    _fields(
+        cleanup,
+        {"schema_version", "replay_task_id", "attempt", "destruction"},
+        "sandbox cleanup confirmation",
+    )
+    if (
+        cleanup.get("schema_version") != 1
+        or cleanup.get("destruction") != "confirmed"
+        or _match(
+            REPLAY_ID,
+            cleanup.get("replay_task_id"),
+            "sandbox cleanup replay_task_id",
+        )
+        != task_id
+        or _integer(cleanup.get("attempt"), "sandbox cleanup attempt", 1)
+        != attempt
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "sandbox cleanup confirmation differs from the running attempt in this lane"
+        )
+    occurred = max(now, started_at + dt.timedelta(milliseconds=1))
+    recovered = {
+        "schema_version": 1,
+        "kind": "failed",
+        "event": {
+            "schema_version": 1,
+            "event_id": _causal_uuid7(
+                occurred, started["event_id"], random_bytes
+            ),
+            "event_type": "replay.failed",
+            "occurred_at": occurred.isoformat(timespec="milliseconds").replace(
+                "+00:00", "Z"
+            ),
+            "subject_id": task_id,
+            "causation_event_id": started["event_id"],
+            "actor": {"kind": "system"},
+            "payload": {
+                "attempt": attempt,
+                "reason_code": "runner_lost",
+                "retryable": attempt < MAX_REPLAY_ATTEMPTS,
+            },
+        },
+    }
     return {
         "schema_version": 1,
         "kind": "failed",
@@ -2762,19 +2988,27 @@ def recover_running(
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+
+    def lane_arguments(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--lane-index", type=int, default=0)
+        command.add_argument("--lane-count", type=int, default=1)
+
     plan = commands.add_parser("plan")
+    lane_arguments(plan)
     plan.add_argument("--state-root", required=True, type=pathlib.Path)
     plan.add_argument("--repository-root", required=True, type=pathlib.Path)
     plan.add_argument("--audit-root", required=True, type=pathlib.Path)
     plan.add_argument("--problem-set", type=pathlib.Path)
     plan.add_argument("--output", required=True, type=pathlib.Path)
     started = commands.add_parser("started-candidate")
+    lane_arguments(started)
     started.add_argument("--plan", required=True, type=pathlib.Path)
     started.add_argument("--state-root", required=True, type=pathlib.Path)
     started.add_argument("--problem-set", type=pathlib.Path)
     started.add_argument("--trusted-now", required=True)
     started.add_argument("--output", required=True, type=pathlib.Path)
     rebind = commands.add_parser("refresh-rebind-plan")
+    lane_arguments(rebind)
     rebind.add_argument("--plan", required=True, type=pathlib.Path)
     rebind.add_argument("--state-root", required=True, type=pathlib.Path)
     rebind.add_argument("--problem-set", type=pathlib.Path)
@@ -2783,11 +3017,13 @@ def parser() -> argparse.ArgumentParser:
     refresh.add_argument("--state-root", required=True, type=pathlib.Path)
     refresh.add_argument("--output", required=True, type=pathlib.Path)
     proof = commands.add_parser("prove-running")
+    lane_arguments(proof)
     proof.add_argument("--plan", required=True, type=pathlib.Path)
     proof.add_argument("--started-candidate", required=True, type=pathlib.Path)
     proof.add_argument("--state-root", required=True, type=pathlib.Path)
     proof.add_argument("--output", required=True, type=pathlib.Path)
     refresh_proof = commands.add_parser("refresh-prove-running")
+    lane_arguments(refresh_proof)
     refresh_proof.add_argument("--plan", required=True, type=pathlib.Path)
     refresh_proof.add_argument(
         "--started-candidate", required=True, type=pathlib.Path
@@ -2795,6 +3031,7 @@ def parser() -> argparse.ArgumentParser:
     refresh_proof.add_argument("--state-root", required=True, type=pathlib.Path)
     refresh_proof.add_argument("--output", required=True, type=pathlib.Path)
     terminal = commands.add_parser("terminal-candidate")
+    lane_arguments(terminal)
     terminal.add_argument("--plan", required=True, type=pathlib.Path)
     terminal.add_argument("--started-candidate", required=True, type=pathlib.Path)
     terminal.add_argument("--verdict", type=pathlib.Path)
@@ -2803,6 +3040,7 @@ def parser() -> argparse.ArgumentParser:
     terminal.add_argument("--trusted-now", required=True)
     terminal.add_argument("--output", required=True, type=pathlib.Path)
     verify_terminal = commands.add_parser("refresh-verify-terminal")
+    lane_arguments(verify_terminal)
     verify_terminal.add_argument("--plan", required=True, type=pathlib.Path)
     verify_terminal.add_argument(
         "--started-candidate", required=True, type=pathlib.Path
@@ -2813,6 +3051,7 @@ def parser() -> argparse.ArgumentParser:
     verify_terminal.add_argument("--state-root", required=True, type=pathlib.Path)
     verify_terminal.add_argument("--output", required=True, type=pathlib.Path)
     verify_recovery = commands.add_parser("refresh-verify-recovery")
+    lane_arguments(verify_recovery)
     verify_recovery.add_argument(
         "--recovery-candidate", required=True, type=pathlib.Path
     )
@@ -2822,6 +3061,7 @@ def parser() -> argparse.ArgumentParser:
     prewarm.add_argument("--plan", required=True, type=pathlib.Path)
     prewarm.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
+    lane_arguments(unwrap)
     for name in (
         "plan", "state-root", "started-candidate", "repository-root", "audit-root",
         "output",
@@ -2830,6 +3070,7 @@ def parser() -> argparse.ArgumentParser:
     unwrap.add_argument("--prewarm-request", required=True, type=pathlib.Path)
     unwrap.add_argument("--trusted-now", required=True)
     executor = commands.add_parser("build-executor-request")
+    lane_arguments(executor)
     for name in (
         "plan", "state-root", "started-candidate", "repository-root", "audit-root",
         "unwrap", "identity", "output",
@@ -2849,6 +3090,7 @@ def parser() -> argparse.ArgumentParser:
     render.add_argument("--source-commit", required=True)
     render.add_argument("--output", required=True, type=pathlib.Path)
     recovery = commands.add_parser("recover")
+    lane_arguments(recovery)
     recovery.add_argument("--state-root", required=True, type=pathlib.Path)
     recovery.add_argument("--trusted-now", required=True)
     recovery.add_argument("--cleanup-confirmation", type=pathlib.Path)
@@ -2872,6 +3114,8 @@ def main() -> int:
                     args.repository_root,
                     args.audit_root,
                     problem_members,
+                    args.lane_index,
+                    args.lane_count,
                 ),
             )
         elif args.command == "started-candidate":
@@ -2887,6 +3131,8 @@ def main() -> int:
                         if args.problem_set is None
                         else load_v1_problem_set(args.problem_set)
                     ),
+                    lane_index=args.lane_index,
+                    lane_count=args.lane_count,
                 ),
                 state_canonical_bytes,
             )
@@ -2901,6 +3147,8 @@ def main() -> int:
                     None
                     if args.problem_set is None
                     else load_v1_problem_set(args.problem_set),
+                    args.lane_index,
+                    args.lane_count,
                 ),
             )
         elif args.command == "refresh-state":
@@ -2926,7 +3174,13 @@ def main() -> int:
             )
             _write(
                 args.output,
-                current_running_proof(plan, started, args.state_root),
+                current_running_proof(
+                    plan,
+                    started,
+                    args.state_root,
+                    args.lane_index,
+                    args.lane_count,
+                ),
             )
         elif args.command == "refresh-prove-running":
             plan, _ = _load_canonical(args.plan, "historical private plan")
@@ -2936,7 +3190,13 @@ def main() -> int:
             refresh_protected_state(args.state_root)
             _write(
                 args.output,
-                current_running_proof(plan, started, args.state_root),
+                current_running_proof(
+                    plan,
+                    started,
+                    args.state_root,
+                    args.lane_index,
+                    args.lane_count,
+                ),
             )
         elif args.command == "terminal-candidate":
             plan, _ = _load_canonical(args.plan, "historical private plan")
@@ -2955,7 +3215,13 @@ def main() -> int:
             _write(
                 args.output,
                 terminal_candidate(
-                    plan, started, verdict, args.state_root, args.trusted_now
+                    plan,
+                    started,
+                    verdict,
+                    args.state_root,
+                    args.trusted_now,
+                    lane_index=args.lane_index,
+                    lane_count=args.lane_count,
                 ),
                 state_canonical_bytes,
             )
@@ -2971,7 +3237,12 @@ def main() -> int:
             _write(
                 args.output,
                 terminal_committed_proof(
-                    plan, started, terminal_value, args.state_root
+                    plan,
+                    started,
+                    terminal_value,
+                    args.state_root,
+                    args.lane_index,
+                    args.lane_count,
                 ),
             )
         elif args.command == "refresh-verify-recovery":
@@ -2981,7 +3252,12 @@ def main() -> int:
             refresh_protected_state(args.state_root)
             _write(
                 args.output,
-                recovery_committed_proof(recovery_value, args.state_root),
+                recovery_committed_proof(
+                    recovery_value,
+                    args.state_root,
+                    args.lane_index,
+                    args.lane_count,
+                ),
             )
         elif args.command == "prepare-prewarm":
             plan, _ = _load_canonical(args.plan, "historical private plan")
@@ -3004,6 +3280,8 @@ def main() -> int:
                     args.audit_root,
                     args.trusted_now,
                     runner_nonce=validate_prewarm_request(plan, prewarm),
+                    lane_index=args.lane_index,
+                    lane_count=args.lane_count,
                 ),
             )
         elif args.command == "build-executor-request":
@@ -3022,6 +3300,8 @@ def main() -> int:
                     args.audit_root,
                     unwrap,
                     args.identity,
+                    args.lane_index,
+                    args.lane_count,
                 ),
             )
         elif args.command == "unwrap-identity":
@@ -3055,6 +3335,8 @@ def main() -> int:
                 recover_running(
                     args.state_root, args.trusted_now,
                     cleanup_confirmation_value=confirmation,
+                    lane_index=args.lane_index,
+                    lane_count=args.lane_count,
                 ),
             )
     except (HistoricalPrivateReplayControllerError, OSError) as error:
