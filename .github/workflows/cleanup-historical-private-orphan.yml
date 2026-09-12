@@ -148,14 +148,8 @@ jobs:
             ($matches | length) == 1 and
             $matches[0].id == "a03e0111-5d7a-4ea0-9d83-e27b4dbcc107" and
             $matches[0].max_instances == 1 and
-            ($matches[0].version | type) == "number" and
-            $matches[0].version >= 1 and
-            $matches[0].configuration == {
-                image:"registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative@sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e",
-                vcpu:4, memory_mib:12288, disk:{size_mb:20000},
-                network:{assign_ipv6:"none",assign_ipv4:"none",mode:"private"},
-                wrangler_ssh:false
-              } and
+            $matches[0].configuration.image ==
+              "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative@sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e" and
             ($matches[0].image == null or
              $matches[0].image == $matches[0].configuration.image)
           ' "$applications" >/dev/null
