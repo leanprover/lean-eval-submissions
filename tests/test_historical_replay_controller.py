@@ -19,6 +19,7 @@ from scripts.historical_replay_controller import (
     _load_canonical,
     _load_provider_json,
     _load_state_canonical,
+    _load_validated_state_event,
     _read_regular,
     _terminal_transition,
     _verify_qualification_source_bindings,
@@ -35,6 +36,7 @@ from scripts.historical_replay_controller import (
     sha256_bytes,
     started_event,
     state_canonical_bytes,
+    state_compact_canonical_bytes,
     terminal_event,
     validate_execution_plan,
     validate_executor_request,
@@ -161,6 +163,29 @@ class HistoricalReplayInputTests(unittest.TestCase):
             path.write_bytes(state_canonical_bytes(queue))
             loaded_queue, _ = _load_state_canonical(path, "State queue")
             self.assertEqual(validate_queue(loaded_queue), loaded_queue)
+
+    def test_validated_state_event_accepts_only_deterministic_state_layouts(self) -> None:
+        value = {"declared_model": "model-β", "schema_version": 1}
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "event.json"
+            for raw in (
+                state_canonical_bytes(value),
+                state_compact_canonical_bytes(value),
+            ):
+                path.write_bytes(raw)
+                self.assertEqual(
+                    _load_validated_state_event(path, "State event")[0], value
+                )
+            for raw in (
+                b'{"schema_version":1,"declared_model":"model-\\u03b2"}\n',
+                state_compact_canonical_bytes(value) + b"\n",
+                b'{"declared_model":"model-\\u03b2", "schema_version":1}\n',
+            ):
+                path.write_bytes(raw)
+                with self.assertRaisesRegex(
+                    HistoricalReplayControllerError, "not canonical JSON"
+                ):
+                    _load_validated_state_event(path, "State event")
 
     def test_cli_output_is_create_only(self) -> None:
         fixture = Fixture()
