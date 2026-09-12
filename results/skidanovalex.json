@@ -94,6 +94,25 @@
         "ref": "c420844ef3159411225bffca68cd6d5d90da15b4",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-12T16:42:02Z",
+      "benchmark_commit": "95bf2a783ffb6ea7ab9328e033135807dce30eed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a09626-69d9-77fc-bbfa-4f0b2610ddd4"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {},
+      "result_id": "r2_9e658b834dbcaa0c4cd6c1654ff58fc89301213d5d21df1781346f976f7508c8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c420844ef3159411225bffca68cd6d5d90da15b4",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
