@@ -60,17 +60,25 @@ jobs:
           test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
           services="$RUNNER_TEMP/worker-services.json"
           applications="$RUNNER_TEMP/container-applications.json"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --max-time 30 \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services?per_page=100" \
-            --output "$services"
-          jq -e '
-            .success == true and .errors == [] and
-            (.result | type == "array") and
-            (.result_info.total_pages == 1) and
-            ([.result[] | .name // .id | select(startswith("hpr-"))] | length) == 0
-          ' "$services" >/dev/null
+          page=1
+          while (( page <= 100 )); do
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services?page=$page&per_page=100" \
+              --output "$services"
+            jq -e '
+              .success == true and (.errors // []) == [] and
+              (.result | type == "array") and
+              ([.result[] | (.name // .id) | select(startswith("hpr-"))] | length) == 0
+            ' "$services" >/dev/null
+            count=$(jq '.result | length' "$services")
+            if (( count < 100 )); then
+              break
+            fi
+            page=$((page + 1))
+          done
+          test "$page" -le 100
           npx --prefix server wrangler containers list --json > "$applications"
           jq -e '
             type == "array" and
