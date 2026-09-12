@@ -18,6 +18,25 @@
         "ref": "0b8bded8121a87d48df389315924490125312c9b",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-12T01:48:35Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0931a-fe99-7869-b217-0d5f4729141a"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {},
+      "result_id": "r2_f9ff15b63e81196f4f178820c80d00ee9a14d6a988aff8cae34f403859ec1ad5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d5fe9ee2be682a3d8faeba070f451928b1fae8a3",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
