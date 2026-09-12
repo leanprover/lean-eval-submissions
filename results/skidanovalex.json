@@ -56,6 +56,25 @@
         "ref": "d5fe9ee2be682a3d8faeba070f451928b1fae8a3",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-12T02:03:50Z",
+      "benchmark_commit": "6b4b87b672f5301f24983a12fda65dac608453ce",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0931a-6e11-77e8-a405-e6aa432a0bdd"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {},
+      "result_id": "r2_cae2110b312585e4a8abbaf07386bf957aa9f5a2cfbae830cc151efb071d2a28",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d5fe9ee2be682a3d8faeba070f451928b1fae8a3",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
