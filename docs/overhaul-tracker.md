@@ -135,45 +135,20 @@ campaign.
 
 ### Historical completion
 
-- [ ] Freeze the final issue-intake cutoff and generate the append-only
-      inventory delta.
-- [ ] Reconcile every accepted Result as public-source replayable,
-      private-archive replayable, or reviewed unavailable.
-- [x] Freeze all thirty-five exact historical-public execution profiles.
-      State qualification and enqueue remain gated on the exact immutable
-      execution packet.
-- [x] Provide one offline, create-only batch finalizer for the existing
-      authorize, qualify, and enqueue State events across the exact retained
-      public task subset. It derives terminal exclusions from the validated
-      pinned State ledger; appending its output remains gated on that packet.
-- [x] Migrate all 439 recoverable retained-baseline legacy private envelopes
-      to bound schema-version-3 sidecars and promote the reviewed patch to
-      audit `d73132415738b0d82c99fd43f630804fe996e342`, tree
-      `48c24fc428eea77d7d9320133fd978f8c7b6abfc`, without changing archive
-      ciphertext or stable IDs.
-- [x] Remove the installed migration identity and retain the custodian-held
-      legacy key offline only through the separately bound final-cutoff delta,
-      its promotion/readback, and recovery checks.
-- [x] Install the production replay role and State, audit, and Cloudflare
-      credentials while leaving both replay lanes disabled.
-- [x] Merge the bounded independent public/private replay controllers and
-      driver. The current controller source binding is
-      `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`.
-- [x] Promote the exact retained-baseline State batch at
-      `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
-      `e196521b812a0942eea9d11a8bcb2d7569728d50`, containing 2,439 events and
-      813 replay tasks; the fixed review branch is absent.
-- [x] Complete one non-replenishing migrated-envelope private canary with
-      terminal `replay.accepted` and verified artifact, resource, scrub, Audit,
-      and cleanup checks; return both controller variables to absent.
-- [ ] Enable and drain the independent bounded public and private
-      retained-baseline lanes, currently 174 public and 637 private tasks.
-- [ ] Run bounded official-Lean-plus-nanoda replay and record a terminal replay
-      or unavailable disposition for every final-cutoff Result.
+- [x] Freeze the 128-problem v1 historical scope.
+- [x] Reconcile each in-scope Result as public-source, private-archive, or
+      reviewed unavailable.
+- [x] Migrate the recoverable private archives to bound schema-version-3
+      envelopes without changing archive ciphertext or stable IDs.
+- [x] Run the official Lean kernel path and nanoda with bounded retries.
+- [x] Record a terminal replay or reviewed-unavailable disposition for every
+      in-scope Result.
+- [x] Disable both controller gates and confirm no replay remains running.
+- [ ] Remove the temporary replay and qualification machinery after the final
+      private resource inventory proves empty.
 
 Canonical inputs retained for this work:
 
-- [`historical-migration-replay-execution-packet.md`](historical-migration-replay-execution-packet.md)
 - [`historical-replay-inventory.md`](historical-replay-inventory.md)
 - [`historical-public-replay-plan.md`](historical-public-replay-plan.md)
 - [`historical-public-replay-profiles.md`](historical-public-replay-profiles.md)
@@ -182,8 +157,9 @@ Canonical inputs retained for this work:
 - machine-readable inputs under `evidence/historical-replay/` and
   `evidence/public-replay/`
 
-Build or qualify only exact images used by replayable Results. Execute the
-official Lean kernel path and nanoda only.
+The 145 materialized public tasks outside the v1 problem set are deferred and
+do not block this overhaul. Retain their canonical data so a later project can
+replay them without another archive migration.
 
 ## Standing authorization boundary
 
