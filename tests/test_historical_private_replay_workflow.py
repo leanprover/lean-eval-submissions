@@ -288,7 +288,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         )
         self.assertLess(
             WORKFLOW.index("Prove exact container readiness without private material"),
-            WORKFLOW.index("Prepare the exact five-minute one-use unwrap capability"),
+            WORKFLOW.index("Prepare the exact ten-minute one-use unwrap capability"),
         )
         self.assertIn(
             "if: steps.prewarm.outputs.ready == 'true'",
@@ -353,7 +353,15 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("environment: replay-production", replenish)
         self.assertNotIn("secrets.", replenish)
         self.assertNotIn("actions/checkout", replenish)
-        self.assertIn("needs.replay-one.result == 'success'", replenish)
+        self.assertNotIn("needs.replay-one.result == 'success'", replenish)
+        self.assertIn(
+            "needs.replay-one.outputs.safe_to_replenish == 'true'", replenish
+        )
+        self.assertIn(
+            "safe_to_replenish: ${{ steps.continuation.outputs.safe }}", replay
+        )
+        self.assertIn("RESOURCE_DELETED", replay)
+        self.assertIn("PRIVATE_DESTROYED", replay)
         self.assertIn("!cancelled()", replenish)
         self.assertIn("inputs.remaining_runs > 1", replenish)
         self.assertIn('test "$REMAINING_RUNS" -le 1024', replenish)

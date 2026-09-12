@@ -146,6 +146,34 @@ class ReplayControllerTests(unittest.TestCase):
             )
             self.assertEqual(unwrap["capability"]["max_uses"], 1)
             self.assertEqual(unwrap["capability"]["purpose"], "lean-eval-replay")
+            self.assertEqual(
+                unwrap["capability"]["expires_at"],
+                "2026-08-23T07:05:00.000Z",
+            )
+            extended = prepare_unwrap(
+                plan,
+                sidecar(),
+                ciphertext,
+                "2026-08-23T07:00:00.000Z",
+                request_random=b"\x04" * 10,
+                runner_nonce="5" * 64,
+                capability_lifetime_minutes=10,
+            )
+            self.assertEqual(
+                extended["capability"]["expires_at"],
+                "2026-08-23T07:10:00.000Z",
+            )
+            for invalid_lifetime in (True, 0, 11):
+                with self.assertRaisesRegex(
+                    ReplayControllerError, "capability lifetime"
+                ):
+                    prepare_unwrap(
+                        plan,
+                        sidecar(),
+                        ciphertext,
+                        "2026-08-23T07:00:00.000Z",
+                        capability_lifetime_minutes=invalid_lifetime,
+                    )
             current = dt.datetime.now(dt.timezone.utc)
             unwrap["capability"]["issued_at"] = current.isoformat(
                 timespec="milliseconds"

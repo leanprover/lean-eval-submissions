@@ -2410,7 +2410,14 @@ def terminal_committed_proof(
         or terminal["state_repository"] != plan["state"]["repository"]
         or not isinstance(terminal.get("expected_head"), str)
         or COMMIT.fullmatch(terminal["expected_head"]) is None
-        or event.get("event_type") not in {"replay.accepted", "replay.failed"}
+        or event.get("event_type") not in {
+            "replay.accepted",
+            "replay.crashed",
+            "replay.declined",
+            "replay.failed",
+            "replay.rejected",
+            "replay.timed_out",
+        }
         or event.get("subject_id") != plan["task"]["replay_task_id"]
         or event.get("causation_event_id") != started_event.get("event_id")
         or event.get("actor") != {"kind": "system"}
@@ -2658,6 +2665,7 @@ def prepare_unwrap(
             request_random=request_random,
             runner_nonce=runner_nonce,
             expected_archive_benchmark_commit=sidecar["benchmark_commit"],
+            capability_lifetime_minutes=10,
         )
 
 

@@ -57,6 +57,7 @@ jobs:
     outputs:
       preflight_kind: ${{ steps.preflight.outputs.kind }}
       plan_kind: ${{ steps.plan.outputs.kind }}
+      safe_to_replenish: ${{ steps.continuation.outputs.safe }}
     environment: replay-production
     env:
       PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}
@@ -785,7 +786,7 @@ jobs:
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-unwrap.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
 
-      - name: Prepare the exact five-minute one-use unwrap capability
+      - name: Prepare the exact ten-minute one-use unwrap capability
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
@@ -1388,6 +1389,7 @@ jobs:
           retention-days: 30
 
       - name: Delete the terminal task's temporary executor
+        id: resource_delete
         if: >-
           always() && (steps.terminal.outputs.appended == 'true' ||
           steps.failure.outputs.appended == 'true')
@@ -1419,6 +1421,7 @@ jobs:
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
           prove_terminal
+          echo 'deleted=true' >> "$GITHUB_OUTPUT"
 
       - name: Delete an executor whose State start never committed
         if: >-
@@ -1440,6 +1443,7 @@ jobs:
             "$WORKER_NAME" "$APPLICATION_NAME"
 
       - name: Destroy all private material, credentials, and temporary refs
+        id: private_destroy
         if: always()
         run: |
           set -euo pipefail
@@ -1492,12 +1496,33 @@ jobs:
             "$RUNNER_TEMP"/container-applications-before.json \
             historical-private-replay-redacted.json
           test ! -e "$RUNNER_TEMP/archive-plaintext.tar"
+          echo 'destroyed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Authorize a successor only after durable terminal cleanup
+        id: continuation
+        if: always()
+        env:
+          TERMINAL_APPENDED: ${{ steps.terminal.outputs.appended }}
+          FAILURE_APPENDED: ${{ steps.failure.outputs.appended }}
+          RESOURCE_DELETED: ${{ steps.resource_delete.outputs.deleted }}
+          PRIVATE_DESTROYED: ${{ steps.private_destroy.outputs.destroyed }}
+        run: |
+          set -euo pipefail
+          safe=false
+          if { [ "$TERMINAL_APPENDED" = true ] && [ "$FAILURE_APPENDED" != true ]; } || \
+             { [ "$TERMINAL_APPENDED" != true ] && [ "$FAILURE_APPENDED" = true ]; }; then
+            if [ "$RESOURCE_DELETED" = true ] && [ "$PRIVATE_DESTROYED" = true ]; then
+              safe=true
+            fi
+          fi
+          echo "safe=$safe" >> "$GITHUB_OUTPUT"
 
   replenish-private-lane:
     needs: replay-one
     if: >-
       ${{
-        !cancelled() && needs.replay-one.result == 'success' &&
+        always() && !cancelled() &&
+        needs.replay-one.outputs.safe_to_replenish == 'true' &&
         inputs.replenish_lane == true && inputs.remaining_runs > 1 &&
         needs.replay-one.outputs.preflight_kind != 'busy' &&
         needs.replay-one.outputs.plan_kind != 'empty'
