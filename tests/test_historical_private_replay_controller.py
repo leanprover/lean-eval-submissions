@@ -2168,6 +2168,37 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             proof["terminal_event_id"], recovery["append"]["event"]["event_id"]
         )
 
+    def test_terminal_proof_accepts_rejected_checker_outcome(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x21" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        verdict = json.loads(
+            (ROOT / "tests/fixtures/replay-verdict-accepted-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        verdict["replay_task_id"] = self.fixture.task["replay_task_id"]
+        verdict["checker_outcome"] = "rejected"
+        terminal = controller.terminal_candidate(
+            plan,
+            started,
+            verdict,
+            self.fixture.state,
+            "2026-10-21T07:00:01.000Z",
+            random_bytes=b"\x22" * 10,
+        )
+        self.assertEqual(terminal["event"]["event_type"], "replay.rejected")
+        self.fixture.commit_state_event(terminal["event"])
+        proof = controller.terminal_committed_proof(
+            plan, started, terminal, self.fixture.state
+        )
+        self.assertEqual(proof["terminal_event_id"], terminal["event"]["event_id"])
+
     def test_recovery_is_lane_local_and_rejects_cross_lane_cleanup(self) -> None:
         lane_count = 4
 

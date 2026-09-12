@@ -3,7 +3,7 @@
 
 This helper performs no network, Git, AWS, decryption, or State writes.  It
 validates the exact queue plan and schema-version-3 archive, creates a
-submission-bound five-minute unwrap capability, builds the fixed executor
+submission-bound short-lived unwrap capability, builds the fixed executor
 request, validates its source-free response, and wraps replay transitions in
 complete State events for the protected controller workflow.
 """
@@ -268,6 +268,7 @@ def prepare_unwrap(
     request_random: bytes | None = None,
     runner_nonce: str | None = None,
     expected_archive_benchmark_commit: str | None = None,
+    capability_lifetime_minutes: int = 5,
 ) -> dict[str, Any]:
     plan = _validated_plan(plan_value)
     _, envelope = _validate_archive(
@@ -277,6 +278,13 @@ def prepare_unwrap(
         expected_archive_benchmark_commit,
     )
     current = _parse_timestamp(trusted_now, "trusted_now")
+    if (
+        type(capability_lifetime_minutes) is not int
+        or not 1 <= capability_lifetime_minutes <= 10
+    ):
+        raise ReplayControllerError(
+            "capability lifetime must be an integer from one to ten minutes"
+        )
     request = plan["request"]
     archive = request["source"]["archive"]
     nonce = secrets.token_hex(32) if runner_nonce is None else runner_nonce
@@ -293,7 +301,9 @@ def prepare_unwrap(
         "data_key_id": envelope["data_key_id"],
         "runner_nonce": nonce,
         "issued_at": _timestamp(current),
-        "expires_at": _timestamp(current + dt.timedelta(minutes=5)),
+        "expires_at": _timestamp(
+            current + dt.timedelta(minutes=capability_lifetime_minutes)
+        ),
         "max_uses": 1,
     }
     validate_binding(
