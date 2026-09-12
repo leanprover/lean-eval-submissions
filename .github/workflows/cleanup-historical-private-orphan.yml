@@ -83,12 +83,13 @@ jobs:
       - name: Install the pinned Cloudflare client
         run: npm ci --prefix server
 
-      - name: Prove the exact task is terminal in current protected State
+      - name: Prove the exact task is terminal in the protected State checkout
         run: |
           set -euo pipefail
           state_head=$(git -C state rev-parse HEAD)
-          remote=$(git -C state ls-remote origin refs/heads/main)
-          test "$remote" = "$state_head"$'\trefs/heads/main'
+          test "$(git -C state config --get remote.origin.url)" = \
+            git@github.com:leanprover/lean-eval-state.git
+          test -z "$(git -C state status --porcelain)"
           python state/scripts/state.py --root state \
             --protected-main-commit "$state_head" validate
           event="state/events/${TERMINAL_EVENT_ID:0:2}/$TERMINAL_EVENT_ID.json"
