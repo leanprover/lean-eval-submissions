@@ -227,6 +227,23 @@ def state_canonical_bytes(value: Any) -> bytes:
         raise HistoricalReplayControllerError("value is not canonical State JSON") from error
 
 
+def state_compact_canonical_bytes(value: Any) -> bytes:
+    """Match State events committed as sorted, compact JSON."""
+    try:
+        return (
+            json.dumps(
+                value,
+                allow_nan=False,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise HistoricalReplayControllerError("value is not canonical State JSON") from error
+
+
 def sha256_bytes(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
@@ -421,6 +438,33 @@ def _load_canonical(path: pathlib.Path, label: str) -> tuple[dict[str, Any], byt
 def _load_state_canonical(path: pathlib.Path, label: str) -> tuple[dict[str, Any], bytes]:
     raw = _read_regular(path, MAX_JSON_BYTES, label)
     value = _parse_canonical(raw, label, state_canonical_bytes)
+    return value, raw
+
+
+def _load_validated_state_event(
+    path: pathlib.Path, label: str
+) -> tuple[dict[str, Any], bytes]:
+    """Read a State-validated event in either deterministic State byte layout.
+
+    Callers must first run the authoritative lean-eval-state validator. This
+    secondary reader still rejects duplicate keys, non-finite numbers, and any
+    byte layout other than sorted ASCII-escaped pretty or compact JSON.
+    """
+    raw = _read_regular(path, MAX_JSON_BYTES, label)
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_reject_nonfinite_float,
+        )
+    except HistoricalReplayControllerError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise HistoricalReplayControllerError(f"{label} is not UTF-8 JSON") from error
+    value = _object(value, label)
+    if raw not in (state_canonical_bytes(value), state_compact_canonical_bytes(value)):
+        raise HistoricalReplayControllerError(f"{label} is not canonical JSON")
     return value, raw
 
 
@@ -1994,7 +2038,7 @@ def current_historical_running(
         )
     events: list[dict[str, Any]] = []
     for path in _event_files(events_root):
-        value, _ = _load_state_canonical(path, "State event")
+        value, _ = _load_validated_state_event(path, "State event")
         event_id = _match(UUID7, value.get("event_id"), "State event_id")
         if path.name != f"{event_id}.json" or path.parent.name != event_id[:2]:
             raise HistoricalReplayControllerError("State event path differs from event_id")
