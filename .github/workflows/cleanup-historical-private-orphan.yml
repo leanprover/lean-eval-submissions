@@ -138,7 +138,7 @@ jobs:
               reviewed_execution_profile_digest:"905608718bf02ba2e962ec767c45cf24142159eb50942e6dd92a208723395a74",
               reviewed_measurement_config_digest:"2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
               reviewed_vm_image_digest:"sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e",
-              executor_ownership_tag:"d701afa1b96b7335a730f5794dcd9103186535dbc054d1705674385756d9a4cc",
+              executor_ownership_tag:"029970c7d79ed6dc9ef551ba0722f1b846d3b792b77c02778dd5dbedd57f7c47",
               expected_replay_task_id:$task, expected_replay_attempt:"1"
             }
           ' "$RUNNER_TEMP/orphan-health.json" >/dev/null
