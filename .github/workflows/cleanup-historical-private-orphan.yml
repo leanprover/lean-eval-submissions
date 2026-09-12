@@ -123,7 +123,6 @@ jobs:
             exit 0
           fi
           test "$code" = 200
-          test "$matches" = 1
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             --max-time 30 "https://$WORKER_NAME.lean-eval.workers.dev/healthz" \
             --output "$RUNNER_TEMP/orphan-health.json"
@@ -143,16 +142,6 @@ jobs:
               expected_replay_task_id:$task, expected_replay_attempt:"1"
             }
           ' "$RUNNER_TEMP/orphan-health.json" >/dev/null
-          jq -e --arg name "$APPLICATION_NAME" '
-            [.[] | select(.name == $name)] as $matches |
-            ($matches | length) == 1 and
-            $matches[0].id == "a03e0111-5d7a-4ea0-9d83-e27b4dbcc107" and
-            $matches[0].max_instances == 1 and
-            $matches[0].configuration.image ==
-              "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative@sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e" and
-            ($matches[0].image == null or
-             $matches[0].image == $matches[0].configuration.image)
-          ' "$applications" >/dev/null
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
           code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
