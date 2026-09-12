@@ -75,6 +75,25 @@
         "ref": "d5fe9ee2be682a3d8faeba070f451928b1fae8a3",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-12T16:18:50Z",
+      "benchmark_commit": "95bf2a783ffb6ea7ab9328e033135807dce30eed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a09627-11d1-7b6e-8308-ceb09b437040"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {},
+      "result_id": "r2_7443554a942830081157b6f0eb7ccfed58ab52b6f53ba5c6abf259eee310b777",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c420844ef3159411225bffca68cd6d5d90da15b4",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
