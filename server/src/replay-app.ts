@@ -46,9 +46,6 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REVIEWED_EXECUTION_PROFILE_DIGEST: string;
   REVIEWED_MEASUREMENT_CONFIG_DIGEST: string;
   REVIEWED_VM_IMAGE_DIGEST: string;
-  EXPECTED_REPLAY_TASK_ID?: string;
-  EXPECTED_REPLAY_ATTEMPT?: string;
-  EXECUTOR_OWNERSHIP_TAG?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
@@ -130,23 +127,6 @@ function terminalReceiptStore(
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
-}
-
-function requireHistoricalPrivateBinding(
-  env: ReplayRuntimeEnv,
-  value: { replay_task_id: string; attempt: number },
-): void {
-  if (env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay") return;
-  if (
-    env.EXPECTED_REPLAY_TASK_ID === undefined
-    || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
-    || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
-    || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
-  ) {
-    throw new AuthoritativeReplayContractError(
-      "execution is not the exact historical private replay binding",
-    );
-  }
 }
 
 const ARCHIVE_COMMAND_FAILURES = new Map([
@@ -1488,11 +1468,6 @@ function health(env: ReplayRuntimeEnv): Response {
     reviewed_execution_profile_digest: env.REVIEWED_EXECUTION_PROFILE_DIGEST,
     reviewed_measurement_config_digest: env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
     reviewed_vm_image_digest: env.REVIEWED_VM_IMAGE_DIGEST,
-    ...(env.EXECUTOR_OWNERSHIP_TAG === undefined ? {} : {
-      executor_ownership_tag: env.EXECUTOR_OWNERSHIP_TAG,
-      expected_replay_task_id: env.EXPECTED_REPLAY_TASK_ID,
-      expected_replay_attempt: env.EXPECTED_REPLAY_ATTEMPT,
-    }),
   });
 }
 
@@ -1507,8 +1482,6 @@ export async function handleReplayRequest(
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
-  const authoritativePrewarm = url.pathname
-    === "/api/v1/historical-private-replay/prewarm";
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
   const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
@@ -1520,7 +1493,6 @@ export async function handleReplayRequest(
       && !archiveAcceptance
       && !authoritativeReplay
       && !authoritativeStatus
-      && !authoritativePrewarm
       && !historicalPublicReplay
       && !historicalPublicStatus
       && !historicalPublicCleanup
@@ -1530,14 +1502,8 @@ export async function handleReplayRequest(
   ) {
     return json({ error: "not_found" }, 404);
   }
-  if ((authoritativeReplay || authoritativePrewarm) && env.REPLAY_ENABLED !== "true") {
+  if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
-  }
-  if (
-    authoritativePrewarm
-    && env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay"
-  ) {
-    return json({ error: "not_found" }, 404);
   }
   if (
     (
@@ -1677,45 +1643,6 @@ export async function handleReplayRequest(
       return authoritativeExecutorFailure(error);
     }
   }
-  if (authoritativePrewarm) {
-    try {
-      await dependencies.authenticate(request, env);
-      const input = await readAuthoritativeReplayStatusRequest(
-        request,
-        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
-        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
-        env.REVIEWED_VM_IMAGE_DIGEST,
-      );
-      requireHistoricalPrivateBinding(env, input);
-      // Claim the cleanup reservation before the first sandbox RPC. A prewarm
-      // creates the nonce-named sandbox even though it transfers no source. If
-      // the controller later fails before /api/v1/replay, cleanup must still
-      // know that exact nonce rather than treating the reservation as proof
-      // that no sandbox exists.
-      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
-      await claimActiveBinding(store, input);
-      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
-      if (sandbox.getProcess === undefined) {
-        throw new ReplayExecutorError("command_rpc_failed");
-      }
-      try {
-        // This is deliberately the only container RPC. It makes Cloudflare
-        // provision the exact sandbox before State records an attempt and
-        // before any private archive key or ciphertext reaches the Worker.
-        await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
-      } catch {
-        throw new ReplayExecutorError("command_rpc_failed");
-      }
-      return json({ ...input, status: "ready" });
-    } catch (error) {
-      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
-        return json({ error: "invalid_request" }, 400);
-      }
-      recordExecutorFailure("historical_private_replay_prewarm", error);
-      return authoritativeExecutorFailure(error);
-    }
-  }
   if (authoritativeStatus) {
     let sandbox: SandboxClient | undefined;
     try {
@@ -1726,7 +1653,6 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
       sandbox = await dependencies.sandbox(env, input.runner_nonce);
@@ -1749,10 +1675,6 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      requireHistoricalPrivateBinding(env, {
-        replay_task_id: String(input.request.replay_task_id),
-        attempt: Number(input.request.attempt),
-      });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
       await claimActiveBinding(store, binding);
