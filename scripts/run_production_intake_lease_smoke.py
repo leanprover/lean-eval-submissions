@@ -258,14 +258,9 @@ def classify_readiness(
             f"post-smoke readiness returned a non-retryable HTTP response ({status})"
         )
     state_commit = body.get("state_commit")
-    exact_except_commit = (
+    exact_protected_state = (
         body.get("status") == "state_writer_ready"
         and body.get("environment") == "production"
-        and body.get("intake_configured_enabled") is True
-        and body.get("intake_effective_enabled") is True
-        and body.get("intake_enabled") is True
-        and body.get("intake_enablement_mode") == "leased"
-        and body.get("intake_lease_expires_at") == expected_expires_at
         and body.get("state_branch_protected") is True
         and body.get("state_contract_verified") is True
         and body.get("state_contract_commit") == expected_contract
@@ -273,8 +268,17 @@ def classify_readiness(
         and isinstance(state_commit, str)
         and SHA.fullmatch(state_commit) is not None
     )
-    if not exact_except_commit:
+    if not exact_protected_state:
         raise LeaseSmokeFailure("post-smoke readiness was not the exact protected-State proof")
+    exact_lease = (
+        body.get("intake_configured_enabled") is True
+        and body.get("intake_effective_enabled") is True
+        and body.get("intake_enabled") is True
+        and body.get("intake_enablement_mode") == "leased"
+        and body.get("intake_lease_expires_at") == expected_expires_at
+    )
+    if not exact_lease:
+        raise LeaseSmokeRetryable("post-smoke leased deployment has not converged")
     if state_commit != expected_state_commit:
         raise LeaseSmokeRetryable("post-smoke State head has not converged")
     return body

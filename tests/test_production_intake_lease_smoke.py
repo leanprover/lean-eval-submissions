@@ -134,6 +134,54 @@ class ProductionIntakeLeaseSmokeTests(unittest.TestCase):
                 proof,
             )
 
+    def test_retries_a_structurally_valid_prior_edge_version(self) -> None:
+        prior = self.readiness()
+        prior.update(
+            intake_configured_enabled=False,
+            intake_effective_enabled=False,
+            intake_enabled=False,
+            intake_enablement_mode="disabled",
+            intake_lease_expires_at=None,
+        )
+        responses = [
+            (200, self.smoke()),
+            (200, prior),
+            (200, self.readiness()),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.args(pathlib.Path(temporary))
+            with (
+                mock.patch.object(SMOKE, "request_json", side_effect=responses) as request,
+                mock.patch.dict(SMOKE.os.environ, {"READINESS_TOKEN": TOKEN}),
+                mock.patch.object(SMOKE.time, "sleep") as sleep,
+                redirect_stderr(io.StringIO()) as stderr,
+            ):
+                SMOKE.run(
+                    args,
+                    client=mock.sentinel.client,
+                    clock=lambda: 1_000,
+                    sleeper=sleep,
+                )
+            self.assertEqual(request.call_count, 3)
+            sleep.assert_called_once_with(5.0)
+            self.assertIn("post-smoke State readiness retryable", stderr.getvalue())
+
+    def test_protected_state_mismatch_remains_fatal(self) -> None:
+        wrong_contract = self.readiness()
+        wrong_contract["state_contract_verified"] = False
+        with self.assertRaisesRegex(
+            SMOKE.LeaseSmokeFailure,
+            "exact protected-State proof",
+        ):
+            SMOKE.classify_readiness(
+                200,
+                wrong_contract,
+                EXPIRES_AT,
+                STATE_COMMIT,
+                CONTRACT,
+                SCHEMA,
+            )
+
     def test_wire_json_rejects_duplicate_members_before_classification(self) -> None:
         class Response:
             status = 503
