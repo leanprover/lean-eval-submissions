@@ -1,0 +1,173 @@
+# One-shot cleanup for the exact terminal executor left by run 34567707604.
+# Delete this workflow after its one successful execution.
+name: Cleanup one historical private replay orphan
+run-name: Cleanup exact terminal private replay executor
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_exact_terminal_orphan:
+        description: Delete only the source-bound executor named in this workflow
+        required: true
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: lean-eval-historical-private-replay-controller-3
+  cancel-in-progress: false
+
+jobs:
+  authorize-manual:
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require an explicit protected-main dispatch
+        env:
+          CONFIRMED: ${{ inputs.confirm_exact_terminal_orphan }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_PROTECTED: ${{ github.ref_protected }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMED" = true
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+          test "$EVENT_REF_PROTECTED" = true
+
+  cleanup:
+    needs: authorize-manual
+    permissions:
+      contents: read
+    environment: replay-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      WORKER_NAME: hpr-1bb05d10a6d5cf956cbaacc28326a26b418eb0c60cdc55bacb8ab693-1
+      APPLICATION_NAME: le-hpr-1bb05d10a6d5cf956cbaac-1
+      REPLAY_TASK_ID: rt1_1bb05d10a6d5cf956cbaacc28326a26b418eb0c60cdc55bacb8ab6934df3e243
+      TERMINAL_EVENT_ID: 01a08f5a-2dd8-79ec-a8a6-ab0404da02e3
+    steps:
+      - name: Require the disabled private controller and exact live main
+        env:
+          CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$CONTROLLER_ENABLED" = false
+          branch=$(gh api repos/leanprover/lean-eval-submissions/branches/main \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: main
+          path: state
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install the pinned Cloudflare client
+        run: npm ci --prefix server
+
+      - name: Prove the exact task is terminal in current protected State
+        run: |
+          set -euo pipefail
+          state_head=$(git -C state rev-parse HEAD)
+          remote=$(git -C state ls-remote origin refs/heads/main)
+          test "$remote" = "$state_head"$'\trefs/heads/main'
+          python state/scripts/state.py --root state \
+            --protected-main-commit "$state_head" validate
+          event="state/events/${TERMINAL_EVENT_ID:0:2}/$TERMINAL_EVENT_ID.json"
+          jq -e --arg task "$REPLAY_TASK_ID" --arg event "$TERMINAL_EVENT_ID" '
+            .schema_version == 1 and .event_id == $event and
+            .event_type == "replay.rejected" and .subject_id == $task and
+            .causation_event_id == "01a08f0e-c140-76ca-89ff-c13ce2ebc978" and
+            .actor == {"kind":"system"} and .payload.attempt == 1
+          ' "$event" >/dev/null
+
+      - name: Verify and delete only the exact owned executor
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
+          service="$RUNNER_TEMP/orphan-service.json"
+          applications="$RUNNER_TEMP/orphan-applications.json"
+          code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 30 --output "$service" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$WORKER_NAME")
+          test "$code" = 200 -o "$code" = 404
+          npx --prefix server wrangler containers list --json > "$applications"
+          matches=$(jq --arg name "$APPLICATION_NAME" \
+            '[.[] | select(.name == $name)] | length' "$applications")
+          test "$matches" -le 1
+          if [ "$code" = 404 ] && [ "$matches" = 0 ]; then
+            echo 'The exact terminal executor is already absent.'
+            exit 0
+          fi
+          test "$code" = 200
+          test "$matches" = 1
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 "https://$WORKER_NAME.lean-eval.workers.dev/healthz" \
+            --output "$RUNNER_TEMP/orphan-health.json"
+          jq -e --arg task "$REPLAY_TASK_ID" '
+            . == {
+              status:"ok", service:"lean-eval-replay-executor",
+              environment:"historical-private-replay",
+              deployed_commit:"c785bf826067cf2ad3c1111d5930085cb82755d7",
+              replay_enabled:true, historical_public_replay_enabled:false,
+              staging_acceptance_enabled:false,
+              staging_memory_limit_bytes:12884901888,
+              production_memory_gate_bytes:12884901888,
+              reviewed_execution_profile_digest:"905608718bf02ba2e962ec767c45cf24142159eb50942e6dd92a208723395a74",
+              reviewed_measurement_config_digest:"2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
+              reviewed_vm_image_digest:"sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e",
+              executor_ownership_tag:"d701afa1b96b7335a730f5794dcd9103186535dbc054d1705674385756d9a4cc",
+              expected_replay_task_id:$task, expected_replay_attempt:"1"
+            }
+          ' "$RUNNER_TEMP/orphan-health.json" >/dev/null
+          jq -e --arg name "$APPLICATION_NAME" '
+            [.[] | select(.name == $name)] as $matches |
+            ($matches | length) == 1 and
+            $matches[0].id == "a03e0111-5d7a-4ea0-9d83-e27b4dbcc107" and
+            $matches[0].max_instances == 1 and
+            ($matches[0].version | type) == "number" and
+            $matches[0].version >= 1 and
+            $matches[0].configuration == {
+                image:"registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative@sha256:3cfe70a5f447565dc445956afd750396a1046f9fafdb4edf3816c0dbb2660d4e",
+                vcpu:4, memory_mib:12288, disk:{size_mb:20000},
+                network:{assign_ipv6:"none",assign_ipv4:"none",mode:"private"},
+                wrangler_ssh:false
+              } and
+            ($matches[0].image == null or
+             $matches[0].image == $matches[0].configuration.image)
+          ' "$applications" >/dev/null
+          scripts/delete_historical_private_executor \
+            "$WORKER_NAME" "$APPLICATION_NAME"
+          code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 30 --output "$RUNNER_TEMP/orphan-after.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$WORKER_NAME")
+          test "$code" = 404
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/applications-after.json"
+          test "$(jq --arg name "$APPLICATION_NAME" \
+            '[.[] | select(.name == $name)] | length' \
+            "$RUNNER_TEMP/applications-after.json")" = 0
