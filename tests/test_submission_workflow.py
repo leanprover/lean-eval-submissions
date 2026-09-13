@@ -43,6 +43,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}", self.text)
         self.assertIn('--submission-id "$SUBMISSION_ID"', self.text)
         self.assertIn('--expected-problem-id "$PROBLEM_ID"', self.text)
+        self.assertIn('--problem-id "$PROBLEM_ID"', self.text)
+        self.assertIn('--statement-revision "$STATEMENT_REVISION"', self.text)
         self.assertIn("github.event_name == 'workflow_dispatch'", self.text)
         self.assertIn('EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}', self.text)
         self.assertIn('if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then', self.text)
