@@ -38,6 +38,11 @@ function manifest(problemId: string, group: string, revision: number): Uint8Arra
     "status = \"active\"",
     `statement_revision = ${String(revision)}`,
     "",
+    "[[status_history]]",
+    'status = "archived"',
+    'effective_date = "2026-01-01"',
+    'reason = "regression fixture: nested status is not the current root status"',
+    "",
   ].join("\n"));
 }
 

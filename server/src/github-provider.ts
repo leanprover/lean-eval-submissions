@@ -130,7 +130,13 @@ function inlineContentBytes(
   return bytes;
 }
 
+function manifestRootTable(text: string): string {
+  const tableStart = text.search(/^[\t ]*\[/mu);
+  return tableStart === -1 ? text : text.slice(0, tableStart);
+}
+
 function manifestField(text: string, field: "id" | "group" | "status"): string {
+  text = manifestRootTable(text);
   const expression = new RegExp(`^${field} = "([A-Za-z0-9_-]+)"$`, "gmu");
   const matches = [...text.matchAll(expression)];
   if (matches.length !== 1 || matches[0]?.[1] === undefined) {
@@ -140,6 +146,7 @@ function manifestField(text: string, field: "id" | "group" | "status"): string {
 }
 
 function manifestRevision(text: string): number {
+  text = manifestRootTable(text);
   const matches = [...text.matchAll(/^statement_revision = ([1-9][0-9]*)$/gmu)];
   const raw = matches[0]?.[1];
   if (matches.length !== 1 || raw === undefined) {
@@ -153,6 +160,7 @@ function manifestRevision(text: string): number {
 }
 
 function manifestBoolean(text: string, field: "visible"): boolean {
+  text = manifestRootTable(text);
   const expression = new RegExp(`^${field} = (true|false)$`, "gmu");
   const matches = [...text.matchAll(expression)];
   if (matches.length !== 1 || matches[0]?.[1] === undefined) {
