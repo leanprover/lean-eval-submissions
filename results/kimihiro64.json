@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-13T22:15:07Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "Codex 5.6 Sol + HITL",
+      "intake": {
+        "issue_number": 1731,
+        "kind": "issue"
+      },
+      "problem_id": "riemann_hypothesis_iff_lagarias_elementary_criterion",
+      "production_metadata": {
+        "production_description": "Codex with ChatGPT 5.6 Sol (Extra High) was used with a custom context system that locates/translates source theorems and plans the autoformalization using human input along the way when issues arose. Subscription billing, not tracked. Overall about 4 days for Robin's theorem, about 1 day for extension to Lagarias's theorem.",
+        "solution_publication_date": "2026-09-12",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ec4f0ac40368b7ef72164cd577bb830dd88910e5da86c2ddd73f7348cc9e892b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "acab1a31f31e0499518a4416b63281e0b4838f9c",
+        "repo": "kimihiro64/Robin1984"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "kimihiro64"
+}
