@@ -16,14 +16,14 @@ performed by the maintainer because the agent lacks access is an operator
 handoff, not a new permission gate. The remaining approval exceptions are
 listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
 
-Last reconciled: **2026-09-03**
+Last reconciled: **2026-09-13**
 
 ## Current baseline
 
 | Contract | Current value |
 | --- | --- |
-| Production State contract pin | `235a96c96462438c7680e6fb90fa0e6044ec1774` |
-| Staging State contract pin | `6105a6255ec40409bcce66c6cf6b6764e0e93ed4` |
+| Production State contract pin | `ac79d8959e994d2504ed83a7be3f51ec27db0c07` |
+| Staging State contract pin | `0999e6bcaee386b1fa9aa55da096b5f7a9161615` |
 | Replay image tag | `lean-eval-authoritative:4026b18d5e679b07be1961d538a51ad689a9d8d4` |
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
 
