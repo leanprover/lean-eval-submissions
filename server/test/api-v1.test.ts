@@ -752,6 +752,11 @@ describe("strict API contract", () => {
           `visible = ${String(visible)}`,
           "statement_revision = 2",
           "",
+          "[[status_history]]",
+          'status = "archived"',
+          'effective_date = "2026-01-01"',
+          'reason = "regression fixture: nested status is not the current root status"',
+          "",
         ].join("\n");
         return Promise.resolve(Response.json({
           type: "file",
