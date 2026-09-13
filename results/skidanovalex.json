@@ -151,6 +151,25 @@
         "ref": "03e1aecee05cd9a14e7b97140dd96e3f3a826466",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-13T00:50:52Z",
+      "benchmark_commit": "61b66577ead43ab36159890e6f986196324fd2ff",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a09738-1471-7d66-87e5-c195ae8eb07e"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {},
+      "result_id": "r2_e75d4cf71c9310266554efc40b1aedbcda8b1e2378698dc0abddefec0c2d59bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "03e1aecee05cd9a14e7b97140dd96e3f3a826466",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
