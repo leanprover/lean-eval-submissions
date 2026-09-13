@@ -1101,6 +1101,29 @@
         "ref": "3d5905db147c558bceb25b1ae395670187e147c5",
         "repo": "mlgraham/lean-eval-euler-lagrange-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-13T01:20:47Z",
+      "benchmark_commit": "61b66577ead43ab36159890e6f986196324fd2ff",
+      "declared_model": "(various models)",
+      "intake": {
+        "issue_number": 1720,
+        "kind": "issue"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "production_description": "Original proof of klartag_packing (Klartag, \"Lattice packing of spheres in high dimensions using a\nstochastically evolving ellipsoid\": an ellipsoid in R^(n+1) of volume c·n^2 whose only lattice point\nis the origin). Produced with Claude Code under human direction, from the Challenge, Mathlib source\nsearch, the published paper and compiler feedback only. No lean-eval solution was consulted; none\nexists for this problem.\n\n176 modules in the import closure of the final theorem, 42,009 lines (the whole Submission/ tree is\n186 modules, 42,821 lines); no `sorry`, no `native_decide`; `#print axioms klartag_packing` reports\nexactly propext, Classical.choice, Quot.sound, and every one of the 4,076 declarations in the closure\nwas swept. No vendored or third-party code: every line is original to this submission. Mathlib pinned\nat 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, toolchain v4.33.0. Verified from a fresh clone:\n`lake exe cache get && lake build` completes 8889 jobs; the proved theorem's type is definitionally\nthe challenge statement (both directions elaborate).\n\nMethod, in the order the obstructions fell:\n\n- The stochastically evolving ellipsoid is discretised: a Gaussian chain with step h = n^-9 over\n  N = ceil(16 n^7 log n) steps replaces the diffusion, so no stochastic calculus is formalised; the\n  only analysis is a one-step log-determinant inequality (an upper form and a sharp lower form) and\n  a Gaussian fourth-moment bound.\n- The lattice is a Construction-A lattice (the kernel of a linear form modulo a prime), which\n  replaces the Siegel mean-value argument; the contact points are counted through a radial profile\n  bound (the paper's Lemma 4.3) with an explicit peak, and a light-contact vector is selected by\n  averaging a weighted count over the nonzero forms.\n- The good event is controlled by a stopped chain: the log-determinant is a supermartingale-type\n  sum whose variance is bounded (Var ≤ T·n/m^2), and the shortfall is bounded directly, without\n  tail estimates or a Markov floor.\n- Every log n in the final budget is cancelled by another log n; the constants are explicit\n  (C' = 10^7, terminal weight coefficient 140/n^2, count threshold 10^4·n^2, integrated threshold\n  n-free at 2.8·10^6), and the proved ceilings give a budget of 0.545 < 1 uniformly in n.",
+        "solution_publication_date": "2026-09-12",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_73b29bd01b79aaeb6a23eb681717e60203633b52fdf6011246c7487d35b10c96",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "270b3358a135f64a6688636660c07772e8db0173",
+        "repo": "mlgraham/lean-eval-klartag-submission"
+      }
     }
   ],
   "schema_version": 2,
