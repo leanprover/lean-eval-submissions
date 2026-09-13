@@ -29,7 +29,7 @@ Last reconciled: **2026-09-13**
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
 
 Public structured health currently reports protected submission implementation
-`0aef118adbe2e2e48917827839c6b37714cc7c50`. Re-read exact active version IDs
+`98d7172786fad65c02173d49eccf415a32e2285d`. Re-read exact active version IDs
 from Cloudflare before any rollback or promotion. The current feature posture is:
 
 - production intake enabled in durable configured and effective state;
