@@ -35,6 +35,25 @@ The service verifies both installations and exact-commit access before it
 records or dispatches a submission. This is enforced for browser and headless
 submission clients; it is not a form checkbox or user assertion.
 
+The service accepts a problem ID, declared model, exact repository and commit,
+publication choice, production metadata, and acceptance of the current terms.
+It resolves the problem group and current statement revision itself from the
+protected LeanEval catalog. Formalization problems must be visible and active;
+software-verification problems may be visible and draft or active. Clients do
+not supply either canonical field.
+
+Scheduled publication is the recommended default. A public repository must use
+scheduled publication. A private repository may instead keep accepted source
+private and irreversibly schedule it later. Accepted scheduled source is
+released under Apache License 2.0 exactly two UTC calendar months after
+acceptance.
+
+Submitting the same owner, repository, commit, problem, and resolved statement
+revision again returns the original submission instead of dispatching duplicate
+work. An owner may have at most four active submissions; completed and terminal
+submissions, and incomplete submissions older than 24 hours, do not occupy a
+slot.
+
 GitHub issue intake remains available during the transition and is
 provisionally scheduled to close no earlier than `2026-09-30T06:57:10Z`.
 Closure is not automatic: issue intake will remain open if a severity-high
@@ -51,15 +70,43 @@ form. Point it at any content that contains at least one
 several workspaces, or a public gist. The CI walks the content and tries
 every match.
 
-Only `Submission.lean` and files under `Submission/` are read. Nothing
-else from your submission is inspected or published — only the set of
-solved problem ids plus the metadata you enter on the form.
+The legacy issue workflow discovers every matching workspace. In contrast, the
+submission service evaluates only the exact problem selected in the request.
+The exact repository snapshot is privately fetched, archived, built, and
+executed. It is not published before the selected release time; only results
+and submitted metadata are public during the embargo or when source is
+withheld. Do not include secrets in a submitted repository or its metadata.
 
 If you use the legacy issue path and your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
 
-### Submitting through the GitHub API
+### Headless service contract
+
+Headless clients first request a source-bound challenge from
+`POST /api/v1/agent/challenges`, prove control through the returned exact tag
+and secret Gist, and then send that signed challenge to
+`POST /api/v1/agent/submissions`. The submission object has this closed v2
+shape:
+
+```json
+{
+  "schema_version": 2,
+  "problem_id": "two_plus_two",
+  "declared_model": "Example Model",
+  "source_repository": "owner/repository",
+  "source_commit": "0123456789abcdef0123456789abcdef01234567",
+  "publication_choice": "scheduled",
+  "production_metadata": {},
+  "terms_version": "lean-eval-intake-terms-v1",
+  "terms_accepted": true
+}
+```
+
+Unknown fields and older schema versions are rejected. The server returns the
+canonical problem group and statement revision in the receipt.
+
+### Legacy issue submission through the GitHub API
 
 API-created issues are supported. Create an issue whose title starts with
 `[submission] ` and whose body uses the same rendered Markdown sections as
@@ -73,7 +120,7 @@ the API request's `labels` field: GitHub drops labels requested by issue
 authors without triage permission. The intake workflow validates a complete
 submission body, applies the `submission` label, and starts evaluation.
 
-### Publishing exact solutions
+### Legacy issue publication metadata
 
 LeanEval supports open science and does not prohibit publishing exact
 solutions. Public solutions can help library development and let others
@@ -89,22 +136,25 @@ The submission form asks you to choose one of three statuses:
   submission-time snapshot, not a commitment.
 - **Private, with no current publication plan**.
 
-There is no required embargo. Please consider the tradeoffs when deciding
+These three choices apply only to the temporary legacy issue form. New service
+submissions use the scheduled-or-withheld policy above. There is no required
+embargo for legacy issue submissions. Please consider the tradeoffs when deciding
 whether and when to publish. Methods, tooling, prompts, aggregate results,
 and reusable library contributions can be published without publishing the
 exact benchmark solutions.
 
 ### Audit archive
 
-Every evaluated submission's compressed source tarball is retained
-indefinitely, `age`-encrypted, in the private
+Every service submission's compressed source tarball is retained indefinitely,
+including submissions that reject or fail. Each archive uses a fresh data key
+and a schema-version-3 per-submission key envelope. The encrypted archives live in the private
 [`leanprover/lean-eval-audit`](https://github.com/leanprover/lean-eval-audit)
 repository so that the exact bytes evaluated for any past submission
 remain recoverable if a comparator regression, soundness incident, or
-research question requires re-examining them. Decryption keys are
-held only by the small set of maintainers listed in
-[`.audit/recipients.txt`](.audit/recipients.txt); submitting agrees
-to this retention (see the submission form's third acknowledgement).
+research question requires re-examining them. Archive-key wrapping and release
+unwrapping use separate, least-privilege AWS roles. Submitting explicitly agrees
+to this retention and to private fetch, archive, build, and execution before
+State accepts the request.
 
 The compressed source tarball is capped at **100 MB**; submissions
 above the cap are rejected before evaluation. See
@@ -181,11 +231,17 @@ file whose `schema_version` they do not know.
 ## How the pipeline fits together
 
 ```
-submission issue on lean-eval-submissions
-  → submission.yml: validate/label API intake if needed
-  → checkout leanprover/lean-eval (problem set + probes), evaluate
-  → write results/<login>.json here, push
-  → repository_dispatch results-advanced → lean-eval-leaderboard redeploys
+submission service
+  → verify the exact source and current catalog problem
+  → atomically accept append-only State and enqueue dispatch
+  → archive the immutable source snapshot with its per-submission envelope
+  → evaluate only the accepted problem and record its terminal lifecycle
+  → write any accepted immutable Result
+  → refresh the lifecycle-aware leaderboard
+
+legacy submission issue (temporary overlap)
+  → validate issue metadata and scan matching workspaces
+  → archive, evaluate, and append accepted Results
 ```
 
 `submission-reconciler.yml` is an hourly safety net: it closes submission

@@ -13,8 +13,9 @@ infrastructure, credential, protected-environment, production, canonical-data,
 and external non-PR operation. Exact readiness packets, preconditions,
 rollback, and post-change readbacks remain mandatory. An authenticated action
 performed by the maintainer because the agent lacks access is an operator
-handoff, not a new permission gate. The remaining approval exceptions are
-listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
+handoff, not a new permission gate. Scope and approval exceptions are defined
+by `leanprover/lean-eval`'s authoritative completion plan and execution
+runbook.
 
 Last reconciled: **2026-09-13**
 
@@ -28,17 +29,17 @@ Last reconciled: **2026-09-13**
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
 
 Public structured health currently reports protected submission implementation
-`e28473c5c83764a044cb9d2666e1b815517e6d0e`. Re-read exact active version IDs
+`0aef118adbe2e2e48917827839c6b37714cc7c50`. Re-read exact active version IDs
 from Cloudflare before any rollback or promotion. The current feature posture is:
 
-- production intake disabled in both configured and effective state;
+- production intake enabled in durable configured and effective state;
+- staging intake disabled;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - staging acceptance enabled and production acceptance disabled;
 - production promotion canary disabled;
-- the six result-owner, amendment-owner, amendment-maintainer, model-owner,
-  model-maintainer, and one-way publication-opt-in gates disabled;
-- both production maintainer lists empty while their APIs are disabled; and
+- production result-owner, amendment-owner, amendment-maintainer, model-owner,
+  model-maintainer, and one-way publication-opt-in gates enabled;
 - model consolidation and publication opt-out disabled.
 
 Automatic release publication is enabled. The terminal production canary is
@@ -78,11 +79,9 @@ No LeanEval resource is hosted in the unrelated
 | Staging rate-limit namespace | `24012001` |
 | Production rate-limit namespace | `24012002` |
 
-No dedicated hostname or DNS change is required. During the temporary intake
-pause, the leaderboard keeps problem statements visible and presents issue
-intake as primary. The prepared server-primary copy will again send users from
-`https://lean-lang.org/eval/submit/` to the production Worker origin only after
-the repaired intake boundary is qualified and restored. Issue intake remains
+No dedicated hostname or DNS change is required. The leaderboard keeps problem
+statements visible and sends users from `https://lean-lang.org/eval/submit/`
+to the production Worker origin. Issue intake remains
 available through no earlier than `2026-09-30T06:57:10Z`.
 
 | Environment | Intake Worker | Broker Worker | Replay Worker / container application |
@@ -160,9 +159,8 @@ secrets are unavailable to pull-request jobs.
 
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) is the normal
 deployment path. It validates code, deploys staging, runs the promotion canary,
-then deploys production with tracked intake and replay disabled and lifecycle
-gates in their reviewed tracked state. This lifecycle candidate may deploy only
-after its separate compatible all-false baseline is qualified. The protected
+then deploys production with each environment's tracked intake, replay, and
+lifecycle settings. The protected
 `submission-dispatch-promotion` environment (`20259251430`) requires reviewer
 `kim-em` and contains only `DISPATCH_PROMOTION_APPROVAL_GUARD`. Tag ruleset
 `21094118` rejects update or deletion of
