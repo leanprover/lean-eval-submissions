@@ -417,6 +417,27 @@
         "ref": "3dc17f41ccd0c86fa443687fac784a42f3798183",
         "repo": "leanprover/lean-eval-state-staging"
       }
+    },
+    {
+      "accepted_at": "2026-09-13T14:45:13Z",
+      "benchmark_commit": "29af5ee209d5724cbcf54f51dc0eee4c0b5af535",
+      "declared_model": "LeanEval P1 launch canary",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a09afc-7359-7a52-aa49-e079ea150ca0"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "web_access": false
+      },
+      "result_id": "r2_e5ced4f397340c4701a1c8e9021199b8f9a0e89f7588b066d51093223e1ff432",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "270b3358a135f64a6688636660c07772e8db0173",
+        "repo": "kim-em/lean-eval-intake-fixture"
+      }
     }
   ],
   "schema_version": 2,
