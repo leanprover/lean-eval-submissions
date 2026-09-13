@@ -71,6 +71,16 @@ import {
   type DispatchOutbox,
   type SubmissionView,
 } from "./submission-view";
+import {
+  ACTIVE_SUBMISSION_LIMIT,
+  decodeIntakeClaim,
+  decodeIntakeOwner,
+  intakeClaimPath,
+  intakeOwner,
+  intakeOwnerPath,
+  submissionIsActive,
+  type IntakeClaim,
+} from "./intake-index";
 import { ScheduledSubrequestBudgetError } from "./scheduled-subrequest-budget";
 import {
   decodeModelAliasView,
@@ -2658,8 +2668,22 @@ export class GitHubStateRepository {
     events: readonly WritableStateEvent[],
     view: SubmissionView,
     outbox: DispatchOutbox,
-  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
-    if (events.length !== 3) throw new TypeError("submission acceptance requires exactly three State events");
+    claim?: IntakeClaim,
+  ): Promise<
+    | { commit: string; created: true; status: "accepted"; view: SubmissionView }
+    | { commit: string; created: false; status: "duplicate"; view: SubmissionView }
+    | { commit: string; created: false; status: "limited"; activeSubmissionIds: readonly string[] }
+  > {
+    if (
+      (claim === undefined && events.length !== 3) ||
+      (claim !== undefined && (
+        events.length !== 4 ||
+        events[3]?.event_type !== "submission.terms_accepted" ||
+        events[3].causation_event_id !== events[2]?.event_id
+      ))
+    ) {
+      throw new TypeError("submission acceptance event batch is invalid");
+    }
     for (const event of events) validateStateEvent(event);
     const decodedView = decodeSubmissionView(view);
     const decodedOutbox = decodeDispatchOutbox(outbox);
@@ -2669,12 +2693,111 @@ export class GitHubStateRepository {
     const paths = events.map(stateEventPath);
     const viewPath = submissionViewPath(view.submission_id);
     const outboxPath = dispatchOutboxPath(view.submission_id);
+    if (claim === undefined) {
+      for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+        const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+        const current = await readSubmissionAt(this.#config, this.#fetcher, view.submission_id, snapshot.headSha);
+        if (current !== null) {
+          return { commit: snapshot.headSha, created: false, status: "duplicate", view: current };
+        }
+        const existing = await Promise.all(
+          [...paths, outboxPath].map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+        );
+        if (existing.some((entry) => entry.found)) {
+          throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
+        }
+        const commit = await createCommit(
+          this.#config,
+          this.#fetcher,
+          snapshot,
+          events,
+          [
+            { path: viewPath, value: decodedView },
+            { path: outboxPath, value: decodedOutbox },
+          ],
+          `Accept submission ${view.submission_id} and enqueue dispatch`,
+        );
+        if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+          return { commit, created: true, status: "accepted", view: decodedView };
+        }
+        if (attempt === MAX_WRITE_ATTEMPTS) {
+          throw new GitHubStateError(409, "State branch kept changing during submission acceptance");
+        }
+        await pause(attempt);
+      }
+      throw new Error("unreachable submission acceptance attempt");
+    }
+    const decodedClaim = decodeIntakeClaim(claim);
+    const expectedClaimPath = intakeClaimPath(decodedClaim.claim_id);
+    if (
+      decodedClaim.submission_id !== decodedView.submission_id ||
+      decodedClaim.owner_login !== decodedView.owner_login ||
+      decodedClaim.source_repository !== decodedView.submission.source_repository.toLowerCase() ||
+      decodedClaim.source_commit !== decodedView.submission.source_commit ||
+      decodedClaim.problem_id !== decodedView.submission.problem_id ||
+      decodedClaim.statement_revision !== decodedView.submission.statement_revision
+    ) {
+      throw new TypeError("intake claim disagrees with the submission view");
+    }
+    const emptyOwner = await intakeOwner(decodedView.owner_login, []);
+    const ownerPath = intakeOwnerPath(emptyOwner.owner_id);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await branchSnapshot(this.#config, this.#fetcher);
-      const current = await readSubmissionAt(this.#config, this.#fetcher, view.submission_id, snapshot.headSha);
-      if (current !== null) return { commit: snapshot.headSha, created: false, view: current };
+      const [existingClaim, existingOwner] = await Promise.all([
+        readPathAt(this.#config, this.#fetcher, expectedClaimPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, ownerPath, snapshot.headSha),
+      ]);
+      if (existingClaim.found) {
+        let priorClaim: IntakeClaim;
+        try {
+          priorClaim = decodeIntakeClaim(existingClaim.value);
+        } catch {
+          throw new StateEventConflictError(expectedClaimPath);
+        }
+        if (canonicalJson(priorClaim) !== canonicalJson({ ...decodedClaim, submission_id: priorClaim.submission_id })) {
+          throw new StateEventConflictError(expectedClaimPath);
+        }
+        const prior = await readSubmissionAt(
+          this.#config,
+          this.#fetcher,
+          priorClaim.submission_id,
+          snapshot.headSha,
+        );
+        if (prior === null) throw new StateEventConflictError(expectedClaimPath);
+        return { commit: snapshot.headSha, created: false, status: "duplicate", view: prior };
+      }
+      let ownerIds: readonly string[] = [];
+      if (existingOwner.found) {
+        let owner;
+        try {
+          owner = decodeIntakeOwner(existingOwner.value);
+        } catch {
+          throw new StateEventConflictError(ownerPath);
+        }
+        if (owner.owner_id !== emptyOwner.owner_id || owner.owner_login !== emptyOwner.owner_login) {
+          throw new StateEventConflictError(ownerPath);
+        }
+        ownerIds = owner.submission_ids;
+      }
+      const ownerViews = await Promise.all(ownerIds.map((submissionId) =>
+        readSubmissionAt(this.#config, this.#fetcher, submissionId, snapshot.headSha)));
+      if (ownerViews.some((ownerView) => ownerView?.owner_login !== decodedView.owner_login)) {
+        throw new StateEventConflictError(ownerPath);
+      }
+      const nowMilliseconds = Date.parse(decodedView.accepted_at);
+      const activeSubmissionIds = ownerViews
+        .filter((ownerView): ownerView is SubmissionView => ownerView !== null && submissionIsActive(ownerView, nowMilliseconds))
+        .map((ownerView) => ownerView.submission_id)
+        .sort();
+      if (activeSubmissionIds.length >= ACTIVE_SUBMISSION_LIMIT) {
+        return { commit: snapshot.headSha, created: false, status: "limited", activeSubmissionIds };
+      }
+      const nextOwner = await intakeOwner(
+        decodedView.owner_login,
+        [...activeSubmissionIds, decodedView.submission_id],
+      );
       const existing = await Promise.all(
-        [...paths, outboxPath].map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+        [...paths, viewPath, outboxPath].map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
       );
       if (existing.some((entry) => entry.found)) {
         throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
@@ -2687,11 +2810,13 @@ export class GitHubStateRepository {
         [
           { path: viewPath, value: decodedView },
           { path: outboxPath, value: decodedOutbox },
+          { path: expectedClaimPath, value: decodedClaim },
+          { path: ownerPath, value: nextOwner },
         ],
         `Accept submission ${view.submission_id} and enqueue dispatch`,
       );
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
-        return { commit, created: true, view: decodedView };
+        return { commit, created: true, status: "accepted", view: decodedView };
       }
       if (attempt === MAX_WRITE_ATTEMPTS) throw new GitHubStateError(409, "State branch kept changing during submission acceptance");
       await pause(attempt);

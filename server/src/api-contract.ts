@@ -47,11 +47,19 @@ export type SubmissionInput = Readonly<{
   production_metadata: ProductionMetadata;
 }>;
 
-export type IntakeSubmissionInput = Omit<SubmissionInput, "problem_group" | "source_visibility"> &
-  Readonly<{
-    problem_group: IntakeProblemGroup;
-    source_visibility: "private";
-  }>;
+export const INTAKE_TERMS_VERSION = "lean-eval-intake-terms-v1" as const;
+
+export type IntakeSubmissionInput = Readonly<{
+  schema_version: 2;
+  problem_id: string;
+  declared_model: string;
+  source_repository: string;
+  source_commit: string;
+  publication_choice: PublicationChoice;
+  production_metadata: ProductionMetadata;
+  terms_version: typeof INTAKE_TERMS_VERSION;
+  terms_accepted: true;
+}>;
 
 export type AgentChallengeInput = Readonly<{
   login: string;
@@ -340,14 +348,45 @@ export function decodeSubmissionInput(value: unknown): SubmissionInput {
 }
 
 export function decodeIntakeSubmissionInput(value: unknown): IntakeSubmissionInput {
-  const input = decodeSubmissionInput(value);
-  if (input.problem_group === "open-conjectures") {
-    throw new ApiDecodeError("problem_group is not accepted for new submissions");
+  const data = object(value, "submission");
+  exactFields(data, [
+    "declared_model",
+    "problem_id",
+    "production_metadata",
+    "publication_choice",
+    "schema_version",
+    "source_commit",
+    "source_repository",
+    "terms_accepted",
+    "terms_version",
+  ], [], "submission");
+  if (data.schema_version !== 2) throw new ApiDecodeError("submission schema_version must be 2");
+  if (typeof data.problem_id !== "string" || !PROBLEM.test(data.problem_id)) {
+    throw new ApiDecodeError("problem_id is not canonical");
   }
-  if (input.source_visibility !== "private") {
-    throw new ApiDecodeError("source_visibility is not accepted for new submissions");
+  if (typeof data.source_repository !== "string" || !REPOSITORY.test(data.source_repository)) {
+    throw new ApiDecodeError("source_repository is not canonical");
   }
-  return input as IntakeSubmissionInput;
+  if (typeof data.source_commit !== "string" || !COMMIT.test(data.source_commit)) {
+    throw new ApiDecodeError("source_commit must be a lowercase 40-character commit");
+  }
+  if (data.publication_choice !== "scheduled" && data.publication_choice !== "withheld") {
+    throw new ApiDecodeError("publication_choice is invalid");
+  }
+  if (data.terms_version !== INTAKE_TERMS_VERSION || data.terms_accepted !== true) {
+    throw new ApiDecodeError("current submission terms must be accepted");
+  }
+  return {
+    schema_version: 2,
+    problem_id: data.problem_id,
+    declared_model: boundedUtf8String(data.declared_model, "declared_model", 256),
+    source_repository: data.source_repository,
+    source_commit: data.source_commit,
+    publication_choice: data.publication_choice,
+    production_metadata: decodeProductionMetadata(data.production_metadata),
+    terms_version: INTAKE_TERMS_VERSION,
+    terms_accepted: true,
+  };
 }
 
 export function decodeAgentChallengeInput(value: unknown): AgentChallengeInput {
@@ -658,16 +697,11 @@ export function decodeResultCompletion(value: unknown): ResultCompletion {
 }
 
 export function assertSourcePolicy(
-  group: IntakeProblemGroup,
-  declared: "private",
+  publicationChoice: PublicationChoice,
   actualPrivate: boolean,
 ): void {
-  const actual = actualPrivate ? "private" : "public";
-  if (declared !== actual) {
-    throw new ApiDecodeError("declared source visibility does not match GitHub");
-  }
-  if (!actualPrivate) {
-    throw new ApiDecodeError(`${group} submissions require private source`);
+  if (!actualPrivate && publicationChoice !== "scheduled") {
+    throw new ApiDecodeError("public_source_cannot_be_withheld");
   }
 }
 

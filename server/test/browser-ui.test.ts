@@ -10,6 +10,7 @@ function fakeElement(value = "") {
   const listeners = new Map<string, FakeListener>();
   return {
     attributes,
+    checked: false,
     disabled: false,
     listeners,
     textContent: "",
@@ -46,7 +47,7 @@ describe("browser intake page", () => {
     expect(body).toContain("LeanEval staging intake");
     expect(body).toContain('href="/api/v1/oauth/start"');
     expect(body).toContain('id="submission-form"');
-    expect(body).toContain('src="/intake.js?v=intake-v3"');
+    expect(body).toContain('src="/intake.js?v=intake-v4"');
     expect(body).toContain('id="auth-status"');
     expect(body).toContain("GitHub sign-in is required");
     expect(body).toContain('id="submit-button"');
@@ -82,8 +83,13 @@ describe("browser intake page", () => {
     expect(body).toContain("authorized to license the submitted source under the Apache License 2.0");
     expect(body).toContain("exactly two UTC calendar months after acceptance");
     expect(body).toContain(
-      "Keep accepted source private only if you have a specific reason not to publish it",
+      "Keep accepted source private only for a private repository and a specific reason not to publish it",
     );
+    expect(body).not.toContain('id="problem_group"');
+    expect(body).not.toContain('id="statement_revision"');
+    expect(body).toContain('id="terms_accepted"');
+    expect(body).toContain("encrypted source archive may be retained indefinitely");
+    expect(body).toContain("do not include secrets");
     expect(body).toContain("the public result will show the solution as withheld");
     expect(body).toContain("you may irreversibly schedule release later");
     expect(body.toLowerCase()).not.toContain("opt out");
@@ -132,7 +138,9 @@ describe("browser intake page", () => {
     expect(script).toContain('setSubmitting(true, "Preparing submission…")');
     expect(script).toContain('submitButton.setAttribute("aria-busy", String(submitting))');
     expect(script).toContain('setSubmitting(false, "Submit exact commit")');
-    expect(script).toContain('source_visibility: "private"');
+    expect(script).not.toContain('source_visibility: "private"');
+    expect(script).toContain("schema_version: 2");
+    expect(script).toContain('terms_version: "lean-eval-intake-terms-v1"');
     expect(script).not.toContain("publication-opt-in");
     expect(script).not.toContain("publication-opt-out");
     expect(script).not.toContain('query.get("submission_id")');
@@ -149,13 +157,12 @@ describe("browser intake page", () => {
       ["#submit-button", fakeElement()],
       ["#submit-label", fakeElement("Submit exact commit")],
       ["#problem_id", fakeElement("two_plus_two")],
-      ["#problem_group", fakeElement("formalization-evaluation")],
-      ["#statement_revision", fakeElement("1")],
       ["#declared_model", fakeElement("Browser smoke")],
       ["#source_repository", fakeElement("example/private")],
       ["#source_commit", fakeElement("a".repeat(40))],
       ["#publication_choice", fakeElement("scheduled")],
       ["#production_metadata", fakeElement("{}")],
+      ["#terms_accepted", { ...fakeElement(), checked: true }],
     ]);
     const { storage } = fakeSessionStorage();
     const replaceState = vi.fn();

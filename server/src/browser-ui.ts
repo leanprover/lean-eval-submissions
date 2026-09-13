@@ -25,8 +25,6 @@ function escapeHtml(value: string): string {
 
 const BROWSER_FIELD_NAMES = [
   "problem_id",
-  "problem_group",
-  "statement_revision",
   "declared_model",
   "source_repository",
   "source_commit",
@@ -102,13 +100,7 @@ export function browserPage(
     </section>
     <form id="submission-form">
       <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}" maxlength="128"></label>
-      <label>Problem group
-        <select id="problem_group" name="problem_group">
-          <option value="formalization-evaluation">formalization-evaluation</option>
-          <option value="software-verification">software-verification</option>
-        </select>
-      </label>
-      <label>Statement revision <input id="statement_revision" name="statement_revision" required type="number" min="1" step="1" value="1"></label>
+      <small>LeanEval resolves the problem group and current statement revision from the live catalog. The problem must currently be open for submissions.</small>
       <label>Declared model <input id="declared_model" name="declared_model" required maxlength="256"></label>
       <label>Source repository <input id="source_repository" name="source_repository" required placeholder="owner/repository"></label>
       <label>Exact source commit <input id="source_commit" name="source_commit" required pattern="[0-9a-f]{40}" minlength="40" maxlength="40"></label>
@@ -117,9 +109,21 @@ export function browserPage(
           <option value="scheduled">scheduled release (recommended default)</option>
           <option value="withheld">keep accepted source private</option>
         </select>
-        <small>Scheduled release is the recommended default because it lets the community inspect and reuse accepted solutions. Choosing it confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Keep accepted source private only if you have a specific reason not to publish it; the public result will show the solution as withheld, and you may irreversibly schedule release later.</small>
+        <small>Scheduled release is the recommended default because it lets the community inspect and reuse accepted solutions. Choosing it confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Public repositories must use scheduled release. Keep accepted source private only for a private repository and a specific reason not to publish it; the public result will show the solution as withheld, and you may irreversibly schedule release later.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
+      <section class="prerequisite" aria-labelledby="submission-terms">
+        <h2 id="submission-terms">Submission terms</h2>
+        <ul>
+          <li>You are authorized to submit this source and the metadata above.</li>
+          <li>LeanEval may privately fetch, archive, build, and execute the exact commit.</li>
+          <li>The encrypted source archive may be retained indefinitely, including when evaluation rejects or fails.</li>
+          <li>The result and submitted metadata may be displayed publicly; do not include secrets.</li>
+          <li>If scheduled, accepted source will be published under Apache License 2.0 exactly two UTC calendar months after acceptance.</li>
+          <li>If initially withheld, a later decision to schedule publication is irreversible.</li>
+        </ul>
+        <label><span><input id="terms_accepted" name="terms_accepted" type="checkbox" required> I accept the current LeanEval submission terms.</span></label>
+      </section>
       <button id="submit-button" type="submit" aria-busy="false">
         <span id="submit-label">Submit exact commit</span>
         <span id="submit-spinner" class="spinner" aria-hidden="true"></span>
@@ -132,7 +136,7 @@ export function browserPage(
       <a href="/release/">Schedule release for an existing private submission</a>
     </nav>
   ` : "";
-  return page(title, status, authentication + submissionForm + releaseLink, intakeEnabled ? "/intake.js?v=intake-v3" : undefined);
+  return page(title, status, authentication + submissionForm + releaseLink, intakeEnabled ? "/intake.js?v=intake-v4" : undefined);
 }
 
 export function releasePage(
@@ -182,6 +186,8 @@ if (saved) {
       const element = document.querySelector("#" + name);
       if (element && typeof values[name] === "string") element.value = values[name];
     }
+    const terms = document.querySelector("#terms_accepted");
+    if (terms) terms.checked = values.terms_accepted === true;
   } catch { sessionStorage.removeItem("lean-eval-pending-submission"); }
 }
 const query = new URLSearchParams(location.search);
@@ -203,7 +209,10 @@ if (Number.isFinite(authExpiresAt) && authExpiresAt > Date.now()) {
 } else {
   sessionStorage.removeItem(authExpiryKey);
 }
-const currentValues = () => Object.fromEntries(fieldNames.map((name) => [name, document.querySelector("#" + name)?.value ?? ""]));
+const currentValues = () => ({
+  ...Object.fromEntries(fieldNames.map((name) => [name, document.querySelector("#" + name)?.value ?? ""])),
+  terms_accepted: document.querySelector("#terms_accepted")?.checked === true,
+});
 const saveCurrentValues = () => sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(currentValues()));
 const setSubmitting = (submitting, label) => {
   submitButton.disabled = submitting;
@@ -237,21 +246,33 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         grant: grantBody.grant,
         submission: {
+          schema_version: 2,
           problem_id: values.problem_id,
-          problem_group: values.problem_group,
-          statement_revision: Number(values.statement_revision),
           declared_model: values.declared_model,
           source_repository: values.source_repository,
           source_commit: values.source_commit,
-          source_visibility: "private",
           publication_choice: values.publication_choice,
           production_metadata: metadata,
+          terms_version: "lean-eval-intake-terms-v1",
+          terms_accepted: values.terms_accepted,
         },
       }),
     });
     const body = await response.json();
     result.textContent = JSON.stringify(body, null, 2);
-    if (!response.ok) throw new Error("Submission was rejected with HTTP " + response.status);
+    if (!response.ok) {
+      const fieldByError = {
+        problem_not_open_for_submission: "problem_id",
+        public_source_cannot_be_withheld: "publication_choice",
+      };
+      const field = document.querySelector("#" + (fieldByError[body.error] ?? ""));
+      if (field) {
+        field.setCustomValidity(body.error.replaceAll("_", " "));
+        field.reportValidity();
+        field.setCustomValidity("");
+      }
+      throw new Error("Submission was rejected with HTTP " + response.status);
+    }
     sessionStorage.removeItem("lean-eval-pending-submission");
     setSubmitting(false, "Submission queued");
     submitButton.disabled = true;

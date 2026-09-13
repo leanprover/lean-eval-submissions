@@ -102,6 +102,15 @@ export type SubmissionMetadataAmendedEvent = Omit<EventEnvelope, "causation_even
     payload: Readonly<{ production_metadata: Readonly<Record<string, unknown>> }>;
   }>;
 
+export type SubmissionTermsAcceptedEvent = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: "submission.terms_accepted";
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "github"; login: string }>;
+    payload: Readonly<{ terms_version: "lean-eval-intake-terms-v1" }>;
+  }>;
+
 export type SubmissionPublicationChangedEvent = Omit<EventEnvelope, "causation_event_id"> &
   Readonly<{
     event_type: "submission.publication_changed";
@@ -272,6 +281,7 @@ export type WritableStateEvent =
   | SubmissionReceivedEvent
   | AuthenticationNonceConsumedEvent
   | SubmissionMetadataAmendedEvent
+  | SubmissionTermsAcceptedEvent
   | SubmissionPublicationChangedEvent
   | WritableSubmissionLifecycleEvent
   | SubmissionResultIdentityConflictedEvent
@@ -507,6 +517,11 @@ function validateSubmissionChild(event: Record<string, unknown>): void {
     exactFields(payload, ["publication_choice"], "State event payload");
     if (payload.publication_choice !== "scheduled" && payload.publication_choice !== "withheld") {
       throw new TypeError("publication choice is invalid");
+    }
+  } else if (event.event_type === "submission.terms_accepted") {
+    exactFields(payload, ["terms_version"], "State event payload");
+    if (payload.terms_version !== "lean-eval-intake-terms-v1") {
+      throw new TypeError("submission terms version is invalid");
     }
   } else {
     exactFields(payload, ["production_metadata"], "State event payload");
@@ -853,7 +868,8 @@ export function validateStateEvent(value: unknown): asserts value is StateEvent 
     validateNonceEvent(event);
   } else if (
     event.event_type === "submission.metadata_amended" ||
-    event.event_type === "submission.publication_changed"
+    event.event_type === "submission.publication_changed" ||
+    event.event_type === "submission.terms_accepted"
   ) {
     validateSubmissionChild(event);
   } else if (

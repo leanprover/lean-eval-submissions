@@ -51,6 +51,12 @@ export type GitHubRepository = Readonly<{
   fullName: string;
   private: boolean;
 }>;
+export type IntakeProblem = Readonly<{
+  problemId: string;
+  problemGroup: "formalization-evaluation" | "software-verification";
+  statementRevision: number;
+  benchmarkCommit: string;
+}>;
 export type VerifiedResult = Readonly<{
   resultId: string;
   treeDigest: string;
@@ -124,7 +130,7 @@ function inlineContentBytes(
   return bytes;
 }
 
-function manifestField(text: string, field: "id" | "group"): string {
+function manifestField(text: string, field: "id" | "group" | "status"): string {
   const expression = new RegExp(`^${field} = "([A-Za-z0-9_-]+)"$`, "gmu");
   const matches = [...text.matchAll(expression)];
   if (matches.length !== 1 || matches[0]?.[1] === undefined) {
@@ -144,6 +150,15 @@ function manifestRevision(text: string): number {
     throw new GitHubProviderError(409, "benchmark manifest statement revision was invalid");
   }
   return revision;
+}
+
+function manifestBoolean(text: string, field: "visible"): boolean {
+  const expression = new RegExp(`^${field} = (true|false)$`, "gmu");
+  const matches = [...text.matchAll(expression)];
+  if (matches.length !== 1 || matches[0]?.[1] === undefined) {
+    throw new GitHubProviderError(409, `benchmark manifest ${field} was missing or ambiguous`);
+  }
+  return matches[0][1] === "true";
 }
 
 function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
@@ -942,6 +957,64 @@ export class GitHubProvider {
         results_path: resultsPath,
         canonical_record_sha256: canonicalRecordSha256,
       },
+    };
+  }
+
+  async resolveIntakeProblem(problemId: string): Promise<IntakeProblem> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(problemId)) {
+      throw new GitHubProviderError(409, "problem_id is not canonical");
+    }
+    if (!this.#benchmarkFetcher) {
+      throw new GitHubProviderError(503, "benchmark verification authority is not configured");
+    }
+    const branchResponse = await this.#benchmarkFetcher(
+      `${API}/repos/${BENCHMARK_REPOSITORY}/branches/main`,
+      { redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const branch = await jsonResponse(branchResponse, "protected benchmark branch response");
+    const branchCommit = object(branch.commit, "protected benchmark branch commit");
+    if (
+      branch.name !== "main" ||
+      branch.protected !== true ||
+      typeof branchCommit.sha !== "string" ||
+      !COMMIT.test(branchCommit.sha)
+    ) {
+      throw new GitHubProviderError(502, "protected benchmark branch response fields were invalid");
+    }
+    const benchmarkCommit = branchCommit.sha;
+    const path = `manifests/problems/${problemId}.toml`;
+    const query = new URLSearchParams({ ref: benchmarkCommit });
+    const headers = providerHeaders();
+    headers.set("x-lean-eval-expected-commit", benchmarkCommit);
+    const response = await this.#benchmarkFetcher(
+      `${API}/repos/${BENCHMARK_REPOSITORY}/contents/${path}?${query.toString()}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const data = await jsonResponse(response, "benchmark manifest contents response");
+    const bytes = inlineContentBytes(data, path, MAX_MANIFEST_BYTES, "benchmark manifest contents");
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
+    } catch {
+      throw new GitHubProviderError(502, "benchmark manifest was not valid UTF-8");
+    }
+    const manifestId = manifestField(text, "id");
+    const group = manifestField(text, "group");
+    const status = manifestField(text, "status");
+    const visible = manifestBoolean(text, "visible");
+    const revision = manifestRevision(text);
+    const accepted = visible && (
+      (group === "formalization-evaluation" && status === "active") ||
+      (group === "software-verification" && (status === "draft" || status === "active"))
+    );
+    if (manifestId !== problemId || !accepted) {
+      throw new GitHubProviderError(409, "problem_not_open_for_submission");
+    }
+    return {
+      problemId,
+      problemGroup: group,
+      statementRevision: revision,
+      benchmarkCommit,
     };
   }
 

@@ -76,6 +76,11 @@ import {
   type DispatchOutbox,
   type SubmissionView,
 } from "../src/submission-view";
+import {
+  ACTIVE_SUBMISSION_LIMIT,
+  submissionIsActive,
+  type IntakeClaim,
+} from "../src/intake-index";
 
 const SECRET = "test-secret-with-at-least-thirty-two-bytes";
 const NOW_MS = 1_777_777_777_000;
@@ -104,6 +109,46 @@ const SUBMISSION = {
   publication_choice: "scheduled",
   production_metadata: { web_access: false, input_tokens: 123 },
 } as const;
+const INTAKE_SUBMISSION = {
+  schema_version: 2,
+  problem_id: SUBMISSION.problem_id,
+  declared_model: SUBMISSION.declared_model,
+  source_repository: SUBMISSION.source_repository,
+  source_commit: SUBMISSION.source_commit,
+  publication_choice: SUBMISSION.publication_choice,
+  production_metadata: SUBMISSION.production_metadata,
+  terms_version: "lean-eval-intake-terms-v1",
+  terms_accepted: true,
+} as const;
+
+const intakeBenchmarkFetch = vi.fn<typeof fetch>((input) => {
+  const url = input instanceof Request ? input.url : input.toString();
+  if (url.endsWith("/repos/leanprover/lean-eval/branches/main")) {
+    return Promise.resolve(Response.json({
+      name: "main",
+      protected: true,
+      commit: { sha: "b".repeat(40) },
+    }));
+  }
+  if (url.includes("/contents/manifests/problems/two_plus_two.toml?")) {
+    const manifest = [
+      'id = "two_plus_two"',
+      'group = "formalization-evaluation"',
+      'status = "active"',
+      "visible = true",
+      "statement_revision = 2",
+      "",
+    ].join("\n");
+    return Promise.resolve(Response.json({
+      type: "file",
+      path: "manifests/problems/two_plus_two.toml",
+      encoding: "base64",
+      content: btoa(manifest),
+      size: new TextEncoder().encode(manifest).byteLength,
+    }));
+  }
+  return Promise.reject(new Error(`unexpected benchmark request: ${url}`));
+});
 
 function reachableLegacyResultFetch(contents: typeof fetch): typeof fetch {
   return (input, init) => {
@@ -136,6 +181,7 @@ class MemoryState implements StateAccess {
   readonly views = new Map<string, SubmissionView>();
   readonly outbox = new Map<string, DispatchOutbox>();
   readonly scheduledReleases = new Set<string>();
+  readonly intakeClaims = new Map<string, IntakeClaim>();
   created = true;
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
@@ -250,19 +296,50 @@ class MemoryState implements StateAccess {
     events: readonly WritableStateEvent[],
     view: SubmissionView,
     outbox: DispatchOutbox,
-  ): Promise<{ created: boolean; view: SubmissionView }> {
+    claim?: IntakeClaim,
+  ): Promise<
+    | { created: true; status: "accepted"; view: SubmissionView }
+    | { created: false; status: "duplicate"; view: SubmissionView }
+    | { created: false; status: "limited"; activeSubmissionIds: readonly string[] }
+  > {
     events.forEach((event) => validateStateEvent(event));
     const decodedView = decodeSubmissionView(view);
     const decodedOutbox = decodeDispatchOutbox(outbox);
     if (decodedView.submission_id !== decodedOutbox.submission_id) {
       throw new TypeError("submission acceptance identities disagree");
     }
+    if (claim !== undefined) {
+      const priorClaim = this.intakeClaims.get(claim.claim_id);
+      if (priorClaim !== undefined) {
+        const prior = this.views.get(priorClaim.submission_id);
+        if (prior === undefined) throw new Error("intake claim has no submission view");
+        return Promise.resolve({ created: false, status: "duplicate", view: prior });
+      }
+      const nowMilliseconds = Date.parse(decodedView.accepted_at);
+      const activeSubmissionIds = [...this.intakeClaims.values()]
+        .filter((candidate) => candidate.owner_login === claim.owner_login)
+        .map((candidate) => this.views.get(candidate.submission_id))
+        .filter((candidate): candidate is SubmissionView =>
+          candidate !== undefined && submissionIsActive(candidate, nowMilliseconds))
+        .map((candidate) => candidate.submission_id)
+        .sort();
+      if (activeSubmissionIds.length >= ACTIVE_SUBMISSION_LIMIT) {
+        return Promise.resolve({
+          created: false,
+          status: "limited",
+          activeSubmissionIds,
+        });
+      }
+      this.intakeClaims.set(claim.claim_id, claim);
+    }
     const existing = this.views.get(view.submission_id);
-    if (existing !== undefined) return Promise.resolve({ created: false, view: existing });
+    if (existing !== undefined) return Promise.resolve({ created: false, status: "duplicate", view: existing });
     this.events.push(...events);
     this.views.set(decodedView.submission_id, decodedView);
     this.outbox.set(decodedOutbox.submission_id, decodedOutbox);
-    return Promise.resolve({ created: this.created, view: decodedView });
+    return this.created
+      ? Promise.resolve({ created: true, status: "accepted", view: decodedView })
+      : Promise.resolve({ created: false, status: "duplicate", view: decodedView });
   }
 
   readSubmission(submissionId: string): Promise<SubmissionView | null> {
@@ -623,29 +700,93 @@ describe("strict API contract", () => {
       source_visibility: "public",
     };
     expect(() => decodeSubmissionInput(historicalOpenConjecture)).not.toThrow();
-    expect(() => decodeIntakeSubmissionInput(historicalOpenConjecture)).toThrow(
-      /not accepted for new submissions/u,
-    );
+    expect(() => decodeIntakeSubmissionInput(historicalOpenConjecture)).toThrow(/fields/u);
     expect(() => decodeBrowserSubmission({
       grant: "signed-grant",
       submission: historicalOpenConjecture,
-    })).toThrow(/not accepted for new submissions/u);
+    })).toThrow(/fields/u);
     expect(() => decodeChallengeSubmission({
       challenge: "signed-challenge",
       submission: historicalOpenConjecture,
-    })).toThrow(/not accepted for new submissions/u);
-    expect(() => decodeIntakeSubmissionInput({
-      ...SUBMISSION,
-      source_visibility: "public",
-    })).toThrow(/source_visibility is not accepted/u);
-    expect(() => assertSourcePolicy("software-verification", "private", false)).toThrow(/visibility/u);
-    expect(() => assertSourcePolicy("formalization-evaluation", "private", true)).not.toThrow();
+    })).toThrow(/fields/u);
+    const intake = {
+      schema_version: 2,
+      problem_id: SUBMISSION.problem_id,
+      declared_model: SUBMISSION.declared_model,
+      source_repository: SUBMISSION.source_repository,
+      source_commit: SUBMISSION.source_commit,
+      publication_choice: SUBMISSION.publication_choice,
+      production_metadata: SUBMISSION.production_metadata,
+      terms_version: "lean-eval-intake-terms-v1",
+      terms_accepted: true,
+    };
+    expect(() => decodeIntakeSubmissionInput(intake)).not.toThrow();
+    expect(() => decodeIntakeSubmissionInput({ ...intake, terms_accepted: false })).toThrow(/terms/u);
+    expect(() => assertSourcePolicy("withheld", false)).toThrow(/public_source_cannot_be_withheld/u);
+    expect(() => assertSourcePolicy("scheduled", false)).not.toThrow();
+    expect(() => assertSourcePolicy("withheld", true)).not.toThrow();
     const request = new Request("https://submit.test/api/v1/test", {
       method: "POST",
       headers: { "content-type": "application/json", "content-length": "999999" },
       body: "{}",
     });
     await expect(readJson(request)).rejects.toThrow(/too large/);
+  });
+
+  it("resolves only server-authoritative catalog entries open for intake", async () => {
+    const resolve = async (group: string, status: string, visible: boolean) => {
+      const fetcher = vi.fn<typeof fetch>((input, init) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (url.endsWith("/repos/leanprover/lean-eval/branches/main")) {
+          return Promise.resolve(Response.json({
+            name: "main",
+            protected: true,
+            commit: { sha: "b".repeat(40) },
+          }));
+        }
+        expect(new Headers(init?.headers).get("x-lean-eval-expected-commit")).toBe("b".repeat(40));
+        const manifest = [
+          'id = "two_plus_two"',
+          `group = "${group}"`,
+          `status = "${status}"`,
+          `visible = ${String(visible)}`,
+          "statement_revision = 2",
+          "",
+        ].join("\n");
+        return Promise.resolve(Response.json({
+          type: "file",
+          path: "manifests/problems/two_plus_two.toml",
+          encoding: "base64",
+          content: btoa(manifest),
+          size: new TextEncoder().encode(manifest).byteLength,
+        }));
+      });
+      const provider = new GitHubProvider(
+        undefined, undefined, undefined, undefined, undefined, undefined, fetcher,
+      );
+      return provider.resolveIntakeProblem("two_plus_two");
+    };
+
+    await expect(resolve("formalization-evaluation", "active", true)).resolves.toMatchObject({
+      problemGroup: "formalization-evaluation",
+      statementRevision: 2,
+      benchmarkCommit: "b".repeat(40),
+    });
+    await expect(resolve("software-verification", "draft", true)).resolves.toMatchObject({
+      problemGroup: "software-verification",
+      statementRevision: 2,
+    });
+    for (const [group, status, visible] of [
+      ["formalization-evaluation", "draft", true],
+      ["software-verification", "archived", true],
+      ["formalization-evaluation", "active", false],
+      ["open-conjectures", "active", true],
+    ] as const) {
+      await expect(resolve(group, status, visible)).rejects.toMatchObject({
+        status: 409,
+        message: "GitHub provider 409: problem_not_open_for_submission",
+      });
+    }
   });
 
   it("strictly separates maintainer decision shapes and rejects smuggled fields", () => {
@@ -1470,7 +1611,7 @@ describe("agent intake in workerd", () => {
       return Promise.reject(new Error(`unexpected provider request: ${url}`));
     });
     const github = new GitHubProvider(
-      upstream, "verification-token", undefined, undefined, undefined, undefined, undefined, upstream,
+      upstream, "verification-token", undefined, undefined, undefined, undefined, intakeBenchmarkFetch, upstream,
     );
     const challengeResponse = await handleRequest(
       jsonRequest("/api/v1/agent/challenges", {
@@ -1487,7 +1628,7 @@ describe("agent intake in workerd", () => {
     challenge = challengeBody.challenge;
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
     const response = await handleRequest(
-      jsonRequest("/api/v1/agent/submissions", { challenge, submission: SUBMISSION }),
+      jsonRequest("/api/v1/agent/submissions", { challenge, submission: INTAKE_SUBMISSION }),
       ENV,
       LIFECYCLE,
       { now: () => NOW_MS + 300_000, provider: github, state, dispatch },
@@ -1497,6 +1638,7 @@ describe("agent intake in workerd", () => {
       "authentication.nonce_consumed",
       "submission.received",
       "submission.metadata_amended",
+      "submission.terms_accepted",
     ]);
     expect(state.events[0]?.payload).not.toHaveProperty("nonce");
     expect(state.events[0]?.occurred_at).toBe(new Date(NOW_MS + 300_000).toISOString());
@@ -1550,30 +1692,147 @@ describe("agent intake in workerd", () => {
       return Promise.reject(new Error(`unexpected provider request: ${url}`));
     });
     const github = new GitHubProvider(
-      upstream, "verification-token", undefined, undefined, undefined, undefined, undefined, upstream,
+      upstream, "verification-token", undefined, undefined, undefined, undefined, intakeBenchmarkFetch, upstream,
     );
     const challengeResponse = await handleRequest(jsonRequest("/api/v1/agent/challenges", {
       login: "alice", gist_id: "abcde", source_repository: "alice/proofs", source_commit: "a".repeat(40),
     }), ENV, LIFECYCLE, { now: () => NOW_MS, provider: github, state });
     challenge = (await challengeResponse.json<{ challenge: string }>()).challenge;
     const failedDispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.reject(new Error("temporary")));
-    const first = await handleRequest(jsonRequest("/api/v1/agent/submissions", { challenge, submission: SUBMISSION }), ENV, LIFECYCLE, {
+    const first = await handleRequest(jsonRequest("/api/v1/agent/submissions", { challenge, submission: INTAKE_SUBMISSION }), ENV, LIFECYCLE, {
       now: () => NOW_MS + 1_000, provider: github, state, dispatch: failedDispatch,
     });
     expect(first.status).toBe(202);
     await expect(first.json()).resolves.toMatchObject({ dispatch_status: "failed" });
-    expect(state.events).toHaveLength(3);
+    expect(state.events).toHaveLength(4);
     expect(state.outbox).toHaveLength(1);
 
     const successfulDispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
-    const retry = await handleRequest(jsonRequest("/api/v1/agent/submissions", { challenge, submission: SUBMISSION }), ENV, LIFECYCLE, {
+    const retry = await handleRequest(jsonRequest("/api/v1/agent/submissions", { challenge, submission: INTAKE_SUBMISSION }), ENV, LIFECYCLE, {
       now: () => NOW_MS + 2_000, provider: github, state, dispatch: successfulDispatch,
     });
     expect(retry.status).toBe(200);
-    await expect(retry.json()).resolves.toMatchObject({ status: "already_received", dispatch_status: "succeeded" });
-    expect(state.events).toHaveLength(3);
-    expect(state.outbox).toHaveLength(0);
-    expect(successfulDispatch).toHaveBeenCalledOnce();
+    await expect(retry.json()).resolves.toMatchObject({ status: "already_submitted", dispatch_status: "failed" });
+    expect(state.events).toHaveLength(4);
+    expect(state.outbox).toHaveLength(1);
+    expect(successfulDispatch).not.toHaveBeenCalled();
+  });
+
+  it("returns the original submission for the same exact identity under a fresh grant", async () => {
+    const state = new MemoryState();
+    let currentChallenge = "";
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/gists/abcde")) return Promise.resolve(Response.json({
+        public: false,
+        owner: { id: 42, login: "alice" },
+        files: { "lean-eval-proof.txt": { truncated: false, content: currentChallenge } },
+      }));
+      if (url.includes("/git/ref/tags/")) {
+        return Promise.resolve(Response.json({ object: { type: "commit", sha: SUBMISSION.source_commit } }));
+      }
+      if (url.endsWith(`/git/commits/${SUBMISSION.source_commit}`)) {
+        return Promise.resolve(Response.json({ sha: SUBMISSION.source_commit }));
+      }
+      if (url.endsWith("/repos/alice/proofs")) {
+        return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
+      }
+      return Promise.reject(new Error(`unexpected provider request: ${url}`));
+    });
+    const github = new GitHubProvider(
+      upstream, undefined, upstream, undefined, undefined, undefined, intakeBenchmarkFetch, upstream,
+    );
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const responses: Response[] = [];
+    for (const offset of [0, 1]) {
+      const challenge = makeAgentChallenge({
+        login: "alice",
+        source_repository: SUBMISSION.source_repository,
+        source_commit: SUBMISSION.source_commit,
+        gist_id: "abcde",
+      }, Math.floor(NOW_MS / 1000) + offset);
+      currentChallenge = await signToken(SECRET, challenge);
+      responses.push(await handleRequest(
+        jsonRequest("/api/v1/agent/submissions", {
+          challenge: currentChallenge,
+          submission: INTAKE_SUBMISSION,
+        }),
+        ENV,
+        LIFECYCLE,
+        { now: () => NOW_MS + offset * 1_000, provider: github, state, dispatch },
+      ));
+    }
+
+    expect(responses.map((response) => response.status)).toEqual([202, 200]);
+    const first = await responses[0]?.json<{ submission_id: string }>();
+    await expect(responses[1]?.json()).resolves.toMatchObject({
+      status: "already_submitted",
+      submission_id: first?.submission_id,
+    });
+    expect(state.events).toHaveLength(4);
+    expect(state.views).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a fifth active submission for one owner without mutating State", async () => {
+    const state = new MemoryState();
+    let currentChallenge = "";
+    let currentCommit = "";
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/gists/abcde")) return Promise.resolve(Response.json({
+        public: false,
+        owner: { id: 42, login: "alice" },
+        files: { "lean-eval-proof.txt": { truncated: false, content: currentChallenge } },
+      }));
+      if (url.includes("/git/ref/tags/")) {
+        return Promise.resolve(Response.json({ object: { type: "commit", sha: currentCommit } }));
+      }
+      if (url.endsWith(`/git/commits/${currentCommit}`)) {
+        return Promise.resolve(Response.json({ sha: currentCommit }));
+      }
+      if (url.endsWith("/repos/alice/proofs")) {
+        return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
+      }
+      return Promise.reject(new Error(`unexpected provider request: ${url}`));
+    });
+    const github = new GitHubProvider(
+      upstream, undefined, upstream, undefined, undefined, undefined, intakeBenchmarkFetch, upstream,
+    );
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const responses: Response[] = [];
+    for (let index = 0; index <= ACTIVE_SUBMISSION_LIMIT; index += 1) {
+      currentCommit = index.toString(16).padStart(40, "0");
+      const challenge = makeAgentChallenge({
+        login: "alice",
+        source_repository: SUBMISSION.source_repository,
+        source_commit: currentCommit,
+        gist_id: "abcde",
+      }, Math.floor(NOW_MS / 1000) + index);
+      currentChallenge = await signToken(SECRET, challenge);
+      responses.push(await handleRequest(
+        jsonRequest("/api/v1/agent/submissions", {
+          challenge: currentChallenge,
+          submission: { ...INTAKE_SUBMISSION, source_commit: currentCommit },
+        }),
+        ENV,
+        LIFECYCLE,
+        { now: () => NOW_MS + index * 1_000, provider: github, state, dispatch },
+      ));
+    }
+
+    expect(responses.map((response) => response.status)).toEqual([202, 202, 202, 202, 429]);
+    const limitedResponse = responses[4];
+    if (limitedResponse === undefined) throw new Error("missing limited response");
+    const limitedBody = await limitedResponse.json();
+    expect(limitedBody).toMatchObject({
+      error: "owner_active_submission_limit",
+      limit: ACTIVE_SUBMISSION_LIMIT,
+    });
+    expect([...limitedResponse.headers.entries()]).toContainEqual(["retry-after", "300"]);
+    expect(state.events).toHaveLength(ACTIVE_SUBMISSION_LIMIT * 4);
+    expect(state.views).toHaveLength(ACTIVE_SUBMISSION_LIMIT);
+    expect(dispatch).toHaveBeenCalledTimes(ACTIVE_SUBMISSION_LIMIT);
   });
 
   it("requires an authenticated owner and same-origin mutation", async () => {
@@ -1627,7 +1886,7 @@ describe("agent intake in workerd", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      intakeBenchmarkFetch,
       workflowReader,
     );
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
@@ -1639,7 +1898,7 @@ describe("agent intake in workerd", () => {
           cookie: `lean_eval_session=${sessionToken}`,
           origin: "https://submit.test",
         },
-        body: JSON.stringify({ grant: grantToken, submission: SUBMISSION }),
+        body: JSON.stringify({ grant: grantToken, submission: INTAKE_SUBMISSION }),
       }),
       ENV,
       LIFECYCLE,
@@ -1697,12 +1956,12 @@ describe("agent intake in workerd", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      intakeBenchmarkFetch,
       workflowReader,
     );
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
     const response = await handleRequest(
-      jsonRequest("/api/v1/agent/submissions", { challenge, submission: SUBMISSION }),
+      jsonRequest("/api/v1/agent/submissions", { challenge, submission: INTAKE_SUBMISSION }),
       ENV,
       LIFECYCLE,
       { now: () => NOW_MS, provider: github, state, dispatch },
