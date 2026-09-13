@@ -85,6 +85,7 @@ import {
   type GitHubIdentity,
 } from "./github-provider";
 import { githubBrokerFetch } from "./github-broker-client";
+import { intakeClaim, type IntakeClaim } from "./intake-index";
 import { intakeEnablement, type IntakeEnablement } from "./intake-enablement";
 import { addCalendarMonths } from "./release-policy";
 import {
@@ -241,7 +242,12 @@ export type StateAccess = Readonly<{
     events: readonly WritableStateEvent[],
     view: SubmissionView,
     outbox: DispatchOutbox,
-  ): Promise<{ created: boolean; view: SubmissionView }>;
+    claim?: IntakeClaim,
+  ): Promise<
+    | { created: true; status: "accepted"; view: SubmissionView }
+    | { created: false; status: "duplicate"; view: SubmissionView }
+    | { created: false; status: "limited"; activeSubmissionIds: readonly string[] }
+  >;
   readSubmission(submissionId: string): Promise<SubmissionView | null>;
   appendSubmissionMutation(
     event: WritableStateEvent,
@@ -732,7 +738,7 @@ type PromotionCanaryMaterial = Readonly<{
   acceptedAtMilliseconds: number;
   evidenceEvent: WritableStateEvent;
   grant: SubmissionGrant;
-  input: IntakeSubmissionInput;
+  input: SubmissionInput;
 }>;
 
 function decodePromotionCanaryRequest(value: unknown): PromotionCanaryRequest {
@@ -830,7 +836,7 @@ async function promotionCanaryMaterial(
     issued_at: issuedAt,
     expires_at: issuedAt + 600,
   };
-  const input: IntakeSubmissionInput = {
+  const input: SubmissionInput = {
     problem_id: "two_plus_two",
     problem_group: "formalization-evaluation",
     statement_revision: 1,
@@ -1006,6 +1012,25 @@ function metadataEvent(
   };
 }
 
+function termsEvent(
+  eventId: string,
+  submissionId: string,
+  metadataEventId: string,
+  login: string,
+  occurredAtMilliseconds: number,
+): WritableStateEvent {
+  return {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "submission.terms_accepted",
+    occurred_at: canonicalMilliseconds(occurredAtMilliseconds),
+    subject_id: submissionId,
+    causation_event_id: metadataEventId,
+    actor: { kind: "github", login },
+    payload: { terms_version: "lean-eval-intake-terms-v1" },
+  };
+}
+
 function requireDispatchConfiguration(env: RuntimeEnv, dependencies: ApiDependencies): void {
   if (!/^lean-eval-dispatch\/[0-9a-f]{40}$/.test(env.DISPATCH_WORKFLOW_REF ?? "")) {
     throw new GitHubProviderError(503, "immutable dispatch workflow tag is not configured");
@@ -1174,11 +1199,29 @@ async function acceptSubmission(
 ): Promise<Response> {
   requireDispatchConfiguration(env, dependencies);
   if (grant.login !== identity.login) throw new AuthError("authenticated identity does not match grant");
-  const repository = await submissionStage(
-    "source_repository_verification",
-    () => provider(env, dependencies).submissionRepository(input.source_repository, input.source_commit),
-  );
-  assertSourcePolicy(input.problem_group, input.source_visibility, repository.private);
+  const github = provider(env, dependencies);
+  const [repository, problem] = await Promise.all([
+    submissionStage(
+      "source_repository_verification",
+      () => github.submissionRepository(input.source_repository, input.source_commit),
+    ),
+    submissionStage(
+      "problem_catalog_verification",
+      () => github.resolveIntakeProblem(input.problem_id),
+    ),
+  ]);
+  assertSourcePolicy(input.publication_choice, repository.private);
+  const acceptedInput: SubmissionInput = {
+    problem_id: problem.problemId,
+    problem_group: problem.problemGroup,
+    statement_revision: problem.statementRevision,
+    declared_model: input.declared_model,
+    source_repository: repository.fullName,
+    source_commit: input.source_commit,
+    source_visibility: repository.private ? "private" : "public",
+    publication_choice: input.publication_choice,
+    production_metadata: input.production_metadata,
+  };
   const acceptedAtMilliseconds = dependencies.now?.() ?? Date.now();
   const workflowRef = env.DISPATCH_WORKFLOW_REF ?? "";
   const consumedNonce = await submissionStage(
@@ -1187,29 +1230,67 @@ async function acceptSubmission(
   );
   const events: WritableStateEvent[] = [
     consumedNonce,
-    receivedEvent(grant.submission_id, identity.login, input, acceptedAtMilliseconds + 1),
+    receivedEvent(grant.submission_id, identity.login, acceptedInput, acceptedAtMilliseconds + 1),
     metadataEvent(grant.metadata_event_id, grant.submission_id, identity.login, input.production_metadata, acceptedAtMilliseconds + 2),
+    termsEvent(
+      newEventId(acceptedAtMilliseconds + 3),
+      grant.submission_id,
+      grant.metadata_event_id,
+      identity.login,
+      acceptedAtMilliseconds + 3,
+    ),
   ];
   const ledger = state(env, dependencies);
-  const proposedView = initialSubmissionView(grant, identity.login, input, acceptedAtMilliseconds, workflowRef);
+  const proposedView = initialSubmissionView(grant, identity.login, acceptedInput, acceptedAtMilliseconds, workflowRef);
   if (!currentIntake(env, dependencies).effective) {
     throw new GitHubStateError(503, "intake lease expired before State acceptance");
   }
   const outcome = await submissionStage(
     "state_acceptance",
-    () => ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView)),
+    async () => ledger.acceptSubmission(
+      events,
+      proposedView,
+      initialDispatchOutbox(proposedView),
+      await intakeClaim(identity.login, acceptedInput, grant.submission_id),
+    ),
   );
+  if (outcome.status === "limited") {
+    return json({
+      error: "owner_active_submission_limit",
+      limit: 4,
+      active_submission_ids: outcome.activeSubmissionIds,
+    }, 429, { "retry-after": "300" });
+  }
+  if (outcome.status === "duplicate") {
+    return json({
+      submission_id: outcome.view.submission_id,
+      status: "already_submitted",
+      dispatch_status: outcome.view.dispatch.status,
+      canonical_problem: {
+        problem_id: outcome.view.submission.problem_id,
+        problem_group: outcome.view.submission.problem_group,
+        statement_revision: outcome.view.submission.statement_revision,
+      },
+      source_visibility: outcome.view.submission.source_visibility,
+    }, 200, { location: `/api/v1/submissions/${outcome.view.submission_id}` });
+  }
   const reconciled = await submissionStage(
     "dispatch_reconciliation",
-    () => reconcileDispatch(env, dependencies, ledger, outcome.view, acceptedAtMilliseconds + 3),
+    () => reconcileDispatch(env, dependencies, ledger, outcome.view, acceptedAtMilliseconds + 4),
   );
   return json(
     {
       submission_id: grant.submission_id,
-      status: outcome.created ? "queued" : "already_received",
+      status: "queued",
       dispatch_status: reconciled.dispatch.status,
+      canonical_problem: {
+        problem_id: acceptedInput.problem_id,
+        problem_group: acceptedInput.problem_group,
+        statement_revision: acceptedInput.statement_revision,
+      },
+      source_visibility: acceptedInput.source_visibility,
     },
-    reconciled.dispatch.status === "succeeded" && !outcome.created ? 200 : 202,
+    202,
     { location: `/api/v1/submissions/${grant.submission_id}` },
   );
 }
@@ -1302,7 +1383,7 @@ async function promotionCanary(
   if (!repository.private || repository.fullName.toLowerCase() !== PROMOTION_CANARY_REPOSITORY.toLowerCase()) {
     throw new GitHubProviderError(409, "promotion canary fixture repository identity or visibility changed");
   }
-  assertSourcePolicy(material.input.problem_group, material.input.source_visibility, repository.private);
+  assertSourcePolicy(material.input.publication_choice, repository.private);
 
   const ledger = state(env, dependencies);
   const consumedNonce = await nonceEvent(
@@ -1339,6 +1420,9 @@ async function promotionCanary(
     "promotion_canary_state_acceptance",
     () => ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView)),
   );
+  if (outcome.status === "limited") {
+    throw new GitHubStateError(502, "promotion canary unexpectedly reached the intake limit");
+  }
   assertPromotionCanaryView(proposedView, outcome.view);
   const proveContention = ledger.provePromotionCanaryContention?.bind(ledger);
   if (proveContention === undefined) {
@@ -2112,9 +2196,16 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const response = await acceptSubmission(env, dependencies, identity, challenge, body.submission, "agent");
     const agentSession = makeAgentSession(identity, challenge, now);
     const responseBody = await response.json<Record<string, unknown>>();
-    return json({ ...responseBody, session_token: await signToken(configuredSecret(env), agentSession) }, response.status, {
-      location: response.headers.get("location") ?? "",
-    });
+    const responseHeaders = new Headers();
+    for (const name of ["location", "retry-after"]) {
+      const value = response.headers.get(name);
+      if (value !== null) responseHeaders.set(name, value);
+    }
+    return json(
+      { ...responseBody, session_token: await signToken(configuredSecret(env), agentSession) },
+      response.status,
+      responseHeaders,
+    );
   }
   if (request.method === "POST" && url.pathname === "/api/v1/model-identities") {
     requireModelIdentityOwnerApi(env);
@@ -2447,7 +2538,12 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
 }
 
 function errorResponse(error: unknown): Response {
-  if (error instanceof ApiDecodeError) return json({ error: "invalid_request", detail: error.message }, 400);
+  if (error instanceof ApiDecodeError) {
+    if (error.message === "public_source_cannot_be_withheld") {
+      return json({ error: "public_source_cannot_be_withheld" }, 409);
+    }
+    return json({ error: "invalid_request", detail: error.message }, 400);
+  }
   if (error instanceof AuthError) return json({ error: "authentication_failed" }, 401);
   if (error instanceof StateUpdateOutcomeUnknownError) {
     return json({ error: "state_unavailable" }, 503);
@@ -2467,6 +2563,9 @@ function errorResponse(error: unknown): Response {
       : json({ error: "idempotency_conflict" }, 409);
   }
   if (error instanceof GitHubProviderError) {
+    if (error.message.endsWith(": problem_not_open_for_submission")) {
+      return json({ error: "problem_not_open_for_submission" }, 409);
+    }
     const status = error.status === 409 ? 409 : error.status === 404 ? 422 : 503;
     return json({ error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable" }, status);
   }

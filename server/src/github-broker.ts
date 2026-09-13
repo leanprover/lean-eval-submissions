@@ -353,7 +353,6 @@ function assertBenchmarkRequest(request: BrokerRequest, url: URL): string {
   if (
     request.method !== "GET" ||
     request.body !== null ||
-    request.expected_commit === null ||
     repository.toLowerCase() !== "leanprover/lean-eval" ||
     (!contentRead && !branchRead && !compareRead)
   ) {
