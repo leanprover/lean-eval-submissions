@@ -168,6 +168,8 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
   ["expectation schema is invalid", "expectation_schema_invalid"],
   ["encoded input is invalid", "encoded_input_invalid"],
   ["decoded input exceeds size limit", "decoded_input_too_large"],
+  ["assembled archive is unavailable", "assembled_archive_unavailable"],
+  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["plaintext size mismatch", "plaintext_size_mismatch"],
@@ -200,7 +202,9 @@ const HISTORICAL_PUBLIC_COMMAND =
 const ARCHIVE_ASSEMBLE_COMMAND = "/opt/lean-eval/replay-assemble-archive";
 const ARCHIVE_ASSEMBLE_MANIFEST = "/workspace/archive-assembly.json";
 const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
-const ARCHIVE_PART_DIRECTORY = "/workspace/archive-parts";
+// Parts sit directly in /workspace under a fixed prefix rather than in a baked
+// subdirectory, which a runtime mount over /workspace could shadow.
+const ARCHIVE_PART_PREFIX = "/workspace/archive-part-";
 const ARCHIVE_ASSEMBLE_FAILURES = new Map([
   ["archive assembly manifest is invalid", "assembly_manifest_invalid"],
   ["archive assembly part is missing", "assembly_part_missing"],
@@ -229,6 +233,8 @@ const AUTHORITATIVE_COMMAND_FAILURES = new Map([
     "measurement configuration does not match the executor limits",
     "measurement_limits_mismatch",
   ],
+  ["assembled archive is unavailable", "assembled_archive_unavailable"],
+  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["archive plaintext identity mismatch", "archive_plaintext_identity_mismatch"],
@@ -1536,8 +1542,13 @@ async function handleArchiveUploadPart(
   // A fresh path per request. Deterministic per-index names would let a retry or
   // a delayed duplicate rewrite bytes that an earlier part already committed,
   // including after finalize had accepted them.
-  const path = `${ARCHIVE_PART_DIRECTORY}/${crypto.randomUUID()}.part`;
-  const written = await streamPartToSandbox(sandbox, path, body, MAX_PART_BYTES);
+  const path = `${ARCHIVE_PART_PREFIX}${crypto.randomUUID()}`;
+  const written = await streamPartToSandbox(
+    sandbox,
+    path,
+    body as ReadableStream<Uint8Array>,
+    MAX_PART_BYTES,
+  );
   if (written.bytes !== header.part_bytes || written.sha256 !== header.part_sha256) {
     throw new ArchiveUploadContractError("upload part does not match its declared digest");
   }
