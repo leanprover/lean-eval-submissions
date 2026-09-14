@@ -27,7 +27,6 @@ const MAX_FINALIZE_REQUEST_BYTES = 64 * 1024;
 export const ARCHIVE_UPLOAD_KINDS = [
   "authoritative-archive",
   "staging-archive-acceptance",
-  "historical-public-source",
 ] as const;
 
 export type ArchiveUploadKind = typeof ARCHIVE_UPLOAD_KINDS[number];
