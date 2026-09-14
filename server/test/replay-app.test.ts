@@ -1456,9 +1456,10 @@ describe("chunked archive upload routes", () => {
     const response = await uploadPart(sandbox, receipts, payload);
     expect(response.status).toBe(202);
     const [path] = [...sandbox.files.keys()];
+    const [written] = [...sandbox.files.values()];
     // A fresh unique name per request: a retry must never rewrite committed bytes.
     expect(path).toMatch(/^\/workspace\/archive-part-[0-9a-f-]{36}$/);
-    expect(sandbox.files.get(path!)).toEqual(payload);
+    expect(written).toEqual(payload);
   });
 
   it("refuses a part whose bytes do not match its declared digest", async () => {
