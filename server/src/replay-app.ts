@@ -22,6 +22,15 @@ import {
   type ReplayVerdict,
   validateReplayVerdict,
 } from "./authoritative-replay-contract";
+import {
+  ArchiveUploadContractError,
+  MAX_PART_BYTES,
+  readArchiveUploadFinalizeRequest,
+  readArchiveUploadPartHeader,
+  sameArchiveUploadIdentity,
+  type ArchiveUploadIdentity,
+  type ArchiveUploadKind,
+} from "./archive-upload-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
 import {
   ReplayArchiveContractError,
@@ -58,6 +67,10 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
+  | "readArchiveUpload"
+  | "claimArchiveUpload"
+  | "commitArchiveUploadPart"
+  | "finalizeArchiveUpload"
 >;
 
 type HistoricalCleanupStore = Pick<
@@ -160,6 +173,30 @@ const HISTORICAL_PUBLIC_COMMAND =
   + "> /workspace/historical-public-source.tar.gz "
   + "&& rm /workspace/historical-public-source.tar.gz.b64 "
   + "&& /opt/lean-eval/historical-public-runner";
+// Assembly is a fixed baked command with no arguments; it reads the manifest the
+// Worker writes. Running it at finalize, before the one-use key unwrap, means a
+// missing part or a Sandbox that idled out is discovered while the capability is
+// still unspent and the upload can simply be retried.
+const ARCHIVE_ASSEMBLE_COMMAND = "/opt/lean-eval/replay-assemble-archive";
+const ARCHIVE_ASSEMBLE_MANIFEST = "/workspace/archive-assembly.json";
+const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
+const ARCHIVE_PART_DIRECTORY = "/workspace/archive-parts";
+const ARCHIVE_ASSEMBLE_FAILURES = new Map([
+  ["archive assembly manifest is invalid", "assembly_manifest_invalid"],
+  ["archive assembly part is missing", "assembly_part_missing"],
+  ["archive assembly part size mismatch", "assembly_part_size_mismatch"],
+  ["archive assembly size mismatch", "assembly_size_mismatch"],
+  ["archive assembly digest mismatch", "assembly_digest_mismatch"],
+]);
+const ARCHIVE_ASSEMBLE_PREFIX = "replay-assemble-archive: ";
+
+/** Where each upload kind assembles, and which process later consumes it. */
+const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind, string> = {
+  "authoritative-archive": "/workspace/archive.tar.gz.age",
+  "staging-archive-acceptance": "/workspace/archive.tar.gz.age",
+  "historical-public-source": "/workspace/historical-public-source.tar.gz",
+};
+
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
 const AUTHORITATIVE_CLEANUP_AFTER_MS = 7 * 60 * 60 * 1000;
 const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -290,6 +327,14 @@ function safeCommandFailureDetail(command: string, stderr: string): string | und
   }
   if (command === "/opt/lean-eval/replay-archive-acceptance") {
     return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
+  }
+  if (command === ARCHIVE_ASSEMBLE_COMMAND) {
+    const output = stderr.trim();
+    if (output.includes("\n") || !output.startsWith(ARCHIVE_ASSEMBLE_PREFIX)) {
+      return "unclassified_assembly_failure";
+    }
+    return ARCHIVE_ASSEMBLE_FAILURES.get(output.slice(ARCHIVE_ASSEMBLE_PREFIX.length))
+      ?? "unclassified_assembly_failure";
   }
   return undefined;
 }
@@ -1376,22 +1421,217 @@ async function writeSandboxFile(
   }
 }
 
-function streamedText(contents: string): ReadableStream<Uint8Array> {
-  // Keep large base64 archives off the inline Sandbox RPC message path while
-  // preserving the exact text file consumed by the locked executor image.
-  const encoder = new TextEncoder();
-  let offset = 0;
-  return new ReadableStream<Uint8Array>({
-    pull(controller) {
-      if (offset === contents.length) {
-        controller.close();
-        return;
+/**
+ * Stream one upload part into the Sandbox, digesting and counting as it passes.
+ *
+ * A pass-through transform rather than `body.tee()`: with `tee`, the digest
+ * branch drains faster than the Sandbox write and the runtime buffers the whole
+ * part for the slower branch, which is the memory behaviour this transport
+ * exists to remove. Here nothing larger than one chunk is ever resident.
+ *
+ * `content-length` is optional and client-controlled, so the count taken here is
+ * the only real bound on how many bytes a part may carry.
+ */
+async function streamPartToSandbox(
+  sandbox: SandboxClient,
+  path: string,
+  body: ReadableStream<Uint8Array>,
+  maximumBytes: number,
+): Promise<{ bytes: number; sha256: string }> {
+  const digestStream = new DigestStream("SHA-256");
+  const writer = digestStream.getWriter();
+  let bytes = 0;
+  let overflowed = false;
+  const counted = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    async transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      if (bytes > maximumBytes) {
+        overflowed = true;
+        throw new Error("upload part exceeds its size limit");
       }
-      const end = Math.min(offset + 64 * 1024, contents.length);
-      controller.enqueue(encoder.encode(contents.slice(offset, end)));
-      offset = end;
+      await writer.write(chunk);
+      controller.enqueue(chunk);
     },
+    async flush() {
+      await writer.close();
+    },
+  }));
+  let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
+  try {
+    result = await sandbox.writeFile(path, counted);
+  } catch {
+    if (overflowed) throw new ArchiveUploadContractError("upload part exceeds its size limit");
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  if (!result.success || result.path !== path) {
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  // `WriteFileResult` carries no byte count, so the Worker cannot confirm here
+  // that the container received everything it was sent. The assembly helper
+  // re-measures every part against the manifest before the key unwrap, which
+  // catches a truncated transfer while the capability is still unspent.
+  const digest = new Uint8Array(await digestStream.digest);
+  return {
+    bytes,
+    sha256: [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+  };
+}
+
+function uploadIdentity(value: {
+  upload_kind: ArchiveUploadKind;
+  runner_nonce: string;
+  archive_sha256: string;
+  archive_bytes: number;
+  part_count: number;
+}): ArchiveUploadIdentity {
+  return {
+    schema_version: 1,
+    upload_kind: value.upload_kind,
+    runner_nonce: value.runner_nonce,
+    archive_sha256: value.archive_sha256,
+    archive_bytes: value.archive_bytes,
+    part_count: value.part_count,
+  };
+}
+
+/**
+ * Accept one part. Claiming happens here, on the first part, rather than at the
+ * replay start: the upload creates the Sandbox, so the durable record that will
+ * later destroy an abandoned one has to exist from the first byte.
+ */
+async function handleArchiveUploadPart(
+  request: Request,
+  store: TerminalReceiptStore,
+  sandbox: SandboxClient,
+  expectedKind: ArchiveUploadKind,
+): Promise<Response> {
+  const header = readArchiveUploadPartHeader(request);
+  if (header.upload_kind !== expectedKind) {
+    throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
+  }
+  const body = request.body;
+  if (body === null) throw new ArchiveUploadContractError("upload part requires a body");
+  const identity = uploadIdentity(header);
+  await store.claimArchiveUpload(identity);
+  // A fresh path per request. Deterministic per-index names would let a retry or
+  // a delayed duplicate rewrite bytes that an earlier part already committed,
+  // including after finalize had accepted them.
+  const path = `${ARCHIVE_PART_DIRECTORY}/${crypto.randomUUID()}.part`;
+  const written = await streamPartToSandbox(sandbox, path, body, MAX_PART_BYTES);
+  if (written.bytes !== header.part_bytes || written.sha256 !== header.part_sha256) {
+    throw new ArchiveUploadContractError("upload part does not match its declared digest");
+  }
+  await store.commitArchiveUploadPart(identity, {
+    index: header.part_index,
+    sha256: written.sha256,
+    bytes: written.bytes,
+    path,
   });
+  return json({
+    schema_version: 1,
+    upload_kind: header.upload_kind,
+    part_index: header.part_index,
+    status: "stored",
+  }, 202);
+}
+
+/**
+ * Assemble and verify inside the container, before any key unwrap. Verifying
+ * only in the replay image would be enough for integrity but not for readiness:
+ * a missing part or an idled-out container would then surface after the one-use
+ * capability had been spent.
+ */
+async function handleArchiveUploadFinalize(
+  request: Request,
+  store: TerminalReceiptStore,
+  sandbox: SandboxClient,
+  expectedKind: ArchiveUploadKind,
+): Promise<Response> {
+  const finalize = await readArchiveUploadFinalizeRequest(request);
+  if (finalize.upload_kind !== expectedKind) {
+    throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
+  }
+  const identity = uploadIdentity(finalize);
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) throw new ArchiveUploadContractError("archive upload was not claimed");
+  const committed = Array.isArray(stored.parts) ? stored.parts : [];
+  if (
+    !sameArchiveUploadIdentity(
+      uploadIdentity(stored as unknown as ArchiveUploadIdentity),
+      identity,
+    )
+    || committed.length !== finalize.part_count
+  ) {
+    throw new ArchiveUploadContractError("archive upload does not match the finalize request");
+  }
+  const ordered = finalize.parts.map((expected) => {
+    const match = committed
+      .map((entry) => objectValue(entry))
+      .find((entry) => entry !== null && entry.index === expected.index);
+    if (
+      match === null
+      || match === undefined
+      || match.sha256 !== expected.sha256
+      || match.bytes !== expected.bytes
+      || typeof match.path !== "string"
+    ) {
+      throw new ArchiveUploadContractError("archive upload part does not match the finalize request");
+    }
+    return { index: expected.index, path: match.path, bytes: expected.bytes, sha256: expected.sha256 };
+  });
+  const target = ARCHIVE_UPLOAD_TARGETS[finalize.upload_kind];
+  await writeSandboxFile(sandbox, ARCHIVE_ASSEMBLE_MANIFEST, JSON.stringify({
+    schema_version: 1,
+    output_path: target,
+    archive_sha256: finalize.archive_sha256,
+    archive_bytes: finalize.archive_bytes,
+    parts: ordered,
+  }));
+  const stdout = await executeSandboxCommand(
+    sandbox,
+    ARCHIVE_ASSEMBLE_COMMAND,
+    ARCHIVE_ASSEMBLE_TIMEOUT_MS,
+    4096,
+  );
+  let assembled: Record<string, unknown> | null;
+  try {
+    assembled = objectValue(JSON.parse(stdout) as unknown);
+  } catch {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  if (
+    assembled === null
+    || assembled.schema_version !== 1
+    || assembled.assembled_path !== target
+    || assembled.archive_bytes !== finalize.archive_bytes
+    || assembled.archive_sha256 !== finalize.archive_sha256
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  await store.finalizeArchiveUpload(identity, target);
+  return json({
+    schema_version: 1,
+    upload_kind: finalize.upload_kind,
+    status: "assembled",
+  }, 200);
+}
+
+/** The assembled archive a replay start may use, or null if none is ready. */
+async function readyArchiveUpload(
+  store: TerminalReceiptStore,
+  expected: ArchiveUploadIdentity,
+): Promise<string> {
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) {
+    throw new AuthoritativeReplayContractError("archive upload was not completed");
+  }
+  if (
+    !sameArchiveUploadIdentity(uploadIdentity(stored as unknown as ArchiveUploadIdentity), expected)
+    || typeof stored.assembled_path !== "string"
+  ) {
+    throw new AuthoritativeReplayContractError("archive upload does not match the replay request");
+  }
+  return stored.assembled_path;
 }
 
 async function executeSandboxCommand(
