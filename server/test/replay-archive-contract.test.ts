@@ -5,23 +5,21 @@ import {
   validateArchiveEvidence,
 } from "../src/replay-archive-contract";
 
-async function digestBase64(encoded: string): Promise<string> {
-  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
+const ACCEPTED_ARCHIVE = "age-encryption.org/v1\naccepted-fixture";
 
 async function fixture(): Promise<Record<string, unknown>> {
-  const ciphertext = btoa("age-encryption.org/v1\naccepted-fixture");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ACCEPTED_ARCHIVE));
   return {
     schema_version: 1,
     request_id: "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f",
     runner_nonce: "1".repeat(64),
     submission_id: "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584",
-    archive_ciphertext_sha256: await digestBase64(ciphertext),
+    archive_ciphertext_sha256: [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join(""),
     plaintext_tar_sha256: "2".repeat(64),
     plaintext_tar_size: 712,
-    ciphertext_base64: ciphertext,
+    archive_ciphertext_bytes: ACCEPTED_ARCHIVE.length,
+    archive_part_count: 1,
     plaintext_identity_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
   };
 }
@@ -35,12 +33,16 @@ describe("accepted archive replay boundary contract", () => {
     }))).resolves.toEqual(value);
   });
 
-  it("rejects digest drift and invalid plaintext bounds", async () => {
-    const drift = { ...(await fixture()), archive_ciphertext_sha256: "0".repeat(64) };
+  it("rejects malformed identity and invalid plaintext bounds", async () => {
+    // The archive is no longer in this body, so a digest that disagrees with
+    // the bytes can only be caught where the bytes are: the assembly helper
+    // refuses it before the key unwrap, and the image refuses it again before
+    // decrypting. What is still checkable here is the shape.
+    const malformed = { ...(await fixture()), archive_ciphertext_sha256: "not-a-digest" };
     await expect(readArchiveAcceptanceRequest(new Request("https://example.test", {
       method: "POST",
-      body: JSON.stringify(drift),
-    }))).rejects.toThrow("digest does not match");
+      body: JSON.stringify(malformed),
+    }))).rejects.toThrow("digest is not canonical");
     const oversized = { ...(await fixture()), plaintext_tar_size: 10 * 1024 * 1024 + 1 };
     await expect(readArchiveAcceptanceRequest(new Request("https://example.test", {
       method: "POST",
