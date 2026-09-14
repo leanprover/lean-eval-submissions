@@ -180,7 +180,7 @@ jobs:
           persist-credentials: false
           ssh-key: ${{ secrets.AUDIT_READ_KEY }}
 
-      - name: Bind ciphertext and prepare one five-minute unwrap
+      - name: Bind ciphertext and split it into upload parts
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
@@ -194,13 +194,110 @@ jobs:
           cp "audit/$archive_path" "$RUNNER_TEMP/archive.tar.age"
           cp "audit/$sidecar_path" "$RUNNER_TEMP/archive-sidecar.json"
           rm -rf audit
+          # Mint the nonce before the archive upload so the parts bind to it,
+          # and so the five-minute capability covers only the unwrap rather than
+          # the whole transfer.
+          python scripts/replay_controller.py mint-nonce \
+            --output "$RUNNER_TEMP/runner-nonce"
+          python scripts/replay_controller.py split-archive \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --part-directory "$RUNNER_TEMP/archive-parts" \
+            --output "$RUNNER_TEMP/archive-manifest.json"
+          echo 'runner_start_failed' > "$RUNNER_TEMP/failure-reason"
+
+      - name: Upload and assemble the archive before any unwrap authority
+        if: steps.started.outputs.appended == 'true'
+        env:
+          REPLAY_PART_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/replay/archive-part
+          REPLAY_FINALIZE_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/replay/archive-finalize
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          runner_nonce=$(cat "$RUNNER_TEMP/runner-nonce")
+          archive_sha256=$(jq -r .archive_sha256 "$RUNNER_TEMP/archive-manifest.json")
+          archive_bytes=$(jq -r .archive_bytes "$RUNNER_TEMP/archive-manifest.json")
+          part_count=$(jq -r .part_count "$RUNNER_TEMP/archive-manifest.json")
+          cleanup() {
+            unset replay_oidc_token
+            rm -f "$RUNNER_TEMP/replay-oidc-response.json"
+          }
+          trap cleanup EXIT
+          mint_oidc() {
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 15 \
+              --retry 3 \
+              --retry-max-time 60 \
+              --retry-all-errors \
+              --retry-delay 2 \
+              --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
+              --output "$RUNNER_TEMP/replay-oidc-response.json"
+            replay_oidc_token=$(python -c \
+              'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["value"])' \
+              "$RUNNER_TEMP/replay-oidc-response.json")
+            test -n "$replay_oidc_token"
+            rm "$RUNNER_TEMP/replay-oidc-response.json"
+          }
+          mint_oidc
+          for index in $(seq 0 $((part_count - 1))); do
+            part_path=$(jq -r --argjson i "$index" '.parts[$i].path' "$RUNNER_TEMP/archive-manifest.json")
+            part_sha256=$(jq -r --argjson i "$index" '.parts[$i].sha256' "$RUNNER_TEMP/archive-manifest.json")
+            part_bytes=$(jq -r --argjson i "$index" '.parts[$i].bytes' "$RUNNER_TEMP/archive-manifest.json")
+            part_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors --retry-delay 2 \
+              --header "Authorization: Bearer $replay_oidc_token" \
+              --header 'Content-Type: application/octet-stream' \
+              --header "X-Lean-Eval-Upload-Kind: authoritative-archive" \
+              --header "X-Lean-Eval-Runner-Nonce: $runner_nonce" \
+              --header "X-Lean-Eval-Archive-Sha256: $archive_sha256" \
+              --header "X-Lean-Eval-Archive-Bytes: $archive_bytes" \
+              --header "X-Lean-Eval-Part-Count: $part_count" \
+              --header "X-Lean-Eval-Part-Index: $index" \
+              --header "X-Lean-Eval-Part-Sha256: $part_sha256" \
+              --header "X-Lean-Eval-Part-Bytes: $part_bytes" \
+              --request POST \
+              --data-binary "@$part_path" \
+              "$REPLAY_PART_URL" \
+              --output "$RUNNER_TEMP/archive-part-response.json" \
+              --write-out '%{http_code}')
+            test "$part_status" = 202
+            rm -f "$part_path" "$RUNNER_TEMP/archive-part-response.json"
+          done
+          python scripts/replay_controller.py build-archive-finalize-request \
+            --manifest "$RUNNER_TEMP/archive-manifest.json" \
+            --runner-nonce "$runner_nonce" \
+            --upload-kind authoritative-archive \
+            --output "$RUNNER_TEMP/archive-finalize-request.json"
+          mint_oidc
+          # Assembly digests the whole archive inside the Sandbox. Failing here
+          # costs nothing: the unwrap capability has not been minted into use.
+          finalize_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors --retry-delay 2 \
+            --header "Authorization: Bearer $replay_oidc_token" \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data-binary "@$RUNNER_TEMP/archive-finalize-request.json" \
+            "$REPLAY_FINALIZE_URL" \
+            --output "$RUNNER_TEMP/archive-finalize-response.json" \
+            --write-out '%{http_code}')
+          unset replay_oidc_token
+          test "$finalize_status" = 200
+          jq -e '.status == "assembled"' "$RUNNER_TEMP/archive-finalize-response.json" >/dev/null
+          rm -rf "$RUNNER_TEMP/archive-parts" "$RUNNER_TEMP/archive-finalize-response.json"
+
+      - name: Prepare one five-minute unwrap for the assembled archive
+        if: steps.started.outputs.appended == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
           python scripts/replay_controller.py prepare-unwrap \
             --plan "$RUNNER_TEMP/replay-plan.json" \
             --sidecar "$RUNNER_TEMP/archive-sidecar.json" \
             --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --runner-nonce "$(cat "$RUNNER_TEMP/runner-nonce")" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/unwrap-request.json"
-          echo 'runner_start_failed' > "$RUNNER_TEMP/failure-reason"
 
       - name: Assume only the staging replay Invoke role
         if: steps.started.outputs.appended == 'true'
@@ -277,7 +374,7 @@ jobs:
             --identity "$RUNNER_TEMP/identity.age" \
             --output "$RUNNER_TEMP/executor-request.json"
           jq '{
-            schema_version,
+            schema_version: 1,
             runner_nonce,
             replay_task_id: .request.replay_task_id,
             attempt: .request.attempt,
