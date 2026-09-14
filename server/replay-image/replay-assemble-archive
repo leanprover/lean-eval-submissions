@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Assemble an uploaded archive from its committed parts and prove its digest.
+
+The Worker streams each upload part to its own immutable path and then runs this
+fixed command. Assembling here rather than in the replay runner is deliberate:
+it happens before the one-use key unwrap, so a missing part, a truncated
+transfer, or a container that idled out and lost its filesystem is discovered
+while the capability is still unspent and the upload can simply be retried.
+
+Only paths the Worker committed are read, and only after their sizes match the
+manifest. The concatenation is streamed, so a 100 MB archive costs one buffer.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import pathlib
+import sys
+
+WORKSPACE = pathlib.Path("/workspace")
+MANIFEST = WORKSPACE / "archive-assembly.json"
+PART_DIRECTORY = WORKSPACE / "archive-parts"
+MAX_MANIFEST = 64 * 1024
+MAX_PART_BYTES = 8 * 1024 * 1024
+MAX_PART_COUNT = 32
+MAX_ARCHIVE_BYTES = 11 * 1024 * 1024
+COPY_BUFFER = 1024 * 1024
+DIGEST_CHARACTERS = set("0123456789abcdef")
+
+
+def fail(message: str) -> None:
+    print(f"replay-assemble-archive: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def digest_text(value: object) -> str:
+    if not isinstance(value, str) or len(value) != 64 or not set(value) <= DIGEST_CHARACTERS:
+        fail("archive assembly manifest is invalid")
+    return value
+
+
+def bounded_int(value: object, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        fail("archive assembly manifest is invalid")
+    return value
+
+
+def committed_part_path(value: object) -> pathlib.Path:
+    """Resolve a manifest path, refusing anything outside the parts directory."""
+    if not isinstance(value, str) or not value:
+        fail("archive assembly manifest is invalid")
+    path = pathlib.Path(value)
+    # The Worker generates these, but the manifest is still an input: a path that
+    # escaped the parts directory would let assembly read an arbitrary file.
+    if path.parent != PART_DIRECTORY or path.is_symlink() or not path.is_file():
+        fail("archive assembly part is missing")
+    return path
+
+
+def load_manifest() -> dict[str, object]:
+    try:
+        raw = MANIFEST.read_bytes()
+        value = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        fail("archive assembly manifest is invalid")
+    if not isinstance(value, dict) or len(raw) > MAX_MANIFEST:
+        fail("archive assembly manifest is invalid")
+    if set(value) != {"schema_version", "output_path", "archive_sha256", "archive_bytes", "parts"}:
+        fail("archive assembly manifest is invalid")
+    if value["schema_version"] != 1:
+        fail("archive assembly manifest is invalid")
+    return value
+
+
+def main() -> int:
+    manifest = load_manifest()
+    output_path = manifest["output_path"]
+    if not isinstance(output_path, str) or not output_path.startswith("/workspace/"):
+        fail("archive assembly manifest is invalid")
+    output = pathlib.Path(output_path)
+    if output.parent != WORKSPACE:
+        fail("archive assembly manifest is invalid")
+    expected_digest = digest_text(manifest["archive_sha256"])
+    expected_bytes = bounded_int(manifest["archive_bytes"], 1, MAX_ARCHIVE_BYTES)
+    entries = manifest["parts"]
+    if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_PART_COUNT:
+        fail("archive assembly manifest is invalid")
+
+    parts: list[tuple[pathlib.Path, int]] = []
+    total = 0
+    for position, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {"index", "path", "bytes", "sha256"}:
+            fail("archive assembly manifest is invalid")
+        # Positional, not sorted: the manifest order is the assembly order, so a
+        # reordered manifest must not silently produce a different archive.
+        if entry["index"] != position:
+            fail("archive assembly manifest is invalid")
+        digest_text(entry["sha256"])
+        size = bounded_int(entry["bytes"], 1, MAX_PART_BYTES)
+        path = committed_part_path(entry["path"])
+        actual = path.stat().st_size
+        # The Worker counts what it sent but cannot see what the container
+        # received, so this is where a truncated transfer is caught.
+        if actual != size:
+            fail("archive assembly part size mismatch")
+        total += size
+        parts.append((path, size))
+    if total != expected_bytes:
+        fail("archive assembly size mismatch")
+
+    digest = hashlib.sha256()
+    descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as destination:
+            for path, _size in parts:
+                with path.open("rb") as source:
+                    while True:
+                        chunk = source.read(COPY_BUFFER)
+                        if not chunk:
+                            break
+                        digest.update(chunk)
+                        destination.write(chunk)
+    except OSError:
+        output.unlink(missing_ok=True)
+        fail("archive assembly part is missing")
+
+    if digest.hexdigest() != expected_digest:
+        # A wrong archive must not survive as a plausible input to the runner.
+        output.unlink(missing_ok=True)
+        fail("archive assembly digest mismatch")
+    for path, _size in parts:
+        path.unlink(missing_ok=True)
+
+    print(json.dumps({
+        "schema_version": 1,
+        "assembled_path": str(output),
+        "archive_bytes": total,
+        "archive_sha256": digest.hexdigest(),
+    }, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001 - never leak a path or byte through a traceback
+        fail("archive assembly manifest is invalid")
