@@ -822,7 +822,9 @@ async function streamPartToSandbox(
   body: ReadableStream<Uint8Array>,
   maximumBytes: number,
 ): Promise<{ bytes: number; sha256: string }> {
-  const digestStream = new DigestStream("SHA-256");
+  // `crypto.DigestStream`, not a bare global: the type is declared globally but
+  // the constructor only exists on the Crypto instance.
+  const digestStream = new crypto.DigestStream("SHA-256");
   const writer = digestStream.getWriter();
   let bytes = 0;
   const overflow = { hit: false };
@@ -893,6 +895,16 @@ async function handleArchiveUploadPart(
   const body = request.body;
   if (body === null) throw new ArchiveUploadContractError("upload part requires a body");
   const identity = uploadIdentity(header);
+  // The Durable Object enforces this atomically; checking first turns a nonce
+  // already bound to a different archive into a 400 the caller can act on
+  // rather than an opaque executor failure.
+  const existing = objectValue(await store.readArchiveUpload());
+  if (
+    existing !== null
+    && !sameArchiveUploadIdentity(uploadIdentity(existing as unknown as ArchiveUploadIdentity), identity)
+  ) {
+    throw new ArchiveUploadContractError("runner nonce is already bound to a different archive upload");
+  }
   await store.claimArchiveUpload(identity);
   // A fresh path per request. Deterministic per-index names would let a retry or
   // a delayed duplicate rewrite bytes that an earlier part already committed,
