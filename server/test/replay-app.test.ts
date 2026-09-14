@@ -179,7 +179,13 @@ function terminalReceiptStore(
   return {
     readArchiveUpload: () => Promise.resolve(upload),
     claimArchiveUpload: (value: unknown) => {
+      // First-writer-wins on the identity, like the Durable Object.
       if (upload === null) upload = { ...(value as object), parts: [], assembled_path: null };
+      const stored = upload as Record<string, unknown>;
+      const wanted = value as Record<string, unknown>;
+      if (stored.archive_sha256 !== wanted.archive_sha256) {
+        return Promise.reject(new Error("runner nonce is already bound to a different archive upload"));
+      }
       return Promise.resolve(upload);
     },
     commitArchiveUploadPart: (_identity: unknown, part: unknown) => {
@@ -1481,4 +1487,258 @@ describe("Cloudflare replay executor", () => {
     expect(destroyed).toBe(true);
   });
 
+});
+
+describe("chunked archive upload routes", () => {
+  const NONCE = "1".repeat(64);
+  const UPLOAD_ENABLED = { ...REVIEWED_ENV, REPLAY_ENABLED: "true" };
+
+  /** A Sandbox that actually drains the stream it is handed, as the real one does. */
+  function streamingSandbox() {
+    const files = new Map<string, Uint8Array>();
+    const commands: string[] = [];
+    let assembleStdout: string | null = null;
+    return {
+      files,
+      commands,
+      setAssembleStdout(value: string) { assembleStdout = value; },
+      client: {
+        writeFile: async (path: string, contents: string | ReadableStream<Uint8Array>) => {
+          if (typeof contents === "string") {
+            files.set(path, new TextEncoder().encode(contents));
+          } else {
+            const chunks: Uint8Array[] = [];
+            const reader = contents.getReader();
+            let chunk = await reader.read();
+            while (!chunk.done) {
+              chunks.push(chunk.value);
+              chunk = await reader.read();
+            }
+            const total = chunks.reduce((sum, part) => sum + part.byteLength, 0);
+            const joined = new Uint8Array(total);
+            let offset = 0;
+            for (const part of chunks) {
+              joined.set(part, offset);
+              offset += part.byteLength;
+            }
+            files.set(path, joined);
+          }
+          return { success: true, path, timestamp: "fixture" };
+        },
+        exec: (command: string) => {
+          commands.push(command);
+          return Promise.resolve({
+            success: true,
+            exitCode: 0,
+            stdout: assembleStdout ?? "",
+            stderr: "",
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          });
+        },
+        destroy: () => Promise.resolve(),
+      },
+    };
+  }
+
+  async function uploadPart(
+    sandbox: ReturnType<typeof streamingSandbox>,
+    receipts: ReturnType<typeof terminalReceiptStore>,
+    payload: Uint8Array,
+    overrides: Record<string, string> = {},
+  ): Promise<Response> {
+    const headers: Record<string, string> = {
+      "content-type": "application/octet-stream",
+      "x-lean-eval-upload-kind": "authoritative-archive",
+      "x-lean-eval-runner-nonce": NONCE,
+      "x-lean-eval-archive-sha256": await hexDigest(payload),
+      "x-lean-eval-archive-bytes": String(payload.byteLength),
+      "x-lean-eval-part-count": "1",
+      "x-lean-eval-part-index": "0",
+      "x-lean-eval-part-sha256": await hexDigest(payload),
+      "x-lean-eval-part-bytes": String(payload.byteLength),
+      ...overrides,
+    };
+    return handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-part", {
+        method: "POST",
+        headers,
+        body: payload,
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+  }
+
+  it("streams a part into the sandbox without buffering the whole archive", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(64 * 1024));
+    const response = await uploadPart(sandbox, receipts, payload);
+    expect(response.status).toBe(202);
+    const [path] = [...sandbox.files.keys()];
+    // A fresh unique name per request: a retry must never rewrite committed bytes.
+    expect(path).toMatch(/^\/workspace\/archive-part-[0-9a-f-]{36}$/);
+    expect(sandbox.files.get(path!)).toEqual(payload);
+  });
+
+  it("refuses a part whose bytes do not match its declared digest", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = new Uint8Array([1, 2, 3, 4]);
+    const response = await uploadPart(sandbox, receipts, payload, {
+      "x-lean-eval-part-sha256": "9".repeat(64),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  });
+
+  it("refuses a body longer than the part it declared", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(4096));
+    // `content-length` is client-controlled, so the count taken while streaming
+    // is the only real bound.
+    const response = await uploadPart(sandbox, receipts, payload, {
+      "x-lean-eval-archive-bytes": "16",
+      "x-lean-eval-part-bytes": "16",
+      "x-lean-eval-part-sha256": await hexDigest(payload.slice(0, 16)),
+      "x-lean-eval-archive-sha256": await hexDigest(payload.slice(0, 16)),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses a second upload binding the same nonce to a different archive", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const first = crypto.getRandomValues(new Uint8Array(1024));
+    expect((await uploadPart(sandbox, receipts, first)).status).toBe(202);
+    const second = crypto.getRandomValues(new Uint8Array(2048));
+    const response = await uploadPart(sandbox, receipts, second);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  });
+
+  it("assembles at finalize and records readiness only on a digest match", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(1024));
+    const digest = await hexDigest(payload);
+    expect((await uploadPart(sandbox, receipts, payload)).status).toBe(202);
+    sandbox.setAssembleStdout(JSON.stringify({
+      schema_version: 1,
+      assembled_path: "/workspace/archive.tar.gz.age",
+      archive_bytes: payload.byteLength,
+      archive_sha256: digest,
+    }));
+    const finalize = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-finalize", {
+        method: "POST",
+        body: JSON.stringify({
+          schema_version: 1,
+          upload_kind: "authoritative-archive",
+          runner_nonce: NONCE,
+          archive_sha256: digest,
+          archive_bytes: payload.byteLength,
+          part_count: 1,
+          parts: [{ index: 0, sha256: digest, bytes: payload.byteLength }],
+        }),
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+    expect(finalize.status).toBe(200);
+    expect(await finalize.json()).toMatchObject({ status: "assembled" });
+    // Assembly is a fixed baked command driven by a manifest the Worker writes.
+    expect(sandbox.commands).toEqual(["/opt/lean-eval/replay-assemble-archive"]);
+    const manifest = sandbox.files.get("/workspace/archive-assembly.json");
+    expect(JSON.parse(new TextDecoder().decode(manifest))).toMatchObject({
+      output_path: "/workspace/archive.tar.gz.age",
+      archive_sha256: digest,
+    });
+    expect(await receipts.readArchiveUpload()).toMatchObject({
+      assembled_path: "/workspace/archive.tar.gz.age",
+    });
+  });
+
+  it("refuses to finalize an upload whose parts never arrived", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const response = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-finalize", {
+        method: "POST",
+        body: JSON.stringify({
+          schema_version: 1,
+          upload_kind: "authoritative-archive",
+          runner_nonce: NONCE,
+          archive_sha256: "4".repeat(64),
+          archive_bytes: 1024,
+          part_count: 1,
+          parts: [{ index: 0, sha256: "5".repeat(64), bytes: 1024 }],
+        }),
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(sandbox.commands).toEqual([]);
+  });
+
+  it("refuses a start whose archive was never assembled", async () => {
+    const body = await authoritativeInput();
+    const sandbox = streamingSandbox();
+    const response = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => terminalReceiptStore(undefined, null),
+      },
+    );
+    // Recoverable by re-uploading under a fresh nonce, which a start is not.
+    expect(response.status).toBe(400);
+    expect(sandbox.commands).toEqual([]);
+  });
+
+  it("keeps the upload routes behind the replay flag", async () => {
+    const sandbox = streamingSandbox();
+    let authenticated = false;
+    for (const path of ["archive-part", "archive-finalize"]) {
+      const response = await handleReplayRequest(
+        new Request(`https://example.test/api/v1/replay/${path}`, {
+          method: "POST",
+          body: new Uint8Array(4),
+        }),
+        REVIEWED_ENV,
+        {
+          authenticate: () => {
+            authenticated = true;
+            return Promise.resolve();
+          },
+          sandbox: () => sandbox.client,
+          receiptStore: () => terminalReceiptStore(),
+        },
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: "replay_disabled" });
+    }
+    expect(authenticated).toBe(false);
+  });
 });
