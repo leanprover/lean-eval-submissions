@@ -48,6 +48,17 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
   Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
 
+type ArchiveUploadStore = Pick<
+  ReplayTerminalReceipt,
+  | "readArchiveUpload"
+  | "claimArchiveUpload"
+  | "commitArchiveUploadPart"
+  | "finalizeArchiveUpload"
+>;
+
+// The upload methods are optional for the same reason `startProcess` is on
+// SandboxClient: routes that never touch an upload should not have to supply
+// them, and the routes that do fail closed when they are absent.
 type TerminalReceiptStore = Pick<
   ReplayTerminalReceipt,
   | "claimBinding"
@@ -55,11 +66,19 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
-  | "readArchiveUpload"
-  | "claimArchiveUpload"
-  | "commitArchiveUploadPart"
-  | "finalizeArchiveUpload"
->;
+> & Partial<ArchiveUploadStore>;
+
+function requireArchiveUploadStore(store: TerminalReceiptStore): ArchiveUploadStore {
+  if (
+    store.readArchiveUpload === undefined
+    || store.claimArchiveUpload === undefined
+    || store.commitArchiveUploadPart === undefined
+    || store.finalizeArchiveUpload === undefined
+  ) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return store as ArchiveUploadStore;
+}
 
 type ExecutorFailureReason =
   | "input_transfer_failed"
@@ -867,9 +886,10 @@ function uploadIdentity(value: {
 async function handleArchiveUploadPart(
   request: Request,
   header: ArchiveUploadPartHeader,
-  store: TerminalReceiptStore,
+  receipts: TerminalReceiptStore,
   sandbox: SandboxClient,
 ): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
   const body = request.body;
   if (body === null) throw new ArchiveUploadContractError("upload part requires a body");
   const identity = uploadIdentity(header);
@@ -909,9 +929,10 @@ async function handleArchiveUploadPart(
  */
 async function handleArchiveUploadFinalize(
   finalize: ArchiveUploadFinalizeRequest,
-  store: TerminalReceiptStore,
+  receipts: TerminalReceiptStore,
   sandbox: SandboxClient,
 ): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
   const identity = uploadIdentity(finalize);
   const stored = objectValue(await store.readArchiveUpload());
   if (stored === null) throw new ArchiveUploadContractError("archive upload was not claimed");
@@ -977,9 +998,10 @@ async function handleArchiveUploadFinalize(
 
 /** The assembled archive a replay start may use, or null if none is ready. */
 async function readyArchiveUpload(
-  store: TerminalReceiptStore,
+  receipts: TerminalReceiptStore,
   expected: ArchiveUploadIdentity,
 ): Promise<string> {
+  const store = requireArchiveUploadStore(receipts);
   const stored = objectValue(await store.readArchiveUpload());
   if (stored === null) {
     throw new ArchiveUploadContractError("archive upload was not completed");
