@@ -20,7 +20,7 @@ import sys
 
 WORKSPACE = pathlib.Path("/workspace")
 MANIFEST = WORKSPACE / "archive-assembly.json"
-PART_DIRECTORY = WORKSPACE / "archive-parts"
+PART_PREFIX = "archive-part-"
 MAX_MANIFEST = 64 * 1024
 MAX_PART_BYTES = 8 * 1024 * 1024
 MAX_PART_COUNT = 32
@@ -52,8 +52,14 @@ def committed_part_path(value: object) -> pathlib.Path:
         fail("archive assembly manifest is invalid")
     path = pathlib.Path(value)
     # The Worker generates these, but the manifest is still an input: a path that
-    # escaped the parts directory would let assembly read an arbitrary file.
-    if path.parent != PART_DIRECTORY or path.is_symlink() or not path.is_file():
+    # escaped the workspace, or named something other than an uploaded part,
+    # would let assembly read an arbitrary file.
+    if (
+        path.parent != WORKSPACE
+        or not path.name.startswith(PART_PREFIX)
+        or path.is_symlink()
+        or not path.is_file()
+    ):
         fail("archive assembly part is missing")
     return path
 

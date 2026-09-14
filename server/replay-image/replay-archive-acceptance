@@ -103,11 +103,36 @@ def platform_evidence() -> tuple[str, str, str]:
 def main() -> None:
     os.umask(0o077)
     expectation = load_expectation()
-    ciphertext = WORKSPACE / "accepted-source.tar.gz.age"
+    # Assembled from its uploaded parts, and already digest-checked, by
+    # replay-assemble-archive before the key was unwrapped.
+    ciphertext = WORKSPACE / "archive.tar.gz.age"
+    encoded_identity = WORKSPACE / "identity.age.b64"
     identity = WORKSPACE / "accepted-source.identity.age"
     plaintext = WORKSPACE / "accepted-source.tar.gz"
-    decode_file(WORKSPACE / "archive.tar.gz.age.b64", ciphertext, MAX_CIPHERTEXT)
-    decode_file(WORKSPACE / "identity.age.b64", identity, 4096)
+    try:
+        run_acceptance(expectation, ciphertext, encoded_identity, identity, plaintext)
+    finally:
+        # Previously these were deleted inline, so any failure left the
+        # ciphertext and the encoded identity behind for the Sandbox teardown
+        # to deal with. Removing them unconditionally matches replay-authoritative.
+        encoded_identity.unlink(missing_ok=True)
+        identity.unlink(missing_ok=True)
+        plaintext.unlink(missing_ok=True)
+        ciphertext.unlink(missing_ok=True)
+
+
+def run_acceptance(
+    expectation: dict[str, object],
+    ciphertext: pathlib.Path,
+    encoded_identity: pathlib.Path,
+    identity: pathlib.Path,
+    plaintext: pathlib.Path,
+) -> None:
+    if not ciphertext.is_file() or ciphertext.is_symlink():
+        fail("assembled archive is unavailable")
+    if ciphertext.stat().st_size > MAX_CIPHERTEXT:
+        fail("assembled archive exceeds its size limit")
+    decode_file(encoded_identity, identity, 4096)
     if sha256(ciphertext) != expectation["archive_ciphertext_sha256"]:
         fail("ciphertext digest mismatch")
     decrypt = subprocess.run(
@@ -118,7 +143,6 @@ def main() -> None:
         stderr=subprocess.DEVNULL,
         env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
     )
-    identity.unlink(missing_ok=True)
     if decrypt.returncode != 0 or not plaintext.is_file():
         fail("archive decryption failed")
     if plaintext.stat().st_size != expectation["plaintext_tar_size"]:
@@ -126,7 +150,6 @@ def main() -> None:
     if plaintext.stat().st_size > MAX_PLAINTEXT or sha256(plaintext) != expectation["plaintext_tar_sha256"]:
         fail("plaintext digest mismatch")
     validate_tar(plaintext)
-    plaintext.unlink(missing_ok=True)
     network = subprocess.run(
         ["curl", "--fail", "--silent", "--show-error", "--max-time", "5", "https://example.com/"],
         check=False,
