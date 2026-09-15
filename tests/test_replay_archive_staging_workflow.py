@@ -78,3 +78,38 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AcceptedArchiveUploadOrderingTests(unittest.TestCase):
+    """The archive transfer must precede the capability it would otherwise burn."""
+
+    def test_upload_and_assembly_precede_the_unwrap_and_aws_authority(self) -> None:
+        split = WORKFLOW.index("Bind the exact ciphertext and split it into upload parts")
+        upload = WORKFLOW.index("Upload and assemble the archive before any unwrap authority")
+        unwrap = WORKFLOW.index("Prepare one five-minute capability for the assembled archive")
+        aws = WORKFLOW.index("Assume only the staging replay Invoke role")
+        consume = WORKFLOW.index("Consume once, prove reuse refusal, and drop AWS authority")
+        self.assertLess(split, upload)
+        # Assembly digests the archive inside the Sandbox. Doing that before the
+        # capability exists means a bad upload costs a retry, not a burned key.
+        self.assertLess(upload, unwrap)
+        self.assertLess(unwrap, aws)
+        self.assertLess(aws, consume)
+
+    def test_upload_binds_the_nonce_and_carries_no_aws_authority(self) -> None:
+        upload = WORKFLOW.index("Upload and assemble the archive before any unwrap authority")
+        unwrap = WORKFLOW.index("Prepare one five-minute capability for the assembled archive")
+        section = WORKFLOW[upload:unwrap]
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', section)
+        self.assertIn("X-Lean-Eval-Upload-Kind: staging-archive-acceptance", section)
+        self.assertIn('test "$part_status" = 202', section)
+        self.assertIn('test "$finalize_status" = 200', section)
+        self.assertIn('rm -f "$part_path"', section)
+
+    def test_capability_binds_the_nonce_the_upload_already_used(self) -> None:
+        unwrap = WORKFLOW.index("Prepare one five-minute capability for the assembled archive")
+        aws = WORKFLOW.index("Assume only the staging replay Invoke role")
+        self.assertIn(
+            '--runner-nonce "$(cat "$RUNNER_TEMP/runner-nonce")"',
+            WORKFLOW[unwrap:aws],
+        )

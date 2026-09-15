@@ -51,10 +51,100 @@ from replay_orchestrator import (  # noqa: E402
 DIGEST = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 MAX_JSON_BYTES = 512 * 1024
-# Replay carries the ciphertext base64-encoded inside one JSON body through a
-# Worker isolate, so its bound is set by that transport and is deliberately
-# independent of the 100 MB audit-archive cap (docs/audit-archive.md).
+# The archive is uploaded in fixed-size parts and assembled in the Sandbox, so
+# this bound is the archive itself rather than what one JSON body can carry.
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
+ARCHIVE_PART_BYTES = 8 * 1024 * 1024
+MAX_ARCHIVE_PART_COUNT = 32
+# The file-key variant is named in key_capability_contract; the identity variant
+# has no constant there because until the transport carried both explicitly, the
+# envelope version alone implied which key form was in play.
+AGE_IDENTITY_MATERIAL_TYPE = "age-identity-v1"
+
+
+def archive_part_count(archive_bytes: int) -> int:
+    """Parts are a fixed size, so the count follows from the archive length."""
+    if not 0 < archive_bytes <= MAX_CIPHERTEXT_BYTES:
+        raise ReplayControllerError("ciphertext exceeds its size limit")
+    count = -(-archive_bytes // ARCHIVE_PART_BYTES)
+    if count > MAX_ARCHIVE_PART_COUNT:
+        raise ReplayControllerError("ciphertext requires too many upload parts")
+    return count
+
+
+def split_archive(
+    ciphertext_path: pathlib.Path,
+    output_directory: pathlib.Path,
+) -> dict[str, Any]:
+    """Write fixed-size parts plus the manifest the finalize request needs.
+
+    Digesting here rather than in the workflow keeps the part identities under
+    test: the Worker refuses any part whose bytes do not match the digest the
+    caller declared, so a wrong manifest fails at upload rather than at replay.
+    """
+    try:
+        archive_bytes = ciphertext_path.stat().st_size
+    except OSError as error:
+        raise ReplayControllerError("cannot read the archive to split") from error
+    count = archive_part_count(archive_bytes)
+    output_directory.mkdir(parents=True, exist_ok=True)
+    parts: list[dict[str, Any]] = []
+    digest = hashlib.sha256()
+    try:
+        with ciphertext_path.open("rb") as source:
+            for index in range(count):
+                chunk = source.read(ARCHIVE_PART_BYTES)
+                if not chunk:
+                    raise ReplayControllerError("archive is shorter than its declared size")
+                digest.update(chunk)
+                part_path = output_directory / f"archive.part-{index:02d}"
+                part_path.write_bytes(chunk)
+                parts.append({
+                    "index": index,
+                    "sha256": hashlib.sha256(chunk).hexdigest(),
+                    "bytes": len(chunk),
+                    "path": str(part_path),
+                })
+            if source.read(1):
+                raise ReplayControllerError("archive is longer than its declared size")
+    except OSError as error:
+        raise ReplayControllerError("cannot split the archive") from error
+    return {
+        "schema_version": 1,
+        "archive_sha256": digest.hexdigest(),
+        "archive_bytes": archive_bytes,
+        "part_count": count,
+        "parts": parts,
+    }
+
+
+def build_archive_finalize_request(
+    manifest_value: Any,
+    runner_nonce: str,
+    upload_kind: str,
+) -> dict[str, Any]:
+    manifest = _object(manifest_value, "archive manifest")
+    _match(DIGEST, runner_nonce, "runner_nonce")
+    if upload_kind not in {"authoritative-archive", "staging-archive-acceptance"}:
+        raise ReplayControllerError("upload kind is invalid")
+    if manifest.get("schema_version") != 1:
+        raise ReplayControllerError("archive manifest schema is invalid")
+    parts = manifest.get("parts")
+    if not isinstance(parts, list) or len(parts) != manifest.get("part_count"):
+        raise ReplayControllerError("archive manifest parts are invalid")
+    return {
+        "schema_version": 1,
+        "upload_kind": upload_kind,
+        "runner_nonce": runner_nonce,
+        "archive_sha256": manifest["archive_sha256"],
+        "archive_bytes": manifest["archive_bytes"],
+        "part_count": manifest["part_count"],
+        # The Worker's copy carries no local paths; those are for the uploader.
+        "parts": [
+            {"index": part["index"], "sha256": part["sha256"], "bytes": part["bytes"]}
+            for part in parts
+        ],
+    }
 MAX_IDENTITY_BYTES = 4096
 AGE_FILE_KEY_BYTES = 16
 MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024
@@ -373,9 +463,11 @@ def build_executor_request(
         raise ReplayControllerError("unwrap capability differs from the execution plan")
     try:
         key_material = key_material_path.read_bytes()
-        ciphertext = ciphertext_path.read_bytes()
+        ciphertext_bytes = ciphertext_path.stat().st_size
     except OSError as error:
         raise ReplayControllerError("cannot read private executor input") from error
+    if not 0 < ciphertext_bytes <= MAX_CIPHERTEXT_BYTES:
+        raise ReplayControllerError("ciphertext exceeds its size limit")
     if envelope["schema_version"] == 1:
         if not 0 < len(key_material) <= MAX_IDENTITY_BYTES:
             raise ReplayControllerError("plaintext identity exceeds its size limit")
@@ -393,22 +485,21 @@ def build_executor_request(
     }
     if envelope["schema_version"] == 2:
         archive_expectation["key_material_type"] = AGE_FILE_KEY_MATERIAL_TYPE
-    common = {
+    # The archive itself is not in this request; it was uploaded in parts and
+    # assembled in the Sandbox before the capability above was consumed. These
+    # two fields only name that upload so the Worker can match it.
+    return {
+        "schema_version": 3,
         "runner_nonce": capability["runner_nonce"],
         "request": plan["request"],
         "archive_expectation": archive_expectation,
-        "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
-    }
-    if envelope["schema_version"] == 1:
-        return {
-            "schema_version": 1,
-            **common,
-            "plaintext_identity_base64": base64.b64encode(key_material).decode("ascii"),
-        }
-    return {
-        "schema_version": 2,
-        **common,
-        "key_material_type": AGE_FILE_KEY_MATERIAL_TYPE,
+        "archive_ciphertext_bytes": ciphertext_bytes,
+        "archive_part_count": archive_part_count(ciphertext_bytes),
+        "key_material_type": (
+            AGE_FILE_KEY_MATERIAL_TYPE
+            if envelope["schema_version"] == 2
+            else AGE_IDENTITY_MATERIAL_TYPE
+        ),
         "plaintext_key_material_base64": base64.b64encode(key_material).decode("ascii"),
     }
 
@@ -649,9 +740,25 @@ def recover_running(domain_value: Any, trusted_now: str) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
     commands = value.add_subparsers(dest="command", required=True)
+    nonce = commands.add_parser("mint-nonce")
+    nonce.add_argument("--output", required=True, type=pathlib.Path)
+    split = commands.add_parser("split-archive")
+    split.add_argument("--ciphertext", required=True, type=pathlib.Path)
+    split.add_argument("--part-directory", required=True, type=pathlib.Path)
+    split.add_argument("--output", required=True, type=pathlib.Path)
+    finalize = commands.add_parser("build-archive-finalize-request")
+    finalize.add_argument("--manifest", required=True, type=pathlib.Path)
+    finalize.add_argument("--runner-nonce", required=True)
+    finalize.add_argument(
+        "--upload-kind",
+        required=True,
+        choices=("authoritative-archive", "staging-archive-acceptance"),
+    )
+    finalize.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
     for name in ("plan", "sidecar", "ciphertext", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
+    unwrap.add_argument("--runner-nonce", required=True)
     unwrap.add_argument("--trusted-now", required=True)
     executor = commands.add_parser("build-executor-request")
     for name in ("plan", "sidecar", "ciphertext", "unwrap", "identity", "output"):
@@ -682,12 +789,25 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        if args.command == "prepare-unwrap":
+        if args.command == "mint-nonce":
+            # Minted before the archive upload so the parts are bound to the
+            # nonce, and so the capability window covers only the unwrap.
+            _write_bytes(args.output, (secrets.token_hex(32) + "\n").encode("ascii"))
+        elif args.command == "split-archive":
+            _write(args.output, split_archive(args.ciphertext, args.part_directory))
+        elif args.command == "build-archive-finalize-request":
+            _write(args.output, build_archive_finalize_request(
+                _load(args.manifest, "archive manifest"),
+                args.runner_nonce,
+                args.upload_kind,
+            ))
+        elif args.command == "prepare-unwrap":
             _write(args.output, prepare_unwrap(
                 _load(args.plan, "replay plan"),
                 _load(args.sidecar, "archive sidecar"),
                 args.ciphertext,
                 args.trusted_now,
+                runner_nonce=args.runner_nonce,
             ))
         elif args.command == "build-executor-request":
             _write(args.output, build_executor_request(

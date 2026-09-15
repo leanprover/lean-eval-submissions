@@ -440,9 +440,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 25); do"), 2)
-        self.assertEqual(
-            DEPLOY.count('"historical_public_replay_enabled": False'), 2
-        )
+        self.assertEqual(DEPLOY.count('"replay_enabled": False'), 2)
         self.assertEqual(DEPLOY.count('echo "health payload did not converge'), 1)
         self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 1)
         self.assertNotIn("curl --fail --retry", DEPLOY)
@@ -466,12 +464,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertEqual(variables["REPLAY_ENABLED"], "false")
                 self.assertEqual(
-                    variables["HISTORICAL_PUBLIC_REPLAY_ENABLED"], "false"
-                )
-                self.assertEqual(
                     variables["STAGING_ACCEPTANCE_ENABLED"],
                     "true" if environment == "staging" else "false",
                 )
+                # The historical-public executor route is gone, so its flag is
+                # no longer part of the replay deployment contract.
+                self.assertNotIn("HISTORICAL_PUBLIC_REPLAY_ENABLED", variables)
                 self.assertEqual(variables["STAGING_MEMORY_LIMIT_BYTES"], "12884901888")
                 self.assertEqual(variables["PRODUCTION_MEMORY_GATE_BYTES"], "12884901888")
                 self.assertEqual(

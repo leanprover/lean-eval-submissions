@@ -26,6 +26,9 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 from archive_submission import _validate_sidecar  # noqa: E402
+# The part size has to be the one the Worker derives its part count from, so it
+# is imported rather than restated here.
+from replay_controller import archive_part_count  # noqa: E402
 from key_capability_contract import (  # noqa: E402
     ContractError,
     canonical_archive_path,
@@ -42,9 +45,8 @@ RESULT_ID = re.compile(r"r2_[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 MAX_JSON_BYTES = 64 * 1024
-# Replay carries the ciphertext base64-encoded inside one JSON body through a
-# Worker isolate, so its bound is set by that transport and is deliberately
-# independent of the 100 MB audit-archive cap (docs/audit-archive.md).
+# The archive is uploaded in fixed-size parts and assembled in the Sandbox, so
+# this bound is the archive itself rather than what one JSON body can carry.
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
 MAX_IDENTITY_BYTES = 4096
 
@@ -226,11 +228,15 @@ def prepare_unwrap(
     ciphertext_path: pathlib.Path,
     trusted_now: str,
     output: pathlib.Path,
+    runner_nonce: str | None = None,
 ) -> None:
     plan = _validate_plan(plan_path)
     _, envelope = _validate_archive(plan, sidecar_path, ciphertext_path)
     current = _trusted_now(trusted_now)
-    runner_nonce = secrets.token_hex(32)
+    # Accepting a nonce lets the archive upload bind to it before the capability
+    # is minted, so the five-minute window covers only the unwrap.
+    runner_nonce = secrets.token_hex(32) if runner_nonce is None else runner_nonce
+    _match(DIGEST, runner_nonce, "runner_nonce")
     capability = {
         "schema_version": 1,
         "purpose": "lean-eval-replay",
@@ -285,9 +291,11 @@ def build_executor_request(
     )
     try:
         identity = identity_path.read_bytes()
-        ciphertext = ciphertext_path.read_bytes()
+        ciphertext_bytes = ciphertext_path.stat().st_size
     except OSError as error:
         raise StagingReplayError("cannot read private executor input") from error
+    if not 0 < ciphertext_bytes <= MAX_CIPHERTEXT_BYTES:
+        raise StagingReplayError("ciphertext exceeds its size limit")
     if len(identity) > MAX_IDENTITY_BYTES:
         raise StagingReplayError("plaintext identity exceeds its size limit")
     validate_age_identity_bytes(identity)
@@ -299,7 +307,10 @@ def build_executor_request(
         "archive_ciphertext_sha256": plan["archive_ciphertext_sha256"],
         "plaintext_tar_sha256": sidecar["sha256_plaintext_tar"],
         "plaintext_tar_size": sidecar["size_bytes_plaintext_tar"],
-        "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
+        # The archive was uploaded in parts and assembled in the Sandbox before
+        # this request; these two fields only name that upload.
+        "archive_ciphertext_bytes": ciphertext_bytes,
+        "archive_part_count": archive_part_count(ciphertext_bytes),
         "plaintext_identity_base64": base64.b64encode(identity).decode("ascii"),
     })
 
@@ -342,6 +353,7 @@ def parser() -> argparse.ArgumentParser:
     for name in ("plan", "sidecar", "ciphertext", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
     unwrap.add_argument("--trusted-now", required=True)
+    unwrap.add_argument("--runner-nonce", required=True)
     executor = commands.add_parser("build-executor-request")
     for name in ("plan", "sidecar", "ciphertext", "unwrap", "identity", "output"):
         executor.add_argument(f"--{name}", required=True, type=pathlib.Path)
@@ -357,7 +369,14 @@ def main() -> int:
         if args.command == "plan":
             build_plan(args.domain, args.submission_id, args.output)
         elif args.command == "prepare-unwrap":
-            prepare_unwrap(args.plan, args.sidecar, args.ciphertext, args.trusted_now, args.output)
+            prepare_unwrap(
+                args.plan,
+                args.sidecar,
+                args.ciphertext,
+                args.trusted_now,
+                args.output,
+                runner_nonce=args.runner_nonce,
+            )
         elif args.command == "build-executor-request":
             build_executor_request(
                 args.plan, args.sidecar, args.ciphertext, args.unwrap, args.identity, args.output

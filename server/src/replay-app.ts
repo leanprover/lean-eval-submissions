@@ -1,19 +1,6 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 
 import {
-  canonicalHistoricalPublicHandoff,
-  HistoricalPublicExecutorContractError,
-  MAX_REPLAY_ATTEMPTS,
-  historicalPublicExecutorVerdictFromBinding,
-  historicalPublicRunnerBinding,
-  readHistoricalPublicExecutorRequest,
-  readHistoricalPublicExecutorStatusRequest,
-  type HistoricalPublicExecutorInput,
-  type HistoricalPublicExecutorStatusRequest,
-  type HistoricalPublicExecutorVerdict,
-  type HistoricalPublicRunnerBinding,
-} from "./historical-public-executor-contract";
-import {
   AuthoritativeReplayContractError,
   readAuthoritativeReplayRequest,
   readAuthoritativeReplayStatusRequest,
@@ -22,6 +9,17 @@ import {
   type ReplayVerdict,
   validateReplayVerdict,
 } from "./authoritative-replay-contract";
+import {
+  ArchiveUploadContractError,
+  MAX_PART_BYTES,
+  readArchiveUploadFinalizeRequest,
+  readArchiveUploadPartHeader,
+  sameArchiveUploadIdentity,
+  type ArchiveUploadFinalizeRequest,
+  type ArchiveUploadIdentity,
+  type ArchiveUploadKind,
+  type ArchiveUploadPartHeader,
+} from "./archive-upload-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
 import {
   ReplayArchiveContractError,
@@ -39,7 +37,6 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REPLAY_SANDBOX: DurableObjectNamespace<Sandbox>;
   REPLAY_TERMINAL_RECEIPT: DurableObjectNamespace<ReplayTerminalReceipt>;
   REPLAY_ENABLED: string;
-  HISTORICAL_PUBLIC_REPLAY_ENABLED: string;
   STAGING_ACCEPTANCE_ENABLED: string;
   STAGING_MEMORY_LIMIT_BYTES: string;
   PRODUCTION_MEMORY_GATE_BYTES: string;
@@ -51,6 +48,17 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
   Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
 
+type ArchiveUploadStore = Pick<
+  ReplayTerminalReceipt,
+  | "readArchiveUpload"
+  | "claimArchiveUpload"
+  | "commitArchiveUploadPart"
+  | "finalizeArchiveUpload"
+>;
+
+// The upload methods are optional for the same reason `startProcess` is on
+// SandboxClient: routes that never touch an upload should not have to supply
+// them, and the routes that do fail closed when they are absent.
 type TerminalReceiptStore = Pick<
   ReplayTerminalReceipt,
   | "claimBinding"
@@ -58,12 +66,19 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
->;
+> & Partial<ArchiveUploadStore>;
 
-type HistoricalCleanupStore = Pick<
-  ReplayTerminalReceipt,
-  "destroyBoundSandbox" | "reserveCleanupIdentity"
->;
+function requireArchiveUploadStore(store: TerminalReceiptStore): ArchiveUploadStore {
+  if (
+    store.readArchiveUpload === undefined
+    || store.claimArchiveUpload === undefined
+    || store.commitArchiveUploadPart === undefined
+    || store.finalizeArchiveUpload === undefined
+  ) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return store as ArchiveUploadStore;
+}
 
 type ExecutorFailureReason =
   | "input_transfer_failed"
@@ -97,13 +112,7 @@ type Dependencies = {
   receiptStore?(
     env: ReplayRuntimeEnv,
     runnerNonce: string,
-    historicalIdentity?: HistoricalPublicExecutorStatusRequest,
   ): TerminalReceiptStore;
-  recoveryStore?(
-    env: ReplayRuntimeEnv,
-    replayTaskId: string,
-    attempt: number,
-  ): HistoricalCleanupStore;
 };
 
 const DEFAULT_DEPENDENCIES: Dependencies = {
@@ -117,12 +126,15 @@ function terminalReceiptStore(
   dependencies: Dependencies,
   env: ReplayRuntimeEnv,
   runnerNonce: string,
-  historicalIdentity?: HistoricalPublicExecutorStatusRequest,
 ): TerminalReceiptStore {
   if (dependencies.receiptStore === undefined) {
     throw new ReplayExecutorError("command_rpc_failed");
   }
-  return dependencies.receiptStore(env, runnerNonce, historicalIdentity);
+  return dependencies.receiptStore(env, runnerNonce);
+}
+
+function stagingAcceptanceEnabled(env: ReplayRuntimeEnv): boolean {
+  return env.DEPLOYMENT_ENVIRONMENT === "staging" && env.STAGING_ACCEPTANCE_ENABLED === "true";
 }
 
 function json(value: unknown, status = 200): Response {
@@ -135,6 +147,8 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
   ["expectation schema is invalid", "expectation_schema_invalid"],
   ["encoded input is invalid", "encoded_input_invalid"],
   ["decoded input exceeds size limit", "decoded_input_too_large"],
+  ["assembled archive is unavailable", "assembled_archive_unavailable"],
+  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["plaintext size mismatch", "plaintext_size_mismatch"],
@@ -147,19 +161,33 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
 ]);
 
 const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
-const SHA256_DIGEST = /^[0-9a-f]{64}$/;
-const OCI_SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/;
-const REPLAY_TASK_ID = /^rt1_[0-9a-f]{64}$/;
-const HISTORICAL_REQUEST_ID = /^prr_[0-9a-f]{64}$/;
-const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
 const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
-const HISTORICAL_PUBLIC_PROCESS_ID = "lean-eval-historical-public";
-const HISTORICAL_PUBLIC_COMMAND =
-  "base64 --decode /workspace/historical-public-source.tar.gz.b64 "
-  + "> /workspace/historical-public-source.tar.gz "
-  + "&& rm /workspace/historical-public-source.tar.gz.b64 "
-  + "&& /opt/lean-eval/historical-public-runner";
+// Assembly is a fixed baked command with no arguments; it reads the manifest the
+// Worker writes. Running it at finalize, before the one-use key unwrap, means a
+// missing part or a Sandbox that idled out is discovered while the capability is
+// still unspent and the upload can simply be retried.
+const ARCHIVE_ASSEMBLE_COMMAND = "/opt/lean-eval/replay-assemble-archive";
+const ARCHIVE_ASSEMBLE_MANIFEST = "/workspace/archive-assembly.json";
+const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
+// Parts sit directly in /workspace under a fixed prefix rather than in a baked
+// subdirectory, which a runtime mount over /workspace could shadow.
+const ARCHIVE_PART_PREFIX = "/workspace/archive-part-";
+const ARCHIVE_ASSEMBLE_FAILURES = new Map([
+  ["archive assembly manifest is invalid", "assembly_manifest_invalid"],
+  ["archive assembly part is missing", "assembly_part_missing"],
+  ["archive assembly part size mismatch", "assembly_part_size_mismatch"],
+  ["archive assembly size mismatch", "assembly_size_mismatch"],
+  ["archive assembly digest mismatch", "assembly_digest_mismatch"],
+]);
+const ARCHIVE_ASSEMBLE_PREFIX = "replay-assemble-archive: ";
+
+/** Where each upload kind assembles, and which process later consumes it. */
+const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind, string> = {
+  "authoritative-archive": "/workspace/archive.tar.gz.age",
+  "staging-archive-acceptance": "/workspace/archive.tar.gz.age",
+};
+
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
 const AUTHORITATIVE_CLEANUP_AFTER_MS = 7 * 60 * 60 * 1000;
 const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -172,6 +200,8 @@ const AUTHORITATIVE_COMMAND_FAILURES = new Map([
     "measurement configuration does not match the executor limits",
     "measurement_limits_mismatch",
   ],
+  ["assembled archive is unavailable", "assembled_archive_unavailable"],
+  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["archive plaintext identity mismatch", "archive_plaintext_identity_mismatch"],
@@ -204,24 +234,6 @@ type AuthoritativeTerminalReceipt = {
 
 type AuthoritativeActiveBinding = AuthoritativeReplayStatusRequest & {
   cleanup_after_epoch_ms: number;
-  retained_until_epoch_ms: number;
-};
-
-type HistoricalPublicProcessBinding = HistoricalPublicExecutorStatusRequest
-  & HistoricalPublicRunnerBinding;
-
-type HistoricalPublicActiveBinding = HistoricalPublicProcessBinding & {
-  cleanup_after_epoch_ms: number;
-  retained_until_epoch_ms: number;
-};
-
-type HistoricalPublicTerminalReceipt = {
-  schema_version: 1;
-  binding: HistoricalPublicProcessBinding;
-  http_status: 200 | 500;
-  body: HistoricalPublicExecutorVerdict | AuthoritativeFailureBody;
-  destruction_state: "pending" | "confirmed";
-  stored_at_epoch_ms: number;
   retained_until_epoch_ms: number;
 };
 
@@ -291,6 +303,14 @@ function safeCommandFailureDetail(command: string, stderr: string): string | und
   if (command === "/opt/lean-eval/replay-archive-acceptance") {
     return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
   }
+  if (command === ARCHIVE_ASSEMBLE_COMMAND) {
+    const output = stderr.trim();
+    if (output.includes("\n") || !output.startsWith(ARCHIVE_ASSEMBLE_PREFIX)) {
+      return "unclassified_assembly_failure";
+    }
+    return ARCHIVE_ASSEMBLE_FAILURES.get(output.slice(ARCHIVE_ASSEMBLE_PREFIX.length))
+      ?? "unclassified_assembly_failure";
+  }
   return undefined;
 }
 
@@ -345,18 +365,6 @@ async function startAuthoritativeProcess(
     sandbox,
     AUTHORITATIVE_PROCESS_ID,
     AUTHORITATIVE_COMMAND,
-    prepare,
-  );
-}
-
-async function startHistoricalPublicProcess(
-  sandbox: SandboxClient,
-  prepare: () => Promise<void>,
-): Promise<void> {
-  await startBackgroundProcess(
-    sandbox,
-    HISTORICAL_PUBLIC_PROCESS_ID,
-    HISTORICAL_PUBLIC_COMMAND,
     prepare,
   );
 }
@@ -526,251 +534,6 @@ async function requireActiveBinding(
   }
   if (value === null) throw new ReplayExecutorError("command_rpc_failed");
   if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
-}
-
-function historicalStatusBinding(
-  input: HistoricalPublicExecutorInput,
-): HistoricalPublicExecutorStatusRequest {
-  return {
-    schema_version: 1,
-    runner_nonce: input.runner_nonce,
-    replay_task_id: input.replay_task_id,
-    attempt: input.attempt,
-    handoff_sha256: input.handoff_sha256,
-    source_archive_sha256: input.source_archive_sha256,
-    execution_profile_digest: input.execution_profile_digest,
-    measurement_config_digest: input.measurement_config_digest,
-    vm_image_digest: input.vm_image_digest,
-  };
-}
-
-function historicalProcessBinding(
-  input: HistoricalPublicExecutorInput,
-): HistoricalPublicProcessBinding {
-  return {
-    ...historicalStatusBinding(input),
-    ...historicalPublicRunnerBinding(input),
-  };
-}
-
-function historicalProcessBindingValue(
-  value: unknown,
-): HistoricalPublicProcessBinding | null {
-  const binding = objectValue(value);
-  if (
-    binding === null
-    || !exactObjectFields(binding, [
-      "schema_version",
-      "runner_nonce",
-      "replay_task_id",
-      "attempt",
-      "handoff_sha256",
-      "source_archive_sha256",
-      "execution_profile_digest",
-      "measurement_config_digest",
-      "vm_image_digest",
-      "request_id",
-      "result_id",
-    ])
-    || binding.schema_version !== 1
-    || typeof binding.runner_nonce !== "string"
-    || !SHA256_DIGEST.test(binding.runner_nonce)
-    || typeof binding.replay_task_id !== "string"
-    || !REPLAY_TASK_ID.test(binding.replay_task_id)
-    || !Number.isSafeInteger(binding.attempt)
-    || (binding.attempt as number) < 1
-    || typeof binding.handoff_sha256 !== "string"
-    || !SHA256_DIGEST.test(binding.handoff_sha256)
-    || typeof binding.source_archive_sha256 !== "string"
-    || !SHA256_DIGEST.test(binding.source_archive_sha256)
-    || typeof binding.execution_profile_digest !== "string"
-    || !SHA256_DIGEST.test(binding.execution_profile_digest)
-    || typeof binding.measurement_config_digest !== "string"
-    || !SHA256_DIGEST.test(binding.measurement_config_digest)
-    || typeof binding.vm_image_digest !== "string"
-    || !OCI_SHA256_DIGEST.test(binding.vm_image_digest)
-    || typeof binding.request_id !== "string"
-    || !HISTORICAL_REQUEST_ID.test(binding.request_id)
-    || typeof binding.result_id !== "string"
-    || !RESULT_ID.test(binding.result_id)
-  ) {
-    return null;
-  }
-  return binding as HistoricalPublicProcessBinding;
-}
-
-function sameHistoricalStatusBinding(
-  value: unknown,
-  request: HistoricalPublicExecutorStatusRequest,
-): value is HistoricalPublicExecutorStatusRequest {
-  const binding = objectValue(value);
-  return binding !== null
-    && exactObjectFields(binding, [
-      "schema_version",
-      "runner_nonce",
-      "replay_task_id",
-      "attempt",
-      "handoff_sha256",
-      "source_archive_sha256",
-      "execution_profile_digest",
-      "measurement_config_digest",
-      "vm_image_digest",
-    ])
-    && binding.schema_version === request.schema_version
-    && binding.runner_nonce === request.runner_nonce
-    && binding.replay_task_id === request.replay_task_id
-    && binding.attempt === request.attempt
-    && binding.handoff_sha256 === request.handoff_sha256
-    && binding.source_archive_sha256 === request.source_archive_sha256
-    && binding.execution_profile_digest === request.execution_profile_digest
-    && binding.measurement_config_digest === request.measurement_config_digest
-    && binding.vm_image_digest === request.vm_image_digest;
-}
-
-function sameHistoricalProcessBinding(
-  value: unknown,
-  request: HistoricalPublicProcessBinding,
-): value is HistoricalPublicProcessBinding {
-  const binding = historicalProcessBindingValue(value);
-  return binding !== null
-    && sameHistoricalStatusBinding(historicalStatusBindingFromProcess(binding), request)
-    && binding.request_id === request.request_id
-    && binding.result_id === request.result_id;
-}
-
-function historicalStatusBindingFromProcess(
-  binding: HistoricalPublicProcessBinding,
-): HistoricalPublicExecutorStatusRequest {
-  return {
-    schema_version: 1,
-    runner_nonce: binding.runner_nonce,
-    replay_task_id: binding.replay_task_id,
-    attempt: binding.attempt,
-    handoff_sha256: binding.handoff_sha256,
-    source_archive_sha256: binding.source_archive_sha256,
-    execution_profile_digest: binding.execution_profile_digest,
-    measurement_config_digest: binding.measurement_config_digest,
-    vm_image_digest: binding.vm_image_digest,
-  };
-}
-
-function historicalProcessBindingFromActive(
-  binding: HistoricalPublicActiveBinding,
-): HistoricalPublicProcessBinding {
-  return {
-    ...historicalStatusBindingFromProcess(binding),
-    request_id: binding.request_id,
-    result_id: binding.result_id,
-  };
-}
-
-function historicalActiveBinding(
-  binding: HistoricalPublicProcessBinding,
-  now = Date.now(),
-): HistoricalPublicActiveBinding {
-  return {
-    ...binding,
-    cleanup_after_epoch_ms: now + AUTHORITATIVE_CLEANUP_AFTER_MS,
-    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
-  };
-}
-
-function historicalActiveBindingValue(
-  value: unknown,
-): HistoricalPublicActiveBinding | null {
-  const binding = objectValue(value);
-  if (
-    binding === null
-    || !exactObjectFields(binding, [
-      "schema_version",
-      "runner_nonce",
-      "replay_task_id",
-      "attempt",
-      "handoff_sha256",
-      "source_archive_sha256",
-      "execution_profile_digest",
-      "measurement_config_digest",
-      "vm_image_digest",
-      "request_id",
-      "result_id",
-      "cleanup_after_epoch_ms",
-      "retained_until_epoch_ms",
-    ])
-    || !Number.isSafeInteger(binding.cleanup_after_epoch_ms)
-    || !Number.isSafeInteger(binding.retained_until_epoch_ms)
-    || (binding.retained_until_epoch_ms as number)
-      - (binding.cleanup_after_epoch_ms as number)
-      !== AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS - AUTHORITATIVE_CLEANUP_AFTER_MS
-  ) {
-    return null;
-  }
-  return historicalProcessBindingValue({
-    schema_version: binding.schema_version,
-    runner_nonce: binding.runner_nonce,
-    replay_task_id: binding.replay_task_id,
-    attempt: binding.attempt,
-    handoff_sha256: binding.handoff_sha256,
-    source_archive_sha256: binding.source_archive_sha256,
-    execution_profile_digest: binding.execution_profile_digest,
-    measurement_config_digest: binding.measurement_config_digest,
-    vm_image_digest: binding.vm_image_digest,
-    request_id: binding.request_id,
-    result_id: binding.result_id,
-  }) === null
-    ? null
-    : binding as HistoricalPublicActiveBinding;
-}
-
-function sameHistoricalActiveBinding(
-  value: unknown,
-  request: HistoricalPublicProcessBinding,
-): value is HistoricalPublicActiveBinding {
-  const binding = historicalActiveBindingValue(value);
-  if (binding === null) return false;
-  return sameHistoricalProcessBinding(historicalProcessBindingFromActive(binding), request);
-}
-
-function rejectHistoricalBindingMismatch(value: unknown): never {
-  if (historicalActiveBindingValue(value) === null) {
-    throw new ReplayExecutorError("command_output_invalid");
-  }
-  throw new HistoricalPublicExecutorContractError("runner nonce is already bound");
-}
-
-async function claimHistoricalActiveBinding(
-  store: TerminalReceiptStore,
-  request: HistoricalPublicProcessBinding,
-): Promise<void> {
-  let value: unknown;
-  try {
-    value = await store.claimBinding(historicalActiveBinding(request));
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  if (!sameHistoricalActiveBinding(value, request)) rejectHistoricalBindingMismatch(value);
-}
-
-async function requireHistoricalActiveBinding(
-  store: TerminalReceiptStore,
-  request: HistoricalPublicExecutorStatusRequest,
-): Promise<HistoricalPublicProcessBinding> {
-  let value: unknown;
-  try {
-    value = await store.readBinding();
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  if (value === null) throw new ReplayExecutorError("command_rpc_failed");
-  const binding = historicalActiveBindingValue(value);
-  if (binding === null) throw new ReplayExecutorError("command_output_invalid");
-  const processBinding = historicalProcessBindingFromActive(binding);
-  if (!sameHistoricalStatusBinding(
-    historicalStatusBindingFromProcess(processBinding),
-    request,
-  )) {
-    throw new HistoricalPublicExecutorContractError("runner nonce is already bound");
-  }
-  return processBinding;
 }
 
 function failureBody(error: unknown): AuthoritativeFailureBody {
@@ -1026,340 +789,6 @@ async function authoritativeProcessStatus(
   return terminalReceiptResponse(await confirmTerminalReceipt(sandbox, store, receipt));
 }
 
-function validateHistoricalTerminalReceipt(
-  value: unknown,
-  request: HistoricalPublicProcessBinding,
-): HistoricalPublicTerminalReceipt {
-  const receipt = objectValue(value);
-  if (
-    receipt === null
-    || !exactObjectFields(receipt, [
-      "schema_version",
-      "binding",
-      "http_status",
-      "body",
-      "destruction_state",
-      "stored_at_epoch_ms",
-      "retained_until_epoch_ms",
-    ])
-    || receipt.schema_version !== 1
-    || !sameHistoricalProcessBinding(receipt.binding, request)
-    || !["pending", "confirmed"].includes(receipt.destruction_state as string)
-    || !Number.isSafeInteger(receipt.stored_at_epoch_ms)
-    || !Number.isSafeInteger(receipt.retained_until_epoch_ms)
-    || (receipt.retained_until_epoch_ms as number)
-      !== (receipt.stored_at_epoch_ms as number) + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS
-  ) {
-    throw new ReplayExecutorError("command_output_invalid");
-  }
-  const body = objectValue(receipt.body);
-  if (receipt.http_status === 200 && body !== null) {
-    if (
-      !exactObjectFields(body, [
-        "schema_version",
-        "contract",
-        "runner_nonce",
-        "replay_task_id",
-        "attempt",
-        "handoff_sha256",
-        "source_archive_sha256",
-        "execution_profile_digest",
-        "measurement_config_digest",
-        "vm_image_digest",
-        "runner_verdict",
-        "destruction",
-      ])
-      || body.contract !== "historical_public_executor_v1"
-      || body.destruction !== "confirmed"
-      || !sameHistoricalStatusBinding({
-        schema_version: body.schema_version,
-        runner_nonce: body.runner_nonce,
-        replay_task_id: body.replay_task_id,
-        attempt: body.attempt,
-        handoff_sha256: body.handoff_sha256,
-        source_archive_sha256: body.source_archive_sha256,
-        execution_profile_digest: body.execution_profile_digest,
-        measurement_config_digest: body.measurement_config_digest,
-        vm_image_digest: body.vm_image_digest,
-      }, historicalStatusBindingFromProcess(request))
-    ) {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    let verdict: HistoricalPublicExecutorVerdict;
-    try {
-      verdict = historicalPublicExecutorVerdictFromBinding(
-        historicalStatusBindingFromProcess(request),
-        { request_id: request.request_id, result_id: request.result_id },
-        body.runner_verdict,
-      );
-    } catch {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    return {
-      schema_version: 1,
-      binding: { ...request },
-      http_status: 200,
-      body: verdict,
-      destruction_state: receipt.destruction_state as "pending" | "confirmed",
-      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
-      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
-    };
-  }
-  if (receipt.http_status === 500 && body !== null) {
-    const hasDetail = Object.hasOwn(body, "detail");
-    if (
-      !exactObjectFields(body, hasDetail
-        ? ["error", "reason", "detail"]
-        : ["error", "reason"])
-      || body.error !== "executor_failed"
-      || ![
-        "input_transfer_failed",
-        "command_rpc_failed",
-        "command_failed",
-        "command_output_invalid",
-        "sandbox_destroy_failed",
-        "unexpected_failure",
-      ].includes(body.reason as string)
-      || (hasDetail
-        && (typeof body.detail !== "string" || !/^[a-z0-9_]{1,64}$/.test(body.detail)))
-    ) {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    return {
-      schema_version: 1,
-      binding: { ...request },
-      http_status: 500,
-      body: {
-        error: "executor_failed",
-        reason: body.reason as ExecutorFailureReason,
-        ...(hasDetail ? { detail: body.detail as string } : {}),
-      },
-      destruction_state: receipt.destruction_state as "pending" | "confirmed",
-      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
-      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
-    };
-  }
-  throw new ReplayExecutorError("command_output_invalid");
-}
-
-async function readHistoricalTerminalReceipt(
-  store: TerminalReceiptStore,
-  request: HistoricalPublicProcessBinding,
-): Promise<HistoricalPublicTerminalReceipt | null> {
-  let value: unknown;
-  try {
-    value = await store.readReceipt();
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  return value === null ? null : validateHistoricalTerminalReceipt(value, request);
-}
-
-async function prepareHistoricalTerminalReceipt(
-  store: TerminalReceiptStore,
-  receipt: HistoricalPublicTerminalReceipt,
-  request: HistoricalPublicProcessBinding,
-): Promise<HistoricalPublicTerminalReceipt> {
-  let value: unknown;
-  try {
-    value = await store.prepareReceipt(receipt);
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  return validateHistoricalTerminalReceipt(value, request);
-}
-
-function historicalTerminalReceiptResponse(
-  receipt: HistoricalPublicTerminalReceipt,
-): Response {
-  if (receipt.destruction_state !== "confirmed") {
-    throw new ReplayExecutorError("sandbox_destroy_failed");
-  }
-  return json(receipt.body, receipt.http_status);
-}
-
-async function confirmHistoricalTerminalReceipt(
-  sandbox: SandboxClient,
-  store: TerminalReceiptStore,
-  receipt: HistoricalPublicTerminalReceipt,
-): Promise<HistoricalPublicTerminalReceipt> {
-  if (receipt.destruction_state === "confirmed") return receipt;
-  try {
-    await sandbox.destroy();
-  } catch {
-    throw new ReplayExecutorError("sandbox_destroy_failed");
-  }
-  let value: unknown;
-  try {
-    value = await store.confirmReceipt();
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  return validateHistoricalTerminalReceipt(value, receipt.binding);
-}
-
-function historicalTerminalReceipt(
-  request: HistoricalPublicProcessBinding,
-  status: string,
-  logs: { stdout: string; stderr: string },
-  now = Date.now(),
-): HistoricalPublicTerminalReceipt {
-  let httpStatus: 200 | 500;
-  let body: HistoricalPublicTerminalReceipt["body"];
-  try {
-    if (status !== "completed") {
-      throw new ReplayExecutorError("command_failed");
-    }
-    if (logs.stdout.length > 64 * 1024) {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    try {
-      body = historicalPublicExecutorVerdictFromBinding(
-        historicalStatusBindingFromProcess(request),
-        { request_id: request.request_id, result_id: request.result_id },
-        JSON.parse(logs.stdout) as unknown,
-      );
-    } catch {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    httpStatus = 200;
-  } catch (error) {
-    recordExecutorFailure("historical_public_replay_status", error);
-    httpStatus = 500;
-    body = failureBody(error);
-  }
-  return {
-    schema_version: 1,
-    binding: { ...request },
-    http_status: httpStatus,
-    body,
-    destruction_state: "pending",
-    stored_at_epoch_ms: now,
-    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
-  };
-}
-
-function historicalRunningResponse(
-  request: HistoricalPublicExecutorStatusRequest,
-): Response {
-  return json({
-    schema_version: 1,
-    replay_task_id: request.replay_task_id,
-    attempt: request.attempt,
-    status: "running",
-  }, 202);
-}
-
-type HistoricalCleanupIdentity = {
-  schema_version: 1;
-  replay_task_id: string;
-  attempt: number;
-};
-
-function validateHistoricalCleanupIdentity(value: unknown): HistoricalCleanupIdentity {
-  const identity = objectValue(value);
-  if (
-    identity === null
-    || !exactObjectFields(identity, ["schema_version", "replay_task_id", "attempt"])
-    || identity.schema_version !== 1
-    || typeof identity.replay_task_id !== "string"
-    || !REPLAY_TASK_ID.test(identity.replay_task_id)
-    || !Number.isSafeInteger(identity.attempt)
-    || (identity.attempt as number) < 1
-    || (identity.attempt as number) > MAX_REPLAY_ATTEMPTS
-  ) {
-    throw new HistoricalPublicExecutorContractError("cleanup identity is invalid");
-  }
-  return {
-    schema_version: 1,
-    replay_task_id: identity.replay_task_id,
-    attempt: identity.attempt as number,
-  };
-}
-
-function validateHistoricalCleanupConfirmation(
-  value: unknown,
-  expected: HistoricalCleanupIdentity,
-): void {
-  const marker = objectValue(value);
-  const exactTombstone = marker !== null && exactObjectFields(marker, [
-    "schema_version",
-    "replay_task_id",
-    "attempt",
-    "destruction_state",
-  ]);
-  const exactRetainedConfirmation = marker !== null && exactObjectFields(marker, [
-    "schema_version",
-    "replay_task_id",
-    "attempt",
-    "destruction_state",
-    "confirmed_at_epoch_ms",
-    "retained_until_epoch_ms",
-  ]);
-  if (
-    marker === null
-    || (!exactTombstone && !exactRetainedConfirmation)
-    || marker.schema_version !== expected.schema_version
-    || marker.replay_task_id !== expected.replay_task_id
-    || marker.attempt !== expected.attempt
-    || marker.destruction_state !== "confirmed"
-    || (
-      exactRetainedConfirmation
-      && (
-        !Number.isSafeInteger(marker.confirmed_at_epoch_ms)
-        || !Number.isSafeInteger(marker.retained_until_epoch_ms)
-        || (marker.retained_until_epoch_ms as number) <= (marker.confirmed_at_epoch_ms as number)
-      )
-    )
-  ) {
-    throw new ReplayExecutorError("command_output_invalid");
-  }
-}
-
-async function historicalProcessStatus(
-  sandbox: SandboxClient,
-  store: TerminalReceiptStore,
-  request: HistoricalPublicProcessBinding,
-): Promise<Response> {
-  const stored = await readHistoricalTerminalReceipt(store, request);
-  if (stored !== null) {
-    return historicalTerminalReceiptResponse(
-      await confirmHistoricalTerminalReceipt(sandbox, store, stored),
-    );
-  }
-  if (sandbox.getProcess === undefined) throw new ReplayExecutorError("command_rpc_failed");
-  let process: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
-  try {
-    process = await sandbox.getProcess(HISTORICAL_PUBLIC_PROCESS_ID);
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  if (process === null) throw new ReplayExecutorError("command_rpc_failed");
-  let status: Awaited<ReturnType<typeof process.getStatus>>;
-  try {
-    status = await process.getStatus();
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  if (status === "starting" || status === "running") {
-    return historicalRunningResponse(historicalStatusBindingFromProcess(request));
-  }
-  let logs: Awaited<ReturnType<typeof process.getLogs>>;
-  try {
-    logs = await process.getLogs();
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  const receipt = await prepareHistoricalTerminalReceipt(
-    store,
-    historicalTerminalReceipt(request, status, logs),
-    request,
-  );
-  return historicalTerminalReceiptResponse(
-    await confirmHistoricalTerminalReceipt(sandbox, store, receipt),
-  );
-}
-
 async function writeSandboxFile(
   sandbox: SandboxClient,
   path: string,
@@ -1376,22 +805,226 @@ async function writeSandboxFile(
   }
 }
 
-function streamedText(contents: string): ReadableStream<Uint8Array> {
-  // Keep large base64 archives off the inline Sandbox RPC message path while
-  // preserving the exact text file consumed by the locked executor image.
-  const encoder = new TextEncoder();
-  let offset = 0;
-  return new ReadableStream<Uint8Array>({
-    pull(controller) {
-      if (offset === contents.length) {
-        controller.close();
-        return;
+/**
+ * Stream one upload part into the Sandbox, digesting and counting as it passes.
+ *
+ * A pass-through transform rather than `body.tee()`: with `tee`, the digest
+ * branch drains faster than the Sandbox write and the runtime buffers the whole
+ * part for the slower branch, which is the memory behaviour this transport
+ * exists to remove. Here nothing larger than one chunk is ever resident.
+ *
+ * `content-length` is optional and client-controlled, so the count taken here is
+ * the only real bound on how many bytes a part may carry.
+ */
+async function streamPartToSandbox(
+  sandbox: SandboxClient,
+  path: string,
+  body: ReadableStream<Uint8Array>,
+  maximumBytes: number,
+): Promise<{ bytes: number; sha256: string }> {
+  // `crypto.DigestStream`, not a bare global: the type is declared globally but
+  // the constructor only exists on the Crypto instance.
+  const digestStream = new crypto.DigestStream("SHA-256");
+  const writer = digestStream.getWriter();
+  let bytes = 0;
+  const overflow = { hit: false };
+  const counted = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    async transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      if (bytes > maximumBytes) {
+        overflow.hit = true;
+        throw new Error("upload part exceeds its size limit");
       }
-      const end = Math.min(offset + 64 * 1024, contents.length);
-      controller.enqueue(encoder.encode(contents.slice(offset, end)));
-      offset = end;
+      await writer.write(chunk);
+      controller.enqueue(chunk);
     },
+    async flush() {
+      await writer.close();
+    },
+  }));
+  let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
+  try {
+    result = await sandbox.writeFile(path, counted);
+  } catch {
+    if (overflow.hit) throw new ArchiveUploadContractError("upload part exceeds its size limit");
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  if (!result.success || result.path !== path) {
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  // `WriteFileResult` carries no byte count, so the Worker cannot confirm here
+  // that the container received everything it was sent. The assembly helper
+  // re-measures every part against the manifest before the key unwrap, which
+  // catches a truncated transfer while the capability is still unspent.
+  const digest = new Uint8Array(await digestStream.digest);
+  return {
+    bytes,
+    sha256: [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+  };
+}
+
+function uploadIdentity(value: {
+  upload_kind: ArchiveUploadKind;
+  runner_nonce: string;
+  archive_sha256: string;
+  archive_bytes: number;
+  part_count: number;
+}): ArchiveUploadIdentity {
+  return {
+    schema_version: 1,
+    upload_kind: value.upload_kind,
+    runner_nonce: value.runner_nonce,
+    archive_sha256: value.archive_sha256,
+    archive_bytes: value.archive_bytes,
+    part_count: value.part_count,
+  };
+}
+
+/**
+ * Accept one part. Claiming happens here, on the first part, rather than at the
+ * replay start: the upload creates the Sandbox, so the durable record that will
+ * later destroy an abandoned one has to exist from the first byte.
+ */
+async function handleArchiveUploadPart(
+  request: Request,
+  header: ArchiveUploadPartHeader,
+  receipts: TerminalReceiptStore,
+  sandbox: SandboxClient,
+): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
+  const body = request.body;
+  if (body === null) throw new ArchiveUploadContractError("upload part requires a body");
+  const identity = uploadIdentity(header);
+  // The Durable Object enforces this atomically; checking first turns a nonce
+  // already bound to a different archive into a 400 the caller can act on
+  // rather than an opaque executor failure.
+  const existing = objectValue(await store.readArchiveUpload());
+  if (
+    existing !== null
+    && !sameArchiveUploadIdentity(uploadIdentity(existing as unknown as ArchiveUploadIdentity), identity)
+  ) {
+    throw new ArchiveUploadContractError("runner nonce is already bound to a different archive upload");
+  }
+  await store.claimArchiveUpload(identity);
+  // A fresh path per request. Deterministic per-index names would let a retry or
+  // a delayed duplicate rewrite bytes that an earlier part already committed,
+  // including after finalize had accepted them.
+  const path = `${ARCHIVE_PART_PREFIX}${crypto.randomUUID()}`;
+  const written = await streamPartToSandbox(
+    sandbox,
+    path,
+    body as ReadableStream<Uint8Array>,
+    MAX_PART_BYTES,
+  );
+  if (written.bytes !== header.part_bytes || written.sha256 !== header.part_sha256) {
+    throw new ArchiveUploadContractError("upload part does not match its declared digest");
+  }
+  await store.commitArchiveUploadPart(identity, {
+    index: header.part_index,
+    sha256: written.sha256,
+    bytes: written.bytes,
+    path,
   });
+  return json({
+    schema_version: 1,
+    upload_kind: header.upload_kind,
+    part_index: header.part_index,
+    status: "stored",
+  }, 202);
+}
+
+/**
+ * Assemble and verify inside the container, before any key unwrap. Verifying
+ * only in the replay image would be enough for integrity but not for readiness:
+ * a missing part or an idled-out container would then surface after the one-use
+ * capability had been spent.
+ */
+async function handleArchiveUploadFinalize(
+  finalize: ArchiveUploadFinalizeRequest,
+  receipts: TerminalReceiptStore,
+  sandbox: SandboxClient,
+): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
+  const identity = uploadIdentity(finalize);
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) throw new ArchiveUploadContractError("archive upload was not claimed");
+  const committed = Array.isArray(stored.parts) ? stored.parts : [];
+  if (
+    !sameArchiveUploadIdentity(
+      uploadIdentity(stored as unknown as ArchiveUploadIdentity),
+      identity,
+    )
+    || committed.length !== finalize.part_count
+  ) {
+    throw new ArchiveUploadContractError("archive upload does not match the finalize request");
+  }
+  const ordered = finalize.parts.map((expected) => {
+    const match = committed
+      .map((entry) => objectValue(entry))
+      .find((entry): entry is Record<string, unknown> => entry !== null && entry.index === expected.index);
+    if (
+      match?.sha256 !== expected.sha256
+      || match.bytes !== expected.bytes
+      || typeof match.path !== "string"
+    ) {
+      throw new ArchiveUploadContractError("archive upload part does not match the finalize request");
+    }
+    return { index: expected.index, path: match.path, bytes: expected.bytes, sha256: expected.sha256 };
+  });
+  const target = ARCHIVE_UPLOAD_TARGETS[finalize.upload_kind];
+  await writeSandboxFile(sandbox, ARCHIVE_ASSEMBLE_MANIFEST, JSON.stringify({
+    schema_version: 1,
+    output_path: target,
+    archive_sha256: finalize.archive_sha256,
+    archive_bytes: finalize.archive_bytes,
+    parts: ordered,
+  }));
+  const stdout = await executeSandboxCommand(
+    sandbox,
+    ARCHIVE_ASSEMBLE_COMMAND,
+    ARCHIVE_ASSEMBLE_TIMEOUT_MS,
+    4096,
+  );
+  let assembled: Record<string, unknown> | null;
+  try {
+    assembled = objectValue(JSON.parse(stdout) as unknown);
+  } catch {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  if (assembled === null) throw new ReplayExecutorError("command_output_invalid");
+  if (
+    assembled.schema_version !== 1
+    || assembled.assembled_path !== target
+    || assembled.archive_bytes !== finalize.archive_bytes
+    || assembled.archive_sha256 !== finalize.archive_sha256
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  await store.finalizeArchiveUpload(identity, target);
+  return json({
+    schema_version: 1,
+    upload_kind: finalize.upload_kind,
+    status: "assembled",
+  }, 200);
+}
+
+/** The assembled archive a replay start may use, or null if none is ready. */
+async function readyArchiveUpload(
+  receipts: TerminalReceiptStore,
+  expected: ArchiveUploadIdentity,
+): Promise<string> {
+  const store = requireArchiveUploadStore(receipts);
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) {
+    throw new ArchiveUploadContractError("archive upload was not completed");
+  }
+  if (
+    !sameArchiveUploadIdentity(uploadIdentity(stored as unknown as ArchiveUploadIdentity), expected)
+    || typeof stored.assembled_path !== "string"
+  ) {
+    throw new ArchiveUploadContractError("archive upload does not match the replay request");
+  }
+  return stored.assembled_path;
 }
 
 async function executeSandboxCommand(
@@ -1461,7 +1094,6 @@ function health(env: ReplayRuntimeEnv): Response {
     environment: env.DEPLOYMENT_ENVIRONMENT,
     deployed_commit: env.DEPLOYED_COMMIT,
     replay_enabled: env.REPLAY_ENABLED === "true",
-    historical_public_replay_enabled: env.HISTORICAL_PUBLIC_REPLAY_ENABLED === "true",
     staging_acceptance_enabled: env.STAGING_ACCEPTANCE_ENABLED === "true",
     staging_memory_limit_bytes: Number(env.STAGING_MEMORY_LIMIT_BYTES),
     production_memory_gate_bytes: Number(env.PRODUCTION_MEMORY_GATE_BYTES),
@@ -1482,164 +1114,64 @@ export async function handleReplayRequest(
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
-  const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
-  const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
-  const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
-  const historicalPublicReservation = url.pathname
-    === "/api/v1/historical-public-replay/cleanup-reservation";
+  const authoritativePart = url.pathname === "/api/v1/replay/archive-part";
+  const authoritativeFinalize = url.pathname === "/api/v1/replay/archive-finalize";
+  const archivePart = url.pathname === "/api/v1/staging-archive-acceptance/archive-part";
+  const archiveFinalize = url.pathname === "/api/v1/staging-archive-acceptance/archive-finalize";
   if (
     (
       !syntheticAcceptance
       && !archiveAcceptance
       && !authoritativeReplay
       && !authoritativeStatus
-      && !historicalPublicReplay
-      && !historicalPublicStatus
-      && !historicalPublicCleanup
-      && !historicalPublicReservation
+      && !authoritativePart
+      && !authoritativeFinalize
+      && !archivePart
+      && !archiveFinalize
     ) ||
     request.method !== "POST"
   ) {
     return json({ error: "not_found" }, 404);
   }
-  if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
+  // Upload shares the replay flag: it creates the same Sandbox the start would,
+  // so it must not be reachable while replay is disabled.
+  if ((authoritativeReplay || authoritativePart || authoritativeFinalize) && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
   }
-  if (
-    (
-      historicalPublicReplay
-      || historicalPublicStatus
-      || historicalPublicCleanup
-      || historicalPublicReservation
-    )
-    && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true"
-  ) {
-    return json({ error: "historical_public_replay_disabled" }, 503);
-  }
-  if (historicalPublicReservation) {
-    try {
-      await dependencies.authenticate(request, env);
-      if (dependencies.recoveryStore === undefined) {
-        throw new ReplayExecutorError("command_rpc_failed");
-      }
-      const identity = validateHistoricalCleanupIdentity(await request.json());
-      const store = dependencies.recoveryStore(
-        env,
-        identity.replay_task_id,
-        identity.attempt,
-      );
-      const reserved = await store.reserveCleanupIdentity(identity);
-      const confirmed = validateHistoricalCleanupIdentity(reserved);
-      if (
-        confirmed.replay_task_id !== identity.replay_task_id
-        || confirmed.attempt !== identity.attempt
-      ) {
-        throw new ReplayExecutorError("command_output_invalid");
-      }
-      return json({ ...identity, status: "reserved" });
-    } catch (error) {
-      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
-        return json({ error: "invalid_request" }, 400);
-      }
-      recordExecutorFailure("historical_public_replay_cleanup_reservation", error);
-      return authoritativeExecutorFailure(error);
+  if (authoritativePart || authoritativeFinalize || archivePart || archiveFinalize) {
+    const kind: ArchiveUploadKind = authoritativePart || authoritativeFinalize
+      ? "authoritative-archive"
+      : "staging-archive-acceptance";
+    const route = `${kind === "authoritative-archive" ? "authoritative" : "staging_archive"}_upload`;
+    if (kind === "staging-archive-acceptance" && !stagingAcceptanceEnabled(env)) {
+      return json({ error: "staging_acceptance_disabled" }, 503);
     }
-  }
-  if (historicalPublicCleanup) {
     try {
       await dependencies.authenticate(request, env);
-      if (dependencies.recoveryStore === undefined) {
-        throw new ReplayExecutorError("command_rpc_failed");
-      }
-      const identity = validateHistoricalCleanupIdentity(await request.json());
-      const store = dependencies.recoveryStore(
-        env,
-        identity.replay_task_id,
-        identity.attempt,
-      );
-      const marker = await store.destroyBoundSandbox(identity);
-      validateHistoricalCleanupConfirmation(marker, identity);
-      return json({ ...identity, destruction: "confirmed" });
-    } catch (error) {
-      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
-        return json({ error: "invalid_request" }, 400);
-      }
-      recordExecutorFailure("historical_public_replay_cleanup", error);
-      return authoritativeExecutorFailure(error);
-    }
-  }
-  if (historicalPublicStatus) {
-    try {
-      await dependencies.authenticate(request, env);
-      const input = await readHistoricalPublicExecutorStatusRequest(
-        request,
-        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
-        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
-        env.REVIEWED_VM_IMAGE_DIGEST,
-      );
-      const store = terminalReceiptStore(dependencies, env, input.runner_nonce, input);
-      const binding = await requireHistoricalActiveBinding(store, input);
-      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
-      return await historicalProcessStatus(sandbox, store, binding);
-    } catch (error) {
-      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
-        return json({ error: "invalid_request" }, 400);
-      }
-      recordExecutorFailure("historical_public_replay_status", error);
-      return authoritativeExecutorFailure(error);
-    }
-  }
-  if (historicalPublicReplay) {
-    try {
-      await dependencies.authenticate(request, env);
-      const input = await readHistoricalPublicExecutorRequest(
-        request,
-        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
-        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
-        env.REVIEWED_VM_IMAGE_DIGEST,
-      );
-      const store = terminalReceiptStore(
-        dependencies,
-        env,
-        input.runner_nonce,
-        historicalStatusBinding(input),
-      );
-      const binding = historicalProcessBinding(input);
-      await claimHistoricalActiveBinding(store, binding);
-      const existingReceipt = await readHistoricalTerminalReceipt(store, binding);
-      if (existingReceipt !== null) {
-        return historicalRunningResponse(historicalStatusBinding(input));
-      }
-      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
-      try {
-        await startHistoricalPublicProcess(sandbox, async () => {
-          await writeSandboxFile(
-            sandbox,
-            "/workspace/historical-public-request.json",
-            canonicalHistoricalPublicHandoff(input.handoff),
-          );
-          await writeSandboxFile(
-            sandbox,
-            "/workspace/historical-public-source.tar.gz.b64",
-            streamedText(input.source_archive_base64),
-          );
-        });
-      } catch (error) {
-        if (!(error instanceof ProcessStartConflictError)) {
-          await sandbox.destroy();
+      // Parse before resolving the Sandbox: the runner nonce names the Sandbox
+      // and the durable record, and a body can only be read once.
+      if (authoritativePart || archivePart) {
+        const header = readArchiveUploadPartHeader(request);
+        if (header.upload_kind !== kind) {
+          throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
         }
-        throw error;
+        const store = terminalReceiptStore(dependencies, env, header.runner_nonce);
+        const sandbox = await dependencies.sandbox(env, header.runner_nonce);
+        return await handleArchiveUploadPart(request, header, store, sandbox);
       }
-      return historicalRunningResponse(historicalStatusBinding(input));
+      const finalize = await readArchiveUploadFinalizeRequest(request);
+      if (finalize.upload_kind !== kind) {
+        throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
+      }
+      const store = terminalReceiptStore(dependencies, env, finalize.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, finalize.runner_nonce);
+      return await handleArchiveUploadFinalize(finalize, store, sandbox);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
+      if (error instanceof ArchiveUploadContractError || error instanceof SyntaxError) {
         return json({ error: "invalid_request" }, 400);
       }
-      recordExecutorFailure("historical_public_replay", error);
+      recordExecutorFailure(route, error);
       return authoritativeExecutorFailure(error);
     }
   }
@@ -1687,6 +1219,18 @@ export async function handleReplayRequest(
           status: "running",
         }, 202);
       }
+      // The archive is already in the Sandbox, assembled and digest-checked by
+      // the finalize that ran before the key unwrap. A start that cannot see it
+      // must not proceed: the capability is spent by now, but a refusal here is
+      // recoverable by re-uploading under a fresh nonce, and a start is not.
+      await readyArchiveUpload(store, {
+        schema_version: 1,
+        upload_kind: "authoritative-archive",
+        runner_nonce: input.runner_nonce,
+        archive_sha256: input.archive_expectation.archive_ciphertext_sha256,
+        archive_bytes: input.archive_ciphertext_bytes,
+        part_count: input.archive_part_count,
+      });
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         await startAuthoritativeProcess(sandbox, async () => {
@@ -1696,13 +1240,8 @@ export async function handleReplayRequest(
             "/workspace/archive-expectation.json",
             JSON.stringify(input.archive_expectation),
           );
-          await writeSandboxFile(
-            sandbox,
-            "/workspace/archive.tar.gz.age.b64",
-            streamedText(input.ciphertext_base64),
-          );
-          if (input.schema_version === 1) {
-            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          if (input.key_material_type === "age-identity-v1") {
+            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_key_material_base64);
           } else {
             await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
           }
@@ -1721,7 +1260,11 @@ export async function handleReplayRequest(
       }, 202);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+      if (
+        error instanceof AuthoritativeReplayContractError
+        || error instanceof ArchiveUploadContractError
+        || error instanceof SyntaxError
+      ) {
         return json({ error: "invalid_request" }, 400);
       }
       recordExecutorFailure("authoritative_replay", error);
@@ -1735,9 +1278,20 @@ export async function handleReplayRequest(
     await dependencies.authenticate(request, env);
     if (archiveAcceptance) {
       const input = await readArchiveAcceptanceRequest(request);
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      // The archive was uploaded and assembled under this nonce before this
+      // request; refusing here keeps a stale or absent upload from being read
+      // as a decryption failure by the acceptance run.
+      await readyArchiveUpload(store, {
+        schema_version: 1,
+        upload_kind: "staging-archive-acceptance",
+        runner_nonce: input.runner_nonce,
+        archive_sha256: input.archive_ciphertext_sha256,
+        archive_bytes: input.archive_ciphertext_bytes,
+        part_count: input.archive_part_count,
+      });
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       const evidence = await withSandboxDestruction(sandbox, async () => {
-          await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
           await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
           await writeSandboxFile(
             sandbox,

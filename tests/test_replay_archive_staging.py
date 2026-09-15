@@ -123,10 +123,14 @@ class ReplayArchiveStagingTests(unittest.TestCase):
                 ciphertext_path,
                 "2026-08-23T04:00:00.000Z",
                 unwrap_path,
+                runner_nonce="a" * 64,
             )
             unwrap = json.loads(unwrap_path.read_text(encoding="utf-8"))
             self.assertEqual(unwrap["capability"]["submission_id"], SUBMISSION_ID)
             self.assertEqual(unwrap["capability"]["max_uses"], 1)
+            # The nonce is minted before the upload, so the capability binds to
+            # one the caller already used for the archive parts.
+            self.assertEqual(unwrap["capability"]["runner_nonce"], "a" * 64)
 
             # Replace the expired fixture interval with a current one before
             # building the handoff; prepare_unwrap itself is tested against the
@@ -154,6 +158,10 @@ class ReplayArchiveStagingTests(unittest.TestCase):
             self.assertEqual(executor["submission_id"], SUBMISSION_ID)
             self.assertEqual(executor["plaintext_tar_sha256"], digest(PLAINTEXT))
             self.assertNotIn("wrapped_identity", executor)
+            # The archive travels as uploaded parts; only its shape is named here.
+            self.assertNotIn("ciphertext_base64", executor)
+            self.assertEqual(executor["archive_ciphertext_bytes"], len(CIPHERTEXT))
+            self.assertEqual(executor["archive_part_count"], 1)
 
     def test_response_requires_destroyed_source_free_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
