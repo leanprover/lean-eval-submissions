@@ -284,6 +284,25 @@
         "ref": "03e1aecee05cd9a14e7b97140dd96e3f3a826466",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-15T03:24:03Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a2e1-acf1-7b11-aadf-3f680ef6bf0e"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {},
+      "result_id": "r2_8580cfb3f772b224317dfca85b92f18dfd6e490481ceffe6ca96d0ba29dd9e15",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "03e1aecee05cd9a14e7b97140dd96e3f3a826466",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
