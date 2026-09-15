@@ -360,6 +360,25 @@
         "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-15T05:06:34Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a34e-bae9-77db-99da-5c2c91d781fd"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_6186b9fe146b3466297ffd7eeebe3bbc9dae8f92b245a2de0fdcdd390a0180b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
