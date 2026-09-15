@@ -474,6 +474,25 @@
         "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-15T17:56:15Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a5e7-e429-75bd-b333-44837ad97a19"
+      },
+      "problem_id": "annals_van_der_waerden_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_3c1d4ae96290519fd348f6fe1b0e23e9e8675edffff18e91e959ca180b2a88de",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
