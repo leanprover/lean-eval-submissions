@@ -455,6 +455,25 @@
         "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-15T17:47:32Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a5e8-8069-7710-9962-ea1b97d0cae0"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {},
+      "result_id": "r2_302fa83e35f3ea68836bcb5e8a0d27ff9616a85a726d22f4497b603d07c15ade",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c9573f094ae097630c155731b11519d3ce27e52",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
