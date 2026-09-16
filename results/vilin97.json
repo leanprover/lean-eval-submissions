@@ -6576,6 +6576,25 @@
         "ref": "5b29d5fdcca7432388ef5ec1f49fda2d14ccf881",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-16T02:44:03Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a787-8e51-7e66-ba6b-bc8974cf18d8"
+      },
+      "problem_id": "gorenstein_walter",
+      "production_metadata": {},
+      "result_id": "r2_bc76ba86b47eebcd4f03045a4a166122e4a2c0f422a0ecf2649f3e85e71a0d1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5b29d5fdcca7432388ef5ec1f49fda2d14ccf881",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
