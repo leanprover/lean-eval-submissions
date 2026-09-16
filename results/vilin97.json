@@ -6557,6 +6557,25 @@
         "ref": "5b29d5fdcca7432388ef5ec1f49fda2d14ccf881",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-16T02:37:31Z",
+      "benchmark_commit": "dd42cf4ae36899031a9c40768adac775734d11ed",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0a786-f9e1-7f2f-8f53-c1d50769510c"
+      },
+      "problem_id": "bender_suzuki",
+      "production_metadata": {},
+      "result_id": "r2_6f3fcc931016a3d794cbcecba4c6dc4c91258f44c08cbefb4e38bd60481f08a7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5b29d5fdcca7432388ef5ec1f49fda2d14ccf881",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
