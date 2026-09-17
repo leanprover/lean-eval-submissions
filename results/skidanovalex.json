@@ -588,6 +588,25 @@
         "ref": "022de95a9680005c31cc631fe3433bf40d0b4812",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-17T19:46:58Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b0af-94a1-7400-892f-d5b150bb99dc"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {},
+      "result_id": "r2_bf1fb9cabd41a6e9f2f4faca9ca00992e3e1263aceabf98211a4f996b4387e61",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "684a976daf2bac702da217d0a67743ef656eb297",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
