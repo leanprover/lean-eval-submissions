@@ -626,6 +626,25 @@
         "ref": "3a6609fcdad2aee7e20c5a8712b974cdc8405d7a",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-18T23:25:19Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b697-c5b9-7ba6-ac94-0598f040737d"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_a531ef63a5b2ecd399d638c47f8bc7a58a763c57db22d5f9c9213759ec9009cc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "44f3b3a5b5d77ec44c95b13b9733c97d4ebf02ff",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
