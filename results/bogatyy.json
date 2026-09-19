@@ -83,6 +83,34 @@
         "ref": "304e322466b2465d1ee55830699576c8e5340abe",
         "repo": "bogatyy/lean-eval-proofs-intake"
       }
+    },
+    {
+      "accepted_at": "2026-09-19T17:34:29Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba7b-5501-7535-a0b0-6c91eb6b66f9"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of lixiang90/chen_theorem at 947f7990ef9b9a0f1bd021f5ed489020d42e0d5b (original proof revision 3264ad6acafa64ada18a309f48350d9acfd261ef). Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib. This is a source-informed adaptation, not an independent new proof. All 411 imported proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Source attribution, upstream provenance, and the Apache-2.0 license and notices for the PrimeNumberTheoremAnd subset are retained. Publication is withheld because no repository-wide license was found for the remaining upstream Chen formalization; no authority to relicense that code under Apache-2.0 is asserted. The source snapshot is separate from the scheduled-release submissions. Details are in generated/chen_theorem/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_e730c95d0868468f04a7293e29ba13717dfc7d4c3c6428fc729b71cb4c3f230f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7e5be33f96ab2ceaa2142de0b309d78a1a639f89",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
     }
   ],
   "schema_version": 2,
