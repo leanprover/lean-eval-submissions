@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-19T00:10:48Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b6d1-fff9-709e-916f-02146207cc18"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_1a33fec6949c545e4b6f147a53203e8e8855ded7cfbd486246d04fea165d4cdd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "79af4788ee793450a7b9f4219b00e5b97860efa3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "sarjinius"
+}
