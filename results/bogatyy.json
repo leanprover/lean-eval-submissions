@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-19T05:23:05Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b7f5-9869-78c1-b09a-2c23fd2f101d"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Source-informed formalization consulting Gardam's paper, Siddhartha Gadgil's public formalization, and LikC1606's gist 7570e284ff8b474a4139db2092de6eec at revision 1062b1e6c3d5bda6ae4a218e41bd34dbf11a2c35. Full provenance and proof strategy are in PROOF_NOTES.md. The exact Lean source passed local official comparator, nanoda and Lean kernel checks under Lean v4.34.0 and pinned Mathlib; edited files passed with warnings treated as errors. Prior legacy intake issue #1740 failed at infrastructure fetch before evaluating the proof. The source is also publicly available at bogatyy/lean-eval-proofs at this same commit; this private mirror is used because the archive workflow currently requires a private source repository. Web submission 01a0b7e6-42a1-7ea7-acfd-71563dd75115 failed before proof evaluation for that visibility requirement.",
+        "web_access": true
+      },
+      "result_id": "r2_d0eaf56b4bd496015fa942bee78600e9bcfbd9e3fe35c9777333dca814c4d408",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7acc2752bd45c6fbb8d3a347e630079a88205a1d",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "bogatyy"
+}
