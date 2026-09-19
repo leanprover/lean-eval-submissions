@@ -55,6 +55,34 @@
         "ref": "304e322466b2465d1ee55830699576c8e5340abe",
         "repo": "bogatyy/lean-eval-proofs-intake"
       }
+    },
+    {
+      "accepted_at": "2026-09-19T16:28:51Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba44-3b89-7914-825e-10cbc60a572a"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of mlgraham/lean-eval-klartag-submission at 270b3358a135f64a6688636660c07772e8db0173, with its Apache-2.0 license retained. Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib, including a measurability compatibility argument for Gaussian pushforward measures. This is a source-informed adaptation, not an independent new proof. All 178 proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Provenance and verification details are in generated/klartag_packing/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_5eac3da25640128dd0fd929dec6c91a689bdd65ab0333b66891ebc0f5efb0b5e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "304e322466b2465d1ee55830699576c8e5340abe",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
     }
   ],
   "schema_version": 2,
