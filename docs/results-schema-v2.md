@@ -44,8 +44,9 @@ Server intake does not infer State advancement from a successful record job.
 After the recorder has pushed, `scripts/build_result_receipt.py` validates the
 canonical schema-version-2 file and emits a source-free receipt naming the
 result ID, repository, environment branch, exact commit, path, and tree
-digest. Staging writes `staging-results`; production and legacy issue intake
-write `main`. Only production and issue writes trigger the public leaderboard.
+digest. Staging writes `staging-results`; production writes `main`. Historical
+legacy issue-intake records remain in `main`. Only production writes trigger
+the public leaderboard.
 
 For the exact per-user file bytes at `path`:
 

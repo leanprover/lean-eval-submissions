@@ -31,11 +31,11 @@ audit/
 archives/
   {uuid-prefix}/
     {submission-uuidv7}.tar.age            # server-intake ciphertext
-    {submission-uuidv7}.json               # sidecar schema version 2, UUID-keyed
+    {submission-uuidv7}.json               # sidecar schema version 3, UUID-keyed
 ```
 
-The first layout is retained for existing GitHub Issue intake. Server intake
-uses a canonical lowercase UUIDv7 and the second layout, where `uuid-prefix`
+The first layout is retained for historical GitHub Issue submissions. Server
+intake uses a canonical lowercase UUIDv7 and the second layout, where `uuid-prefix`
 is the first two hexadecimal digits of the UUID with hyphens removed. The two
 identity modes are deliberately unambiguous: a legacy metadata record has an
 `issue_number`; a server metadata record has a `submission_id`; neither may
@@ -44,12 +44,14 @@ carry both.
 The archive tarball and the evaluator's independent refetch resolve to the
 same immutable source commit. Their gzip/tar bytes need not be reproducible;
 the workflow compares frozen metadata containing the exact commit before any
-untrusted Lean runs. Encryption uses
-[`age`](https://github.com/FiloSottile/age) with recipients listed in
-[`.audit/recipients.txt`](../.audit/recipients.txt). The sidecar
-records the SHA-256 of both plaintext-tar and ciphertext so an
-operator can verify integrity at decrypt time (against the plaintext
-digest) and without decrypting (against the ciphertext digest).
+untrusted Lean runs. Current server archives use
+[`age`](https://github.com/FiloSottile/age) with one fresh identity per
+submission and wrap that identity in the schema-version-3 provider-neutral KMS
+envelope. Historical issue archives use the recipients listed in
+[`.audit/recipients.txt`](../.audit/recipients.txt). The sidecar records the
+SHA-256 of both plaintext-tar and ciphertext so an operator can verify
+integrity at decrypt time (against the plaintext digest) and without decrypting
+(against the ciphertext digest).
 For submissions made after publication disclosure was added, it also
 preserves the submitter's `solution_publication_status` and optional
 `solution_publication_date` snapshot.
@@ -64,10 +66,9 @@ Three ordered pieces live inside the existing `submission.yml`:
    provenance sidecar directly to `lean-eval-audit`. It mints the narrowly
    scoped archiver App token only after encryption. It runs no submitted code
    and uploads no source or ciphertext transport artifact.
-2. **State acknowledgement for server intake.** A source-free callback job
-   records the verified immutable locator. Evaluation cannot begin until that
-   acknowledgement succeeds. Issue intake skips this callback but still waits
-   for archive persistence.
+2. **State acknowledgement.** A source-free callback job records the verified
+   immutable locator. Evaluation cannot begin until that acknowledgement
+   succeeds.
 3. **Independent evaluation fetch.** The evaluation job checks out the exact
    benchmark commit frozen by archive, independently refetches the source, and
    compares the deterministic metadata digest before running untrusted Lean.
@@ -131,11 +132,8 @@ The push is **idempotent on the source**, which matters because a
    commit and performs the same byte check.
 
    `archive` exposes `audit_ciphertext_ready` as a job output, set to
-   `'true'` only when encryption succeeded. `notify` branches on it so an
-   audit-encryption failure produces an
-   "audit encryption failed" comment rather than the misleading
-   "Submission.lean failed to compile" message that would otherwise
-   fire from the generic evaluate-failure path.
+   `'true'` only when encryption succeeded. Archive failures are reported to
+   lifecycle State before evaluation is allowed to start.
 
 ## Threat model
 
