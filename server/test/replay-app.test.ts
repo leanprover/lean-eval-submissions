@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
-import { canonicalHistoricalPublicHandoff } from "../src/historical-public-executor-contract";
 
 const PROFILE_DIGEST = "3".repeat(64);
 const MEASUREMENT_DIGEST = "4".repeat(64);
@@ -23,35 +22,69 @@ async function input(): Promise<Record<string, unknown>> {
   };
 }
 
+const ACCEPTED_ARCHIVE = "age-encryption.org/v1\naccepted-fixture";
+
 async function archiveInput(): Promise<Record<string, unknown>> {
-  const ciphertext = btoa("age-encryption.org/v1\naccepted-fixture");
-  const bytes = Uint8Array.from(atob(ciphertext), (character) => character.charCodeAt(0));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
   return {
     schema_version: 1,
     request_id: "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f",
     runner_nonce: "1".repeat(64),
     submission_id: "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584",
-    archive_ciphertext_sha256: [...new Uint8Array(digest)]
-      .map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+    archive_ciphertext_sha256: await hexDigest(new TextEncoder().encode(ACCEPTED_ARCHIVE)),
     plaintext_tar_sha256: "2".repeat(64),
     plaintext_tar_size: 712,
-    ciphertext_base64: ciphertext,
+    archive_ciphertext_bytes: ACCEPTED_ARCHIVE.length,
+    archive_part_count: 1,
     plaintext_identity_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
   };
 }
 
-async function authoritativeInput(
-  ciphertextContents = "age-encryption.org/v1\nauthoritative-fixture",
-): Promise<Record<string, unknown>> {
-  const ciphertext = btoa(ciphertextContents);
-  const bytes = Uint8Array.from(atob(ciphertext), (character) => character.charCodeAt(0));
+const FIXTURE_ARCHIVE = "age-encryption.org/v1\nauthoritative-fixture";
+
+async function hexDigest(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const archiveDigest = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  const submissionId = "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584";
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+const FIXTURE_ARCHIVE_DIGEST = await hexDigest(new TextEncoder().encode(FIXTURE_ARCHIVE));
+
+/** The upload record a start expects to find: complete and assembled. */
+function assembledUploadForTest(
+  archiveSha256: string = FIXTURE_ARCHIVE_DIGEST,
+  archiveBytes: number = FIXTURE_ARCHIVE.length,
+  partCount = 1,
+  uploadKind = "authoritative-archive",
+): Record<string, unknown> {
   return {
     schema_version: 1,
+    upload_kind: uploadKind,
+    runner_nonce: "1".repeat(64),
+    archive_sha256: archiveSha256,
+    archive_bytes: archiveBytes,
+    part_count: partCount,
+    parts: [],
+    assembled_path: "/workspace/archive.tar.gz.age",
+  };
+}
+
+/** The assembled upload matching an `authoritativeInput` body. */
+function uploadForBody(body: Record<string, unknown>): Record<string, unknown> {
+  const expectation = body.archive_expectation as Record<string, unknown>;
+  return assembledUploadForTest(
+    expectation.archive_ciphertext_sha256 as string,
+    body.archive_ciphertext_bytes as number,
+    body.archive_part_count as number,
+  );
+}
+
+async function authoritativeInput(
+  ciphertextContents = FIXTURE_ARCHIVE,
+): Promise<Record<string, unknown>> {
+  const bytes = new TextEncoder().encode(ciphertextContents);
+  const archiveDigest = await hexDigest(bytes);
+  const submissionId = "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584";
+  return {
+    schema_version: 3,
     runner_nonce: "1".repeat(64),
     request: {
       replay_task_id: `rt1_${"2".repeat(64)}`,
@@ -75,96 +108,10 @@ async function authoritativeInput(
       plaintext_tar_sha256: "3".repeat(64),
       plaintext_tar_size: 712,
     },
-    ciphertext_base64: ciphertext,
-    plaintext_identity_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
-  };
-}
-
-async function historicalPublicInput(): Promise<Record<string, unknown>> {
-  const sourceText = "historical public source archive".repeat(6_000);
-  const sourceArchive = new TextEncoder().encode(sourceText);
-  const archiveHash = await crypto.subtle.digest("SHA-256", sourceArchive);
-  const archiveDigest = [...new Uint8Array(archiveHash)]
-    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  const handoff = {
-    schema_version: 1,
-    kind: "historical_public_runner_handoff",
-    contract: "historical_public_runner_v1",
-    contract_sha256: "6".repeat(64),
-    plan_sha256: "7".repeat(64),
-    profile_matrix_sha256: "8".repeat(64),
-    request_id: `prr_${"9".repeat(64)}`,
-    source: {
-      repository: "example/source",
-      commit: "a".repeat(40),
-      tree: "b".repeat(40),
-      visibility: "public",
-      archive_format: "git_archive_tar_gzip_v1",
-      archive_member_prefix: "source",
-      archive_sha256: archiveDigest,
-      archive_size_bytes: sourceArchive.byteLength,
-    },
-    benchmark: {},
-    result: { result_id: `r2_${"c".repeat(64)}` },
-    profile: {},
-    checker: "nanoda",
-    network: {},
-    untrusted_environment: {},
-  };
-  const handoffHash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(canonicalHistoricalPublicHandoff(handoff)),
-  );
-  return {
-    schema_version: 1,
-    runner_nonce: "1".repeat(64),
-    replay_task_id: `rt1_${"2".repeat(64)}`,
-    attempt: 1,
-    handoff_sha256: [...new Uint8Array(handoffHash)]
-      .map((byte) => byte.toString(16).padStart(2, "0")).join(""),
-    source_archive_sha256: archiveDigest,
-    execution_profile_digest: PROFILE_DIGEST,
-    measurement_config_digest: MEASUREMENT_DIGEST,
-    vm_image_digest: VM_IMAGE_DIGEST,
-    handoff,
-    source_archive_base64: btoa(sourceText),
-  };
-}
-
-function historicalPublicRunnerVerdict(body: Record<string, unknown>): Record<string, unknown> {
-  const handoff = body.handoff as Record<string, unknown>;
-  const result = handoff.result as Record<string, unknown>;
-  return {
-    schema_version: 1,
-    request_id: handoff.request_id,
-    result_id: result.result_id,
-    execution_outcome: "completed",
-    checker_outcome: "accepted",
-    failure_reason: null,
-    statistics: {
-      checker_wall_time_ms: 10,
-      checker_retired_instructions: { status: "measured", value: 20 },
-      build_wall_time_ms: 30,
-      build_retired_instructions: { status: "measured", value: 40 },
-      lines_of_code: 2,
-      file_count: 1,
-    },
-  };
-}
-
-function historicalStatusInput(body: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(body).filter(
-    ([field]) => field !== "handoff" && field !== "source_archive_base64",
-  ));
-}
-
-function historicalProcessBindingInput(body: Record<string, unknown>): Record<string, unknown> {
-  const handoff = body.handoff as Record<string, unknown>;
-  const result = handoff.result as Record<string, unknown>;
-  return {
-    ...historicalStatusInput(body),
-    request_id: handoff.request_id,
-    result_id: result.result_id,
+    archive_ciphertext_bytes: ciphertextContents.length,
+    archive_part_count: 1,
+    key_material_type: "age-identity-v1",
+    plaintext_key_material_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
   };
 }
 
@@ -211,12 +158,48 @@ function acceptedVerdict(body: Record<string, unknown>): Record<string, unknown>
   };
 }
 
-function terminalReceiptStore(initialBinding?: Record<string, unknown>) {
+/**
+ * In-memory stand-in for the receipt Durable Object.
+ *
+ * `archiveUpload` starts out already assembled so the many tests that only care
+ * about start, status and destruction do not each have to stage an upload; the
+ * upload-specific tests pass their own state explicitly.
+ */
+function terminalReceiptStore(
+  initialBinding?: Record<string, unknown>,
+  initialUpload?: Record<string, unknown> | null,
+) {
   let binding: unknown = initialBinding === undefined
     ? null
     : activeBindingForTest(initialBinding);
   let receipt: unknown = null;
+  let upload: unknown = initialUpload === undefined
+    ? assembledUploadForTest()
+    : initialUpload;
   return {
+    readArchiveUpload: () => Promise.resolve(upload),
+    claimArchiveUpload: (value: unknown) => {
+      // First-writer-wins on the identity, like the Durable Object.
+      if (upload === null) upload = { ...(value as object), parts: [], assembled_path: null };
+      const stored = upload as Record<string, unknown>;
+      const wanted = value as Record<string, unknown>;
+      if (stored.archive_sha256 !== wanted.archive_sha256) {
+        return Promise.reject(new Error("runner nonce is already bound to a different archive upload"));
+      }
+      return Promise.resolve(upload);
+    },
+    commitArchiveUploadPart: (_identity: unknown, part: unknown) => {
+      const current = upload as { parts: unknown[] } | null;
+      if (current === null) return Promise.reject(new Error("archive upload was not claimed"));
+      current.parts = [...current.parts, part];
+      return Promise.resolve(current);
+    },
+    finalizeArchiveUpload: (_identity: unknown, assembledPath: string) => {
+      const current = upload as Record<string, unknown> | null;
+      if (current === null) return Promise.reject(new Error("archive upload was not claimed"));
+      upload = { ...current, assembled_path: assembledPath };
+      return Promise.resolve(upload);
+    },
     readBinding: () => Promise.resolve(binding),
     claimBinding: (value: unknown) => {
       if (binding === null) binding = value;
@@ -237,11 +220,21 @@ function terminalReceiptStore(initialBinding?: Record<string, unknown>) {
   };
 }
 
+
+/** Store fake for the staging archive acceptance route's assembled upload. */
+function acceptedArchiveReceipts(body: Record<string, unknown>) {
+  return terminalReceiptStore(undefined, assembledUploadForTest(
+    body.archive_ciphertext_sha256 as string,
+    body.archive_ciphertext_bytes as number,
+    body.archive_part_count as number,
+    "staging-archive-acceptance",
+  ));
+}
+
 const ENV = {
   DEPLOYED_COMMIT: "a".repeat(40),
   DEPLOYMENT_ENVIRONMENT: "staging",
   REPLAY_ENABLED: "false",
-  HISTORICAL_PUBLIC_REPLAY_ENABLED: "false",
   STAGING_ACCEPTANCE_ENABLED: "true",
   STAGING_MEMORY_LIMIT_BYTES: "12884901888",
   PRODUCTION_MEMORY_GATE_BYTES: "12884901888",
@@ -277,716 +270,6 @@ describe("Cloudflare replay executor", () => {
     expect(authenticated).toBe(false);
   });
 
-  it("keeps historical public replay separately disabled before authentication", async () => {
-    for (const path of [
-      "/api/v1/historical-public-replay",
-      "/api/v1/historical-public-replay/status",
-      "/api/v1/historical-public-replay/cleanup",
-      "/api/v1/historical-public-replay/cleanup-reservation",
-    ]) {
-      let authenticated = false;
-      const response = await handleReplayRequest(new Request(
-        `https://example.test${path}`,
-        { method: "POST", body: "{}" },
-      ), REVIEWED_ENV, {
-        authenticate: () => {
-          authenticated = true;
-          return Promise.resolve();
-        },
-        sandbox: () => { throw new Error("sandbox must remain unreachable"); },
-      });
-      expect(response.status).toBe(503);
-      expect(await response.json()).toEqual({
-        error: "historical_public_replay_disabled",
-      });
-      expect(authenticated).toBe(false);
-    }
-  });
-
-  it("accepts attempt four and rejects attempt five across status and cleanup", async () => {
-    const fourthAttempt = await historicalPublicInput();
-    fourthAttempt.attempt = 4;
-    const fourthStatus = historicalStatusInput(fourthAttempt);
-    const fourthBinding = activeBindingForTest(
-      historicalProcessBindingInput(fourthAttempt),
-    );
-    let recoveryStoreLookups = 0;
-    let receiptStoreLookups = 0;
-    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-    const dependencies = {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => ({
-        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-        exec: () => { throw new Error("blocking exec must remain unreachable"); },
-        getProcess: () => Promise.resolve({
-          getStatus: () => Promise.resolve("running"),
-        } as never),
-        destroy: () => Promise.resolve(),
-      }),
-      receiptStore: () => {
-        receiptStoreLookups += 1;
-        return {
-          readBinding: () => Promise.resolve(fourthBinding),
-          claimBinding: (value: unknown) => Promise.resolve(value),
-          readReceipt: () => Promise.resolve(null),
-          prepareReceipt: (value: unknown) => Promise.resolve(value),
-          confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-        };
-      },
-      recoveryStore: () => {
-        recoveryStoreLookups += 1;
-        return {
-          reserveCleanupIdentity: (identity: unknown) => Promise.resolve(identity),
-          destroyBoundSandbox: (identity: unknown) => Promise.resolve({
-            ...(identity as Record<string, unknown>),
-            destruction_state: "confirmed",
-          }),
-        };
-      },
-    };
-    const cleanupIdentity = {
-      schema_version: 1,
-      replay_task_id: fourthAttempt.replay_task_id,
-      attempt: fourthAttempt.attempt,
-    };
-
-    const reservation = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
-      { method: "POST", body: JSON.stringify(cleanupIdentity) },
-    ), enabled, dependencies);
-    expect(reservation.status).toBe(200);
-    expect(await reservation.json()).toEqual({ ...cleanupIdentity, status: "reserved" });
-
-    const cleanup = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/cleanup",
-      { method: "POST", body: JSON.stringify(cleanupIdentity) },
-    ), enabled, dependencies);
-    expect(cleanup.status).toBe(200);
-    expect(await cleanup.json()).toEqual({ ...cleanupIdentity, destruction: "confirmed" });
-
-    const status = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/status",
-      { method: "POST", body: JSON.stringify(fourthStatus) },
-    ), enabled, dependencies);
-    expect(status.status).toBe(202);
-    expect(await status.json()).toEqual({
-      schema_version: 1,
-      replay_task_id: fourthAttempt.replay_task_id,
-      attempt: 4,
-      status: "running",
-    });
-
-    const fifthIdentity = { ...cleanupIdentity, attempt: 5 };
-    const fifthStatus = { ...fourthStatus, attempt: 5 };
-    for (const [path, body] of [
-      ["/api/v1/historical-public-replay/cleanup-reservation", fifthIdentity],
-      ["/api/v1/historical-public-replay/cleanup", fifthIdentity],
-      ["/api/v1/historical-public-replay/status", fifthStatus],
-    ] as const) {
-      const response = await handleReplayRequest(new Request(
-        `https://example.test${path}`,
-        { method: "POST", body: JSON.stringify(body) },
-      ), enabled, dependencies);
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error: "invalid_request" });
-    }
-    expect(recoveryStoreLookups).toBe(2);
-    expect(receiptStoreLookups).toBe(1);
-  });
-
-  it("idempotently starts and polls one historical handoff through confirmed destruction", async () => {
-    const body = await historicalPublicInput();
-    const writes = new Map<string, string>();
-    const archiveChunkSizes: number[] = [];
-    const commands: string[] = [];
-    const processIds: string[] = [];
-    let processStarted = false;
-    let processStatus: "running" | "completed" = "running";
-    let logReads = 0;
-    let destroyCalls = 0;
-    let claimedBinding: unknown = null;
-    let storedReceipt: unknown = null;
-    const receipts = {
-      readBinding: () => Promise.resolve(claimedBinding),
-      claimBinding: (value: unknown) => {
-        if (claimedBinding === null) claimedBinding = value;
-        return Promise.resolve(claimedBinding);
-      },
-      readReceipt: () => Promise.resolve(storedReceipt),
-      prepareReceipt: (value: unknown) => {
-        if (storedReceipt === null) storedReceipt = value;
-        return Promise.resolve(storedReceipt);
-      },
-      confirmReceipt: () => {
-        storedReceipt = {
-          ...(storedReceipt as Record<string, unknown>),
-          destruction_state: "confirmed",
-        };
-        return Promise.resolve(storedReceipt);
-      },
-    };
-    const process = {
-      getStatus: () => Promise.resolve(processStatus),
-      getLogs: () => {
-        logReads += 1;
-        return Promise.resolve({
-          stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
-          stderr: "",
-        });
-      },
-    };
-    const sandbox = {
-      writeFile: async (
-        path: string,
-        contents: string | ReadableStream<Uint8Array>,
-      ) => {
-        let text: string;
-        if (typeof contents === "string") {
-          text = contents;
-        } else {
-          const reader = contents.getReader();
-          const decoder = new TextDecoder();
-          text = "";
-          let chunk = await reader.read();
-          while (!chunk.done) {
-            archiveChunkSizes.push(chunk.value.byteLength);
-            text += decoder.decode(chunk.value, { stream: true });
-            chunk = await reader.read();
-          }
-          text += decoder.decode();
-        }
-        writes.set(path, text);
-        return Promise.resolve({ success: true, path, timestamp: "fixture" });
-      },
-      exec: () => { throw new Error("blocking exec must remain unreachable"); },
-      getProcess: () => Promise.resolve(processStarted ? process as never : null),
-      startProcess: (command: string, options?: { processId?: string }) => {
-        processStarted = true;
-        commands.push(command);
-        processIds.push(options?.processId ?? "");
-        return Promise.resolve(process as never);
-      },
-      destroy: () => {
-        destroyCalls += 1;
-        return Promise.resolve();
-      },
-    };
-    const dependencies = {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => sandbox,
-      receiptStore: () => receipts,
-    };
-    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-    const startRequest = () => new Request(
-      "https://example.test/api/v1/historical-public-replay",
-      { method: "POST", body: JSON.stringify(body) },
-    );
-    const statusRequest = () => new Request(
-      "https://example.test/api/v1/historical-public-replay/status",
-      { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
-    );
-
-    const start = await handleReplayRequest(startRequest(), enabled, dependencies);
-    expect(start.status).toBe(202);
-    expect(await start.json()).toEqual({
-      schema_version: 1,
-      replay_task_id: body.replay_task_id,
-      attempt: body.attempt,
-      status: "running",
-    });
-    expect(commands).toHaveLength(1);
-    expect(commands[0]).toContain("/opt/lean-eval/historical-public-runner");
-    expect(processIds).toEqual(["lean-eval-historical-public"]);
-    expect(writes.get("/workspace/historical-public-request.json"))
-      .toBe(canonicalHistoricalPublicHandoff(body.handoff));
-    expect(writes.get("/workspace/historical-public-source.tar.gz.b64"))
-      .toBe(body.source_archive_base64);
-    expect(archiveChunkSizes.length).toBeGreaterThan(1);
-    expect(Math.max(...archiveChunkSizes)).toBeLessThanOrEqual(64 * 1024);
-    expect(claimedBinding).toMatchObject(historicalProcessBindingInput(body));
-    expect(typeof (claimedBinding as Record<string, unknown>).retained_until_epoch_ms)
-      .toBe("number");
-    expect(destroyCalls).toBe(0);
-
-    const duplicateStart = await handleReplayRequest(startRequest(), enabled, dependencies);
-    expect(duplicateStart.status).toBe(202);
-    expect(commands).toHaveLength(1);
-    expect(writes).toHaveLength(2);
-
-    const running = await handleReplayRequest(statusRequest(), enabled, dependencies);
-    expect(running.status).toBe(202);
-    expect(await running.json()).toMatchObject({ status: "running" });
-    expect(destroyCalls).toBe(0);
-
-    processStatus = "completed";
-    const terminal = await handleReplayRequest(statusRequest(), enabled, dependencies);
-    expect(terminal.status).toBe(200);
-    const terminalBody = await terminal.json();
-    expect(terminalBody).toMatchObject({
-      contract: "historical_public_executor_v1",
-      replay_task_id: body.replay_task_id,
-      attempt: body.attempt,
-      runner_nonce: body.runner_nonce,
-      handoff_sha256: body.handoff_sha256,
-      source_archive_sha256: body.source_archive_sha256,
-      execution_profile_digest: PROFILE_DIGEST,
-      measurement_config_digest: MEASUREMENT_DIGEST,
-      vm_image_digest: VM_IMAGE_DIGEST,
-      destruction: "confirmed",
-    });
-    expect(storedReceipt).toMatchObject({
-      binding: historicalProcessBindingInput(body),
-      http_status: 200,
-      body: terminalBody,
-      destruction_state: "confirmed",
-    });
-    expect(destroyCalls).toBe(1);
-    expect(logReads).toBe(1);
-
-    const repeated = await handleReplayRequest(statusRequest(), enabled, dependencies);
-    expect(repeated.status).toBe(200);
-    expect(await repeated.json()).toEqual(terminalBody);
-    expect(destroyCalls).toBe(1);
-    expect(logReads).toBe(1);
-
-    const startAfterTerminal = await handleReplayRequest(startRequest(), enabled, dependencies);
-    expect(startAfterTerminal.status).toBe(202);
-    expect(commands).toHaveLength(1);
-  });
-
-  it("treats a concurrent exact process-start duplicate as the same running handoff", async () => {
-    const body = await historicalPublicInput();
-    let claimedBinding: unknown = null;
-    let initialReads = 0;
-    let startCalls = 0;
-    let destroyCalls = 0;
-    let releaseInitialReads: (() => void) | undefined;
-    const initialReadsComplete = new Promise<void>((resolve) => {
-      releaseInitialReads = resolve;
-    });
-    const process = { getStatus: () => Promise.resolve("running") };
-    const sandbox = {
-      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-      exec: () => { throw new Error("blocking exec must remain unreachable"); },
-      getProcess: async () => {
-        if (initialReads < 2) {
-          initialReads += 1;
-          if (initialReads === 2) releaseInitialReads?.();
-          await initialReadsComplete;
-          return null;
-        }
-        return process as never;
-      },
-      startProcess: () => {
-        startCalls += 1;
-        if (startCalls === 1) return Promise.resolve(process as never);
-        return Promise.reject(Object.assign(
-          new Error("duplicate process"),
-          { code: "PROCESS_ALREADY_EXISTS" },
-        ));
-      },
-      destroy: () => {
-        destroyCalls += 1;
-        return Promise.resolve();
-      },
-    };
-    const receipts = {
-      readBinding: () => Promise.resolve(claimedBinding),
-      claimBinding: (value: unknown) => {
-        if (claimedBinding === null) claimedBinding = value;
-        return Promise.resolve(claimedBinding);
-      },
-      readReceipt: () => Promise.resolve(null),
-      prepareReceipt: (receipt: unknown) => Promise.resolve(receipt),
-      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-    };
-    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-    const request = () => new Request(
-      "https://example.test/api/v1/historical-public-replay",
-      { method: "POST", body: JSON.stringify(body) },
-    );
-    const dependencies = {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => sandbox,
-      receiptStore: () => receipts,
-    };
-
-    const responses = await Promise.all([
-      handleReplayRequest(request(), enabled, dependencies),
-      handleReplayRequest(request(), enabled, dependencies),
-    ]);
-    expect(responses.map((response) => response.status)).toEqual([202, 202]);
-    expect(await Promise.all(responses.map((response) => response.json()))).toEqual([
-      {
-        schema_version: 1,
-        replay_task_id: body.replay_task_id,
-        attempt: body.attempt,
-        status: "running",
-      },
-      {
-        schema_version: 1,
-        replay_task_id: body.replay_task_id,
-        attempt: body.attempt,
-        status: "running",
-      },
-    ]);
-    expect(startCalls).toBe(2);
-    expect(initialReads).toBe(2);
-    expect(destroyCalls).toBe(0);
-  });
-
-  it("only preserves the sandbox for an exact duplicate code with an ambiguous reread", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const body = await historicalPublicInput();
-      const cases = [
-        {
-          error: new Error("PROCESS_ALREADY_EXISTS"),
-          expectedDestroyCalls: 1,
-          rereadThrows: false,
-        },
-        {
-          error: Object.assign(new Error("different failure"), { code: "DIFFERENT_ERROR" }),
-          expectedDestroyCalls: 1,
-          rereadThrows: false,
-        },
-        {
-          error: Object.assign(new Error("duplicate process"), {
-            code: "PROCESS_ALREADY_EXISTS",
-          }),
-          expectedDestroyCalls: 0,
-          rereadThrows: false,
-        },
-        {
-          error: Object.assign(new Error("duplicate process"), {
-            code: "PROCESS_ALREADY_EXISTS",
-          }),
-          expectedDestroyCalls: 0,
-          rereadThrows: true,
-        },
-      ];
-      for (const testCase of cases) {
-        let claimedBinding: unknown = null;
-        let destroyCalls = 0;
-        let processReads = 0;
-        const response = await handleReplayRequest(new Request(
-          "https://example.test/api/v1/historical-public-replay",
-          { method: "POST", body: JSON.stringify(body) },
-        ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
-          authenticate: () => Promise.resolve(),
-          sandbox: () => ({
-            writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-            exec: () => { throw new Error("blocking exec must remain unreachable"); },
-            getProcess: () => {
-              processReads += 1;
-              if (testCase.rereadThrows && processReads === 2) {
-                return Promise.reject(new Error("process reread failed"));
-              }
-              return Promise.resolve(null);
-            },
-            startProcess: () => Promise.reject(testCase.error),
-            destroy: () => {
-              destroyCalls += 1;
-              return Promise.resolve();
-            },
-          }),
-          receiptStore: () => ({
-            readBinding: () => Promise.resolve(claimedBinding),
-            claimBinding: (value: unknown) => {
-              if (claimedBinding === null) claimedBinding = value;
-              return Promise.resolve(claimedBinding);
-            },
-            readReceipt: () => Promise.resolve(null),
-            prepareReceipt: (receipt: unknown) => Promise.resolve(receipt),
-            confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-          }),
-        });
-        expect(response.status).toBe(500);
-        expect(await response.json()).toEqual({
-          error: "executor_failed",
-          reason: "command_rpc_failed",
-        });
-        expect(destroyCalls).toBe(testCase.expectedDestroyCalls);
-        expect(processReads).toBe(testCase.expectedDestroyCalls === 0 ? 2 : 1);
-      }
-    } finally {
-      logged.mockRestore();
-    }
-  });
-
-  it("rejects historical active-binding drift before sandbox lookup", async () => {
-    const body = await historicalPublicInput();
-    const activeBinding = activeBindingForTest(historicalProcessBindingInput(body));
-    const status = historicalStatusInput(body);
-    const mutations: [string, unknown][] = [
-      ["runner_nonce", "a".repeat(64)],
-      ["replay_task_id", `rt1_${"b".repeat(64)}`],
-      ["attempt", 2],
-      ["handoff_sha256", "c".repeat(64)],
-      ["source_archive_sha256", "d".repeat(64)],
-      ["execution_profile_digest", "e".repeat(64)],
-      ["measurement_config_digest", "f".repeat(64)],
-      ["vm_image_digest", `sha256:${"a".repeat(64)}`],
-    ];
-    for (const [field, value] of mutations) {
-      let sandboxLookups = 0;
-      const response = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/historical-public-replay/status",
-        { method: "POST", body: JSON.stringify({ ...status, [field]: value }) },
-      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
-        authenticate: () => Promise.resolve(),
-        sandbox: () => {
-          sandboxLookups += 1;
-          throw new Error("sandbox must remain unreachable");
-        },
-        receiptStore: () => ({
-          readBinding: () => Promise.resolve(activeBinding),
-          claimBinding: (claimed) => Promise.resolve(claimed),
-          readReceipt: () => Promise.resolve(null),
-          prepareReceipt: (receipt) => Promise.resolve(receipt),
-          confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-        }),
-      });
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error: "invalid_request" });
-      expect(sandboxLookups).toBe(0);
-    }
-  });
-
-  it("rejects a historical duplicate start bound to another replay task", async () => {
-    const body = await historicalPublicInput();
-    const claimed = activeBindingForTest(historicalProcessBindingInput(body));
-    const duplicate = { ...body, replay_task_id: `rt1_${"f".repeat(64)}` };
-    let sandboxLookups = 0;
-    const response = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay",
-      { method: "POST", body: JSON.stringify(duplicate) },
-    ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => {
-        sandboxLookups += 1;
-        throw new Error("sandbox must remain unreachable");
-      },
-      receiptStore: () => ({
-        readBinding: () => Promise.resolve(claimed),
-        claimBinding: () => Promise.resolve(claimed),
-        readReceipt: () => Promise.resolve(null),
-        prepareReceipt: (receipt) => Promise.resolve(receipt),
-        confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-      }),
-    });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "invalid_request" });
-    expect(sandboxLookups).toBe(0);
-  });
-
-  it("persists and replays an exact historical terminal failure after destruction", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const body = await historicalPublicInput();
-      const binding = historicalProcessBindingInput(body);
-      const activeBinding = activeBindingForTest(binding);
-      let receipt: unknown = null;
-      let logReads = 0;
-      let destroyCalls = 0;
-      const receipts = {
-        readBinding: () => Promise.resolve(activeBinding),
-        claimBinding: () => Promise.resolve(activeBinding),
-        readReceipt: () => Promise.resolve(receipt),
-        prepareReceipt: (value: unknown) => {
-          if (receipt === null) receipt = value;
-          return Promise.resolve(receipt);
-        },
-        confirmReceipt: () => {
-          receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
-          return Promise.resolve(receipt);
-        },
-      };
-      const sandbox = {
-        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-        exec: () => { throw new Error("blocking exec must remain unreachable"); },
-        getProcess: () => Promise.resolve({
-          getStatus: () => Promise.resolve("failed"),
-          getLogs: () => {
-            logReads += 1;
-            return Promise.resolve({ stdout: "", stderr: "untrusted historical output" });
-          },
-        } as never),
-        destroy: () => {
-          destroyCalls += 1;
-          return Promise.resolve();
-        },
-      };
-      const request = () => new Request(
-        "https://example.test/api/v1/historical-public-replay/status",
-        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
-      );
-      const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-      const dependencies = {
-        authenticate: () => Promise.resolve(),
-        sandbox: () => sandbox,
-        receiptStore: () => receipts,
-      };
-
-      const first = await handleReplayRequest(request(), enabled, dependencies);
-      expect(first.status).toBe(500);
-      const failure = await first.json();
-      expect(failure).toEqual({ error: "executor_failed", reason: "command_failed" });
-      expect(JSON.stringify(failure)).not.toContain("untrusted historical output");
-      expect(receipt).toMatchObject({
-        binding,
-        http_status: 500,
-        body: failure,
-        destruction_state: "confirmed",
-      });
-      expect(destroyCalls).toBe(1);
-      expect(logReads).toBe(1);
-
-      const repeated = await handleReplayRequest(request(), enabled, dependencies);
-      expect(repeated.status).toBe(500);
-      expect(await repeated.json()).toEqual(failure);
-      expect(destroyCalls).toBe(1);
-      expect(logReads).toBe(1);
-      expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
-        event: "lean_eval_replay_executor_failure",
-        route: "historical_public_replay_status",
-        reason: "command_failed",
-      }));
-      expect(logged.mock.calls.flat().join(" ")).not.toContain("untrusted historical output");
-    } finally {
-      logged.mockRestore();
-    }
-  });
-
-  it("does not release a historical terminal verdict until destruction is confirmed", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const body = await historicalPublicInput();
-      const binding = historicalProcessBindingInput(body);
-      const activeBinding = activeBindingForTest(binding);
-      let receipt: unknown = null;
-      let rejectDestruction = true;
-      let destroyCalls = 0;
-      let confirmCalls = 0;
-      const receipts = {
-        readBinding: () => Promise.resolve(activeBinding),
-        claimBinding: () => Promise.resolve(activeBinding),
-        readReceipt: () => Promise.resolve(receipt),
-        prepareReceipt: (value: unknown) => {
-          if (receipt === null) receipt = value;
-          return Promise.resolve(receipt);
-        },
-        confirmReceipt: () => {
-          confirmCalls += 1;
-          receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
-          return Promise.resolve(receipt);
-        },
-      };
-      const sandbox = {
-        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-        exec: () => { throw new Error("blocking exec must remain unreachable"); },
-        getProcess: () => Promise.resolve({
-          getStatus: () => Promise.resolve("completed"),
-          getLogs: () => Promise.resolve({
-            stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
-            stderr: "",
-          }),
-        } as never),
-        destroy: () => {
-          destroyCalls += 1;
-          if (rejectDestruction) {
-            rejectDestruction = false;
-            return Promise.reject(new Error("destruction unavailable"));
-          }
-          return Promise.resolve();
-        },
-      };
-      const request = () => new Request(
-        "https://example.test/api/v1/historical-public-replay/status",
-        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
-      );
-      const dependencies = {
-        authenticate: () => Promise.resolve(),
-        sandbox: () => sandbox,
-        receiptStore: () => receipts,
-      };
-      const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-
-      const first = await handleReplayRequest(request(), enabled, dependencies);
-      expect(first.status).toBe(500);
-      expect(await first.json()).toEqual({
-        error: "executor_failed",
-        reason: "sandbox_destroy_failed",
-      });
-      expect(receipt).toMatchObject({ destruction_state: "pending", http_status: 200 });
-      expect(confirmCalls).toBe(0);
-
-      const retry = await handleReplayRequest(request(), enabled, dependencies);
-      expect(retry.status).toBe(200);
-      expect(await retry.json()).toMatchObject({
-        contract: "historical_public_executor_v1",
-        destruction: "confirmed",
-      });
-      expect(destroyCalls).toBe(2);
-      expect(confirmCalls).toBe(1);
-    } finally {
-      logged.mockRestore();
-    }
-  });
-
-  it("fails closed on corrupt or differently bound historical receipts", async () => {
-    const body = await historicalPublicInput();
-    const binding = historicalProcessBindingInput(body);
-    const activeBinding = activeBindingForTest(binding);
-    const storedAt = 1_000;
-    const terminalBody = {
-      ...historicalStatusInput(body),
-      contract: "historical_public_executor_v1",
-      runner_verdict: historicalPublicRunnerVerdict(body),
-      destruction: "confirmed",
-    };
-    const mismatched = {
-      schema_version: 1,
-      binding: { ...binding, source_archive_sha256: "f".repeat(64) },
-      http_status: 200,
-      body: terminalBody,
-      destruction_state: "confirmed",
-      stored_at_epoch_ms: storedAt,
-      retained_until_epoch_ms: storedAt + 24 * 60 * 60 * 1000,
-    };
-    for (const stored of [{ schema_version: 1 }, mismatched]) {
-      let processReads = 0;
-      const response = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/historical-public-replay/status",
-        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
-      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
-        authenticate: () => Promise.resolve(),
-        sandbox: () => ({
-          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-          exec: () => { throw new Error("blocking exec must remain unreachable"); },
-          getProcess: () => {
-            processReads += 1;
-            return Promise.resolve(null);
-          },
-          destroy: () => Promise.resolve(),
-        }),
-        receiptStore: () => ({
-          readBinding: () => Promise.resolve(activeBinding),
-          claimBinding: () => Promise.resolve(activeBinding),
-          readReceipt: () => Promise.resolve(stored),
-          prepareReceipt: (receipt) => Promise.resolve(receipt),
-          confirmReceipt: () => Promise.resolve(stored),
-        }),
-      });
-      expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({
-        error: "executor_failed",
-        reason: "command_output_invalid",
-      });
-      expect(processReads).toBe(0);
-    }
-  });
-
   it("starts one background command, polls it, and confirms destruction", async () => {
     const body = await authoritativeInput(
       `age-encryption.org/v1\n${"a".repeat(1_500_000)}`,
@@ -997,7 +280,7 @@ describe("Cloudflare replay executor", () => {
     let destroyed = false;
     let processStarted = false;
     let processStatus: "running" | "completed" = "running";
-    const receipts = terminalReceiptStore();
+    const receipts = terminalReceiptStore(undefined, uploadForBody(body));
     const process = {
       getStatus: () => Promise.resolve(processStatus),
       getLogs: () => Promise.resolve({
@@ -1035,30 +318,15 @@ describe("Cloudflare replay executor", () => {
     expect(await start.json()).toMatchObject({ status: "running" });
     expect(commands).toEqual(["/opt/lean-eval/replay-authoritative"]);
     expect(timeouts).toEqual([20_100_000]);
+    // The archive is not written here any more: it was uploaded in parts and
+    // assembled before this request, so a start writes only the small inputs.
     expect([...writes.keys()]).toEqual([
       "/workspace/replay-request.json",
       "/workspace/archive-expectation.json",
-      "/workspace/archive.tar.gz.age.b64",
       "/workspace/identity.age.b64",
     ]);
-    const archiveWrite = writes.get("/workspace/archive.tar.gz.age.b64");
-    expect(archiveWrite).toBeInstanceOf(ReadableStream);
-    const reader = (archiveWrite as ReadableStream<Uint8Array>).getReader();
-    const decoder = new TextDecoder();
-    let streamedArchive = "";
-    let chunkCount = 0;
-    let chunk = await reader.read();
-    while (!chunk.done) {
-      chunkCount += 1;
-      expect(chunk.value.byteLength).toBeLessThanOrEqual(64 * 1024);
-      streamedArchive += decoder.decode(chunk.value, { stream: true });
-      chunk = await reader.read();
-    }
-    streamedArchive += decoder.decode();
-    expect(chunkCount).toBeGreaterThan(1);
-    expect(streamedArchive).toBe(body.ciphertext_base64);
     expect(writes.get("/workspace/identity.age.b64"))
-      .toBe(body.plaintext_identity_base64);
+      .toBe(body.plaintext_key_material_base64);
     expect(destroyed).toBe(false);
 
     const duplicateStart = await handleReplayRequest(new Request(
@@ -1071,7 +339,7 @@ describe("Cloudflare replay executor", () => {
     });
     expect(duplicateStart.status).toBe(202);
     expect(commands).toHaveLength(1);
-    expect(writes).toHaveLength(4);
+    expect(writes.size).toBe(3);
 
     const running = await handleReplayRequest(new Request(
       "https://example.test/api/v1/replay/status",
@@ -1174,10 +442,10 @@ describe("Cloudflare replay executor", () => {
     expect(rpcCalls).toBeGreaterThan(0);
   });
 
-  it("writes historical file-key material to its distinct sandbox input", async () => {
+  it("writes file-key material to its distinct sandbox input", async () => {
     const body = await authoritativeInput();
-    body.schema_version = 2;
-    delete body.plaintext_identity_base64;
+    // The transport version stays 3; only the archive envelope moves to v2,
+    // which is what selects the file-key form.
     body.key_material_type = "age-file-key-v1";
     body.plaintext_key_material_base64 = btoa("0123456789abcdef");
     const expectation = body.archive_expectation as Record<string, unknown>;
@@ -1202,7 +470,7 @@ describe("Cloudflare replay executor", () => {
         } as never),
         destroy: () => Promise.resolve(),
       }),
-      receiptStore: () => terminalReceiptStore(),
+      receiptStore: () => terminalReceiptStore(undefined, uploadForBody(body)),
     });
     expect(response.status).toBe(202);
     expect(writes).toContain("/workspace/key-material.b64");
@@ -1269,6 +537,12 @@ describe("Cloudflare replay executor", () => {
       readReceipt: () => Promise.resolve(null),
       prepareReceipt: (value: unknown) => Promise.resolve(value),
       confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+      // The archive was uploaded and assembled before this start; only the
+      // binding claim is being made lossy here.
+      readArchiveUpload: () => Promise.resolve(uploadForBody(body)),
+      claimArchiveUpload: (value: unknown) => Promise.resolve(value),
+      commitArchiveUploadPart: (_identity: unknown, part: unknown) => Promise.resolve(part),
+      finalizeArchiveUpload: (_identity: unknown, path: string) => Promise.resolve(path),
     };
     const dependencies = {
       authenticate: () => Promise.resolve(),
@@ -1861,7 +1135,6 @@ describe("Cloudflare replay executor", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       replay_enabled: false,
-      historical_public_replay_enabled: false,
       staging_acceptance_enabled: true,
       staging_memory_limit_bytes: 12_884_901_888,
       production_memory_gate_bytes: 12_884_901_888,
@@ -1933,6 +1206,7 @@ describe("Cloudflare replay executor", () => {
       { method: "POST", body: JSON.stringify(body) },
     ), ENV, {
       authenticate: () => Promise.resolve(),
+      receiptStore: () => acceptedArchiveReceipts(body),
       sandbox: () => ({
         writeFile: (path) => {
           writes.push(path);
@@ -1968,8 +1242,8 @@ describe("Cloudflare replay executor", () => {
     });
     expect(response.status).toBe(200);
     expect(commands).toEqual(["/opt/lean-eval/replay-archive-acceptance"]);
+    // The archive arrived as uploaded parts and was assembled before this call.
     expect(writes).toEqual([
-      "/workspace/archive.tar.gz.age.b64",
       "/workspace/identity.age.b64",
       "/workspace/archive-expectation.json",
     ]);
@@ -1984,11 +1258,13 @@ describe("Cloudflare replay executor", () => {
   it("logs only an allowlisted archive command failure classification", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
+      const body = await archiveInput();
       const response = await handleReplayRequest(new Request(
         "https://example.test/api/v1/staging-archive-acceptance",
-        { method: "POST", body: JSON.stringify(await archiveInput()) },
+        { method: "POST", body: JSON.stringify(body) },
       ), ENV, {
         authenticate: () => Promise.resolve(),
+        receiptStore: () => acceptedArchiveReceipts(body),
         sandbox: () => ({
           writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
           exec: (command) => Promise.resolve({
@@ -2024,11 +1300,13 @@ describe("Cloudflare replay executor", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const sensitive = "private identity fixture";
     try {
+      const body = await archiveInput();
       const response = await handleReplayRequest(new Request(
         "https://example.test/api/v1/staging-archive-acceptance",
-        { method: "POST", body: JSON.stringify(await archiveInput()) },
+        { method: "POST", body: JSON.stringify(body) },
       ), ENV, {
         authenticate: () => Promise.resolve(),
+        receiptStore: () => acceptedArchiveReceipts(body),
         sandbox: () => ({
           writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
           exec: (command) => Promise.resolve({
@@ -2083,189 +1361,259 @@ describe("Cloudflare replay executor", () => {
     expect(destroyed).toBe(true);
   });
 
-  it("recovers a cancellation immediately after 202 with idempotent source-free cleanup", async () => {
-    const body = await historicalPublicInput();
-    let activeBinding: unknown = null;
-    let cleanupMarker: unknown = null;
-    let cleanupReservation: unknown = null;
-    let cleanupDestroyCalls = 0;
-    let cleanupRequests = 0;
-    const receipts = {
-      readBinding: () => Promise.resolve(activeBinding),
-      claimBinding: (value: unknown) => {
-        if (activeBinding === null) activeBinding = value;
-        return Promise.resolve(activeBinding);
-      },
-      readReceipt: () => Promise.resolve(null),
-      prepareReceipt: (value: unknown) => Promise.resolve(value),
-      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
-    };
-    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-    const dependencies = {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => ({
-        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-        exec: () => { throw new Error("blocking exec must remain unreachable"); },
-        getProcess: () => Promise.resolve(null),
-        startProcess: () => Promise.resolve({ getStatus: () => Promise.resolve("running") } as never),
-        destroy: () => Promise.reject(new Error("request path must not clean up the winner")),
-      }),
-      receiptStore: () => receipts,
-      recoveryStore: (_env: ReplayRuntimeEnv, replayTaskId: string, attempt: number) => ({
-        reserveCleanupIdentity: (expected: unknown) => {
-          if (cleanupReservation === null) cleanupReservation = expected;
-          return Promise.resolve(cleanupReservation);
-        },
-        destroyBoundSandbox: (expected: { replay_task_id: string; attempt: number }) => {
-          cleanupRequests += 1;
-          expect(activeBinding).toMatchObject({
-            runner_nonce: body.runner_nonce,
-            replay_task_id: replayTaskId,
-            attempt,
-          });
-          expect(expected).toEqual({
-            schema_version: 1,
-            replay_task_id: replayTaskId,
-            attempt,
-          });
-          if (cleanupMarker === null) {
-            cleanupDestroyCalls += 1;
-            cleanupMarker = {
-              ...expected,
-              destruction_state: "confirmed",
-              confirmed_at_epoch_ms: 1_000,
-              retained_until_epoch_ms: 2_000,
-            };
+});
+
+describe("chunked archive upload routes", () => {
+  const NONCE = "1".repeat(64);
+  const UPLOAD_ENABLED = { ...REVIEWED_ENV, REPLAY_ENABLED: "true" };
+
+  /** A Sandbox that actually drains the stream it is handed, as the real one does. */
+  function streamingSandbox() {
+    const files = new Map<string, Uint8Array>();
+    const commands: string[] = [];
+    let assembleStdout: string | null = null;
+    return {
+      files,
+      commands,
+      setAssembleStdout(value: string) { assembleStdout = value; },
+      client: {
+        writeFile: async (path: string, contents: string | ReadableStream<Uint8Array>) => {
+          if (typeof contents === "string") {
+            files.set(path, new TextEncoder().encode(contents));
+          } else {
+            const chunks: Uint8Array[] = [];
+            const reader = contents.getReader();
+            let chunk = await reader.read();
+            while (!chunk.done) {
+              chunks.push(chunk.value);
+              chunk = await reader.read();
+            }
+            const total = chunks.reduce((sum, part) => sum + part.byteLength, 0);
+            const joined = new Uint8Array(total);
+            let offset = 0;
+            for (const part of chunks) {
+              joined.set(part, offset);
+              offset += part.byteLength;
+            }
+            files.set(path, joined);
           }
-          return Promise.resolve(cleanupRequests === 1 ? cleanupMarker : {
-            ...expected,
-            destruction_state: "confirmed",
+          return { success: true, path, timestamp: "fixture" };
+        },
+        exec: (command: string) => {
+          commands.push(command);
+          return Promise.resolve({
+            success: true,
+            exitCode: 0,
+            stdout: assembleStdout ?? "",
+            stderr: "",
+            command,
+            duration: 1,
+            timestamp: "fixture",
           });
         },
-      }),
-    };
-    const cleanupBody = {
-      schema_version: 1,
-      replay_task_id: body.replay_task_id,
-      attempt: body.attempt,
-    };
-    const reservation = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
-      { method: "POST", body: JSON.stringify(cleanupBody) },
-    ), enabled, dependencies);
-    expect(reservation.status).toBe(200);
-    expect(await reservation.json()).toEqual({ ...cleanupBody, status: "reserved" });
-    const start = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay",
-      { method: "POST", body: JSON.stringify(body) },
-    ), enabled, dependencies);
-    expect(start.status).toBe(202);
-
-    for (let index = 0; index < 2; index += 1) {
-      const cleanup = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/historical-public-replay/cleanup",
-        { method: "POST", body: JSON.stringify(cleanupBody) },
-      ), enabled, dependencies);
-      expect(cleanup.status).toBe(200);
-      expect(await cleanup.json()).toEqual({ ...cleanupBody, destruction: "confirmed" });
-    }
-    expect(cleanupDestroyCalls).toBe(1);
-    expect(JSON.stringify(cleanupBody)).not.toContain(body.runner_nonce as string);
-    expect(JSON.stringify(cleanupBody)).not.toContain("source_archive");
-  });
-
-  it("recovers cancellation after replay.started but before an executor binding exists", async () => {
-    const body = await historicalPublicInput();
-    const identity = {
-      schema_version: 1,
-      replay_task_id: body.replay_task_id,
-      attempt: body.attempt,
-    };
-    let reservation: unknown = null;
-    let marker: unknown = null;
-    let sandboxLookups = 0;
-    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
-    const dependencies = {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => {
-        sandboxLookups += 1;
-        throw new Error("pre-binding cleanup must not look up a sandbox");
+        destroy: () => Promise.resolve(),
       },
-      recoveryStore: () => ({
-        reserveCleanupIdentity: (expected: unknown) => {
-          if (reservation === null) reservation = expected;
-          return Promise.resolve(reservation);
-        },
-        destroyBoundSandbox: (expected: unknown) => {
-          expect(reservation).toEqual(expected);
-          if (marker === null) {
-            marker = {
-              ...(expected as Record<string, unknown>),
-              destruction_state: "confirmed",
-              confirmed_at_epoch_ms: 1_000,
-              retained_until_epoch_ms: 2_000,
-            };
-          }
-          return Promise.resolve(marker);
-        },
-      }),
     };
+  }
 
-    const reserved = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
-      { method: "POST", body: JSON.stringify(identity) },
-    ), enabled, dependencies);
-    expect(reserved.status).toBe(200);
-    expect(await reserved.json()).toEqual({ ...identity, status: "reserved" });
-
-    const cleanup = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay/cleanup",
-      { method: "POST", body: JSON.stringify(identity) },
-    ), enabled, dependencies);
-    expect(cleanup.status).toBe(200);
-    expect(await cleanup.json()).toEqual({ ...identity, destruction: "confirmed" });
-    expect(sandboxLookups).toBe(0);
-    expect(JSON.stringify(marker)).not.toContain(body.runner_nonce as string);
-    expect(JSON.stringify(marker)).not.toContain("source_archive");
-  });
-
-  it("rejects a durable cleanup confirmation with mismatched identity", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const body = {
-        schema_version: 1,
-        replay_task_id: `rt1_${"2".repeat(64)}`,
-        attempt: 1,
-      };
-      let sandboxLookups = 0;
-      const response = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/historical-public-replay/cleanup",
-        { method: "POST", body: JSON.stringify(body) },
-      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+  async function uploadPart(
+    sandbox: ReturnType<typeof streamingSandbox>,
+    receipts: ReturnType<typeof terminalReceiptStore>,
+    payload: Uint8Array,
+    overrides: Record<string, string> = {},
+  ): Promise<Response> {
+    const headers: Record<string, string> = {
+      "content-type": "application/octet-stream",
+      "x-lean-eval-upload-kind": "authoritative-archive",
+      "x-lean-eval-runner-nonce": NONCE,
+      "x-lean-eval-archive-sha256": await hexDigest(payload),
+      "x-lean-eval-archive-bytes": String(payload.byteLength),
+      "x-lean-eval-part-count": "1",
+      "x-lean-eval-part-index": "0",
+      "x-lean-eval-part-sha256": await hexDigest(payload),
+      "x-lean-eval-part-bytes": String(payload.byteLength),
+      ...overrides,
+    };
+    return handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-part", {
+        method: "POST",
+        headers,
+        body: payload,
+      }),
+      UPLOAD_ENABLED,
+      {
         authenticate: () => Promise.resolve(),
-        sandbox: () => {
-          sandboxLookups += 1;
-          throw new Error("sandbox must remain unreachable from the route");
-        },
-        recoveryStore: () => ({
-          reserveCleanupIdentity: (expected: unknown) => Promise.resolve(expected),
-          destroyBoundSandbox: () => Promise.resolve({
-            ...body,
-            attempt: 2,
-            destruction_state: "confirmed",
-            confirmed_at_epoch_ms: 1_000,
-            retained_until_epoch_ms: 2_000,
-          }),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+  }
+
+  it("streams a part into the sandbox without buffering the whole archive", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(64 * 1024));
+    const response = await uploadPart(sandbox, receipts, payload);
+    expect(response.status).toBe(202);
+    const [path] = [...sandbox.files.keys()];
+    const [written] = [...sandbox.files.values()];
+    // A fresh unique name per request: a retry must never rewrite committed bytes.
+    expect(path).toMatch(/^\/workspace\/archive-part-[0-9a-f-]{36}$/);
+    expect(written).toEqual(payload);
+  });
+
+  it("refuses a part whose bytes do not match its declared digest", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = new Uint8Array([1, 2, 3, 4]);
+    const response = await uploadPart(sandbox, receipts, payload, {
+      "x-lean-eval-part-sha256": "9".repeat(64),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  });
+
+  it("refuses a body longer than the part it declared", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(4096));
+    // `content-length` is client-controlled, so the count taken while streaming
+    // is the only real bound.
+    const response = await uploadPart(sandbox, receipts, payload, {
+      "x-lean-eval-archive-bytes": "16",
+      "x-lean-eval-part-bytes": "16",
+      "x-lean-eval-part-sha256": await hexDigest(payload.slice(0, 16)),
+      "x-lean-eval-archive-sha256": await hexDigest(payload.slice(0, 16)),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses a second upload binding the same nonce to a different archive", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const first = crypto.getRandomValues(new Uint8Array(1024));
+    expect((await uploadPart(sandbox, receipts, first)).status).toBe(202);
+    const second = crypto.getRandomValues(new Uint8Array(2048));
+    const response = await uploadPart(sandbox, receipts, second);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  });
+
+  it("assembles at finalize and records readiness only on a digest match", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const payload = crypto.getRandomValues(new Uint8Array(1024));
+    const digest = await hexDigest(payload);
+    expect((await uploadPart(sandbox, receipts, payload)).status).toBe(202);
+    sandbox.setAssembleStdout(JSON.stringify({
+      schema_version: 1,
+      assembled_path: "/workspace/archive.tar.gz.age",
+      archive_bytes: payload.byteLength,
+      archive_sha256: digest,
+    }));
+    const finalize = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-finalize", {
+        method: "POST",
+        body: JSON.stringify({
+          schema_version: 1,
+          upload_kind: "authoritative-archive",
+          runner_nonce: NONCE,
+          archive_sha256: digest,
+          archive_bytes: payload.byteLength,
+          part_count: 1,
+          parts: [{ index: 0, sha256: digest, bytes: payload.byteLength }],
         }),
-      });
-      expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({
-        error: "executor_failed",
-        reason: "command_output_invalid",
-      });
-      expect(sandboxLookups).toBe(0);
-    } finally {
-      logged.mockRestore();
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+    expect(finalize.status).toBe(200);
+    expect(await finalize.json()).toMatchObject({ status: "assembled" });
+    // Assembly is a fixed baked command driven by a manifest the Worker writes.
+    expect(sandbox.commands).toEqual(["/opt/lean-eval/replay-assemble-archive"]);
+    const manifest = sandbox.files.get("/workspace/archive-assembly.json");
+    expect(JSON.parse(new TextDecoder().decode(manifest))).toMatchObject({
+      output_path: "/workspace/archive.tar.gz.age",
+      archive_sha256: digest,
+    });
+    expect(await receipts.readArchiveUpload()).toMatchObject({
+      assembled_path: "/workspace/archive.tar.gz.age",
+    });
+  });
+
+  it("refuses to finalize an upload whose parts never arrived", async () => {
+    const sandbox = streamingSandbox();
+    const receipts = terminalReceiptStore(undefined, null);
+    const response = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay/archive-finalize", {
+        method: "POST",
+        body: JSON.stringify({
+          schema_version: 1,
+          upload_kind: "authoritative-archive",
+          runner_nonce: NONCE,
+          archive_sha256: "4".repeat(64),
+          archive_bytes: 1024,
+          part_count: 1,
+          parts: [{ index: 0, sha256: "5".repeat(64), bytes: 1024 }],
+        }),
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => receipts,
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(sandbox.commands).toEqual([]);
+  });
+
+  it("refuses a start whose archive was never assembled", async () => {
+    const body = await authoritativeInput();
+    const sandbox = streamingSandbox();
+    const response = await handleReplayRequest(
+      new Request("https://example.test/api/v1/replay", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+      UPLOAD_ENABLED,
+      {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox.client,
+        receiptStore: () => terminalReceiptStore(undefined, null),
+      },
+    );
+    // Recoverable by re-uploading under a fresh nonce, which a start is not.
+    expect(response.status).toBe(400);
+    expect(sandbox.commands).toEqual([]);
+  });
+
+  it("keeps the upload routes behind the replay flag", async () => {
+    const sandbox = streamingSandbox();
+    let authenticated = false;
+    for (const path of ["archive-part", "archive-finalize"]) {
+      const response = await handleReplayRequest(
+        new Request(`https://example.test/api/v1/replay/${path}`, {
+          method: "POST",
+          body: new Uint8Array(4),
+        }),
+        REVIEWED_ENV,
+        {
+          authenticate: () => {
+            authenticated = true;
+            return Promise.resolve();
+          },
+          sandbox: () => sandbox.client,
+          receiptStore: () => terminalReceiptStore(),
+        },
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: "replay_disabled" });
     }
+    expect(authenticated).toBe(false);
   });
 });

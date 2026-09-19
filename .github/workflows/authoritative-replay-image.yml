@@ -10,6 +10,7 @@ on:
       - 'scripts/replay_orchestrator.py'
       - 'server/replay-image/comparator-71b52-phase-metrics.patch'
       - 'server/replay-image/replay-archive-acceptance'
+      - 'server/replay-image/replay-assemble-archive'
       - 'server/replay-image/replay-authoritative'
       - 'server/replay-image/replay-measure'
       - 'server/replay-image/replay-profile-lock-v433.json'
@@ -87,6 +88,7 @@ jobs:
             test -x /opt/lean-eval/replay-authoritative
             test -x /opt/lean-eval/replay-staging-acceptance
             test -x /opt/lean-eval/replay-archive-acceptance
+            test -x /opt/lean-eval/replay-assemble-archive
             test -x /opt/lean-eval/replay-measure
             test "$(python3 -c '"'"'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'"'"')" = 3.11
             python3 -c '"'"'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)'"'"'
