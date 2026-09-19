@@ -27,6 +27,34 @@
         "ref": "7acc2752bd45c6fbb8d3a347e630079a88205a1d",
         "repo": "bogatyy/lean-eval-proofs-intake"
       }
+    },
+    {
+      "accepted_at": "2026-09-19T16:21:15Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba43-4571-7ce6-a4ff-cbd1f35c399c"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of mlgraham/lean-eval-dimitrov-submission at 661e66a9fb0830eea5084f2b6ca88a10813749df, with its Apache-2.0 license retained. Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib. This is a source-informed adaptation, not an independent new proof. All 87 proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Provenance and verification details are in generated/dimitrov/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_21c2bbab06647ba53aece35c8400bef41227f0957305babffabe8d0f5059f653",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "304e322466b2465d1ee55830699576c8e5340abe",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
     }
   ],
   "schema_version": 2,
