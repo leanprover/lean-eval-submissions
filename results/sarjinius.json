@@ -94,6 +94,25 @@
         "ref": "218b531d1d4f8b86b347dd7b1599d7ab378d37a4",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-21T13:42:44Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c405-ab49-74f2-8199-8b18c398460a"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {},
+      "result_id": "r2_d5abbb91b8ba500ada342ac12e8ccb578e08f0186bd1e169a536959f699cc82e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "36843f1aabd3d4fcf9dbb999dfdb96112ddc3039",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
