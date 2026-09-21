@@ -56,6 +56,25 @@
         "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-21T08:12:26Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c2d8-1ff9-74d3-b045-7a84b6cddae8"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {},
+      "result_id": "r2_80497cf099aa1ea28c68c0ebc20832f454fad27d883bea85bf4fbbd8e8e6337f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
