@@ -37,6 +37,25 @@
         "ref": "4edc1cfcfa9a88954745422c851c1d41d94cca36",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-21T00:43:40Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c138-4ec1-77e9-afb7-bab1651f986b"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {},
+      "result_id": "r2_d9a413e127674614fdb476ca23c8aba71c80a4dd83e5e44777d9f98f737b3610",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
