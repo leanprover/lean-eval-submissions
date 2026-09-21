@@ -113,6 +113,25 @@
         "ref": "36843f1aabd3d4fcf9dbb999dfdb96112ddc3039",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-21T17:39:47Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c4df-03e9-724d-8b6a-9f63d15df5ba"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {},
+      "result_id": "r2_44358056ddef23edd74766ba1610ece6ffcaf4f606cf2633f811c4281f8ecffd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b82c52110c9ac6ce87478819614f4544fc64e1d1",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
