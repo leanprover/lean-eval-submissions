@@ -75,6 +75,25 @@
         "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-21T11:34:59Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c38a-d211-76ef-a7ef-283cf6b583aa"
+      },
+      "problem_id": "hopf_rinow",
+      "production_metadata": {},
+      "result_id": "r2_81d86fd3e785f4a3ceb9ea7a3593f15331c8b1b3026864276c61de3bf79b34bb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "218b531d1d4f8b86b347dd7b1599d7ab378d37a4",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
