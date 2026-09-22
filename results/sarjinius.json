@@ -246,6 +246,25 @@
         "ref": "68f3f1a81f836de54abee36014bace71537efa1c",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T16:56:32Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c9db-8ce1-787c-9de6-42f16d63bc22"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {},
+      "result_id": "r2_c4b9e2754e9c88ababfaf21cd824d9169cd6593298acdecce0ff033f0140bede",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b2d9f1f6277db369ac137398c4f9436446b6dff",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
