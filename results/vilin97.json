@@ -6595,6 +6595,25 @@
         "ref": "5b29d5fdcca7432388ef5ec1f49fda2d14ccf881",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T00:44:57Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c658-b751-71ec-b206-3273b7a15438"
+      },
+      "problem_id": "bourgain_polynomial_ergodic",
+      "production_metadata": {},
+      "result_id": "r2_12fee93a26b9f3a66ff1e2926107067c009445699e5eea2b46b3cf173631a196",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6e827b26fcde46c46154a217667eb9f4c49feab2",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
