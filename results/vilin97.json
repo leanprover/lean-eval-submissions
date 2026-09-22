@@ -6671,6 +6671,25 @@
         "ref": "8e7f9ba73084064dbb89f887cc1e6e8dc6c36dba",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T01:59:23Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c6aa-0f89-7514-a766-bcc6e28979ef"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {},
+      "result_id": "r2_4714148ca07ab3cca849634cfc847e899161350f0b96de9bada5e6448a74b873",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "73427e699673e8625cedfdbcbee3fba56d014a9f",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
