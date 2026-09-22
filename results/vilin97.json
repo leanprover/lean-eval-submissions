@@ -6633,6 +6633,25 @@
         "ref": "2c586b175c76745984cd340e3f39fd506962c3e8",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T00:48:05Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c654-65d9-7536-b3ef-1807b0d706f0"
+      },
+      "problem_id": "bakerWustholz_linearForms_logs",
+      "production_metadata": {},
+      "result_id": "r2_06428321c7f4f5db482c420243b06dad1be1553453db078dd6aa6d5358809a62",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b99faa1efa1a725f0d4e3dd7445686f9b9016d11",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
