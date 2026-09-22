@@ -6709,6 +6709,25 @@
         "ref": "a342f11e837ba2c3e8595406ef768a8cc6cb86a7",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T04:18:15Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c6fa-69d9-7ed8-8a41-96a0ee14115a"
+      },
+      "problem_id": "whitney_embedding",
+      "production_metadata": {},
+      "result_id": "r2_a18427cec30c87ef545396fa89df45023b42e0abee9f75f2b112a9f5904392f7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "049cf46594483aaf6a1a2f2b994c7561e9efaf69",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
