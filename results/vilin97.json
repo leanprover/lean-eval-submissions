@@ -6728,6 +6728,25 @@
         "ref": "049cf46594483aaf6a1a2f2b994c7561e9efaf69",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T05:40:37Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c758-7411-7cc9-8984-85d47f482d81"
+      },
+      "problem_id": "equichordal_point_unique",
+      "production_metadata": {},
+      "result_id": "r2_cedf420c7d105e778664ef8d700b1f669de304f941cc639139da5942c9f3aca4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7153dc4aa5742148cd8f9851d7053a92c00d3096",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
