@@ -265,6 +265,25 @@
         "ref": "7b2d9f1f6277db369ac137398c4f9436446b6dff",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T17:16:31Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c9ec-9c11-7d31-838a-145d5a2936f0"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {},
+      "result_id": "r2_8c66c4bc323674c265356879dda7f15fd6f141bdb9f9ab44eb01c7287a1eec73",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b2d9f1f6277db369ac137398c4f9436446b6dff",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
