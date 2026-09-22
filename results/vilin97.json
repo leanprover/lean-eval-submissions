@@ -6690,6 +6690,25 @@
         "ref": "73427e699673e8625cedfdbcbee3fba56d014a9f",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T02:27:16Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c6b2-9339-7706-af81-c13f49915854"
+      },
+      "problem_id": "annals_erdos_faber_lovasz_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_096c084e16a8f2332a73e9477321bd1c0b93048959e367cdc156ab3c3614625e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a342f11e837ba2c3e8595406ef768a8cc6cb86a7",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
