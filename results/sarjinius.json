@@ -151,6 +151,25 @@
         "ref": "fab9e1323a65930493065d3d2244c75b225c18bc",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T05:12:28Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c756-5519-7fa5-9e0a-2df9a1a5a4cd"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {},
+      "result_id": "r2_6f2ab2960456e2ee8ded216b3b72cb87ee5524dcf30dd68adaea0f8385f8ef3e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4164d95d80d04570f2e0c85baa1e87db5b0edbef",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
