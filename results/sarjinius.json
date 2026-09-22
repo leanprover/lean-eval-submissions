@@ -208,6 +208,25 @@
         "ref": "f404be85973799c4208176d20f4b6aef19a5bdc9",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T12:08:54Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c8d2-a479-7bba-a9b6-cb6b5bfc47b9"
+      },
+      "problem_id": "annals_supremum_of_selector_processes",
+      "production_metadata": {},
+      "result_id": "r2_943e8d0dcd8c11c98b0e92d44e7d6c04b2658638a27854a79460378f86d932ae",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f8a86e86b2b8c22340291e92429712566d9f5355",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
