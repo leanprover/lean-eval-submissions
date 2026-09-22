@@ -303,6 +303,25 @@
         "ref": "4e2b989f679bfb00afa4019ab25611b4d0dd1882",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T20:33:42Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0caa4-3fc9-795e-8cba-5ddada881647"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {},
+      "result_id": "r2_039939217e1fa89d6f54d582a9cce8aec27dc49d58bb924711f09cf6dd3f0b97",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a633da4075d49b01f8e8bc245bc8ba1047621090",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
