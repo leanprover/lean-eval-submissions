@@ -189,6 +189,25 @@
         "ref": "1a35d2b6804ccc40b507483e6fea6070171bfe64",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T10:51:52Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c88b-3b39-71ac-8124-816747fe3ae9"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_23c7182118646bfa3e75eef1895121b61b73ea51872339738986c98c1ea6c86f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f404be85973799c4208176d20f4b6aef19a5bdc9",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
