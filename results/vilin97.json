@@ -6614,6 +6614,25 @@
         "ref": "6e827b26fcde46c46154a217667eb9f4c49feab2",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-22T00:46:28Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c64d-16c1-76bf-8561-533f460b2fa2"
+      },
+      "problem_id": "annals_bose_gases",
+      "production_metadata": {},
+      "result_id": "r2_bbcc9cbb9569988d5d7c8aaf43dfcedce782d1560bb7d0abbb6c064c5ed27606",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2c586b175c76745984cd340e3f39fd506962c3e8",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
