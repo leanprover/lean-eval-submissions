@@ -1910,12 +1910,43 @@ describe("agent intake in workerd", () => {
       { now: () => NOW_MS, provider, state, dispatch },
     );
     expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: "source_not_found",
+      stage: "source_repository_verification",
+      provider_status: 404,
+      provider_operation: "workflow source reader repository response",
+    });
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/u);
     expect(sourceReader).toHaveBeenCalled();
     expect(workflowReader).toHaveBeenCalledOnce();
     expect(state.events).toHaveLength(0);
     expect(state.views).toHaveLength(0);
     expect(state.outbox).toHaveLength(0);
     expect(dispatch).not.toHaveBeenCalled();
+
+    workflowReader.mockImplementation(() =>
+      Promise.resolve(Response.json({ message: "Validation Failed" }, { status: 422 })));
+    const invalidProviderResponse = await handleRequest(
+      new Request("https://submit.test/api/v1/browser/submissions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `lean_eval_session=${sessionToken}`,
+          origin: "https://submit.test",
+        },
+        body: JSON.stringify({ grant: grantToken, submission: INTAKE_SUBMISSION }),
+      }),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, provider, state, dispatch },
+    );
+    expect(invalidProviderResponse.status).toBe(503);
+    expect(await invalidProviderResponse.json()).toMatchObject({
+      error: "provider_unavailable",
+      stage: "source_repository_verification",
+      provider_status: 422,
+      provider_operation: "workflow source reader repository response",
+    });
   });
 
   it("fails headless intake before State when the legacy workflow reader cannot read the repository", async () => {
@@ -3658,13 +3689,22 @@ describe("authenticated legacy result owner routes", () => {
         state: new MemoryState(),
       });
       const publicBody = await response.text();
+      const publicJson: unknown = JSON.parse(publicBody);
+      if (
+        typeof publicJson !== "object" || publicJson === null ||
+        !("request_id" in publicJson) || typeof publicJson.request_id !== "string"
+      ) throw new Error("missing diagnostic request ID");
       expect(response.status).toBe(503);
       expect(publicBody).not.toContain(sensitive);
       expect(logged.join("\n")).not.toContain(sensitive);
       expect(logged).toEqual([JSON.stringify({
         event: "submission_stage_failed",
+        request_id: publicJson.request_id,
         stage: "legacy_result_verification",
+        provider_status: 503,
+        provider_operation: "protected Results branch response",
         error_name: "GitHubProviderError",
+        response_status: 503,
       })]);
     } finally {
       errorLog.mockRestore();

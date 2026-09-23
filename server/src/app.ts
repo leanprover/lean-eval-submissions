@@ -689,16 +689,18 @@ function state(
   );
 }
 
+class SubmissionStageError extends Error {
+  constructor(readonly stage: string, readonly originalError: unknown) {
+    super("submission stage failed");
+    this.name = "SubmissionStageError";
+  }
+}
+
 async function submissionStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "submission_stage_failed",
-      stage,
-      error_name: error instanceof Error ? error.name : "unknown",
-    }));
-    throw error;
+    throw new SubmissionStageError(stage, error);
   }
 }
 
@@ -2537,7 +2539,32 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   return json({ error: "not_found" }, 404);
 }
 
-function errorResponse(error: unknown): Response {
+function diagnosticResponse(
+  error: unknown,
+  stage: string | undefined,
+  body: { error: string },
+  status: number,
+): Response {
+  const requestId = crypto.randomUUID();
+  const provider = error instanceof GitHubProviderError ? error : undefined;
+  const detail = {
+    request_id: requestId,
+    ...(stage === undefined ? {} : { stage }),
+    ...(provider === undefined ? {} : { provider_status: provider.status }),
+    ...(provider?.operation === undefined ? {} : { provider_operation: provider.operation }),
+  };
+  console.error(JSON.stringify({
+    event: stage === undefined ? "api_request_failed" : "submission_stage_failed",
+    ...detail,
+    error_name: error instanceof Error ? error.name : "unknown",
+    response_status: status,
+  }));
+  return json({ ...body, ...detail }, status, { "x-request-id": requestId });
+}
+
+function errorResponse(failure: unknown): Response {
+  const stage = failure instanceof SubmissionStageError ? failure.stage : undefined;
+  const error = failure instanceof SubmissionStageError ? failure.originalError : failure;
   if (error instanceof ApiDecodeError) {
     if (error.message === "public_source_cannot_be_withheld") {
       return json({ error: "public_source_cannot_be_withheld" }, 409);
@@ -2546,7 +2573,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof AuthError) return json({ error: "authentication_failed" }, 401);
   if (error instanceof StateUpdateOutcomeUnknownError) {
-    return json({ error: "state_unavailable" }, 503);
+    return stage === undefined
+      ? json({ error: "state_unavailable" }, 503)
+      : diagnosticResponse(error, stage, { error: "state_unavailable" }, 503);
   }
   if (error instanceof ResultIdentityCollisionError) {
     return json({ error: "result_identity_conflict" }, 409);
@@ -2564,14 +2593,19 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof GitHubProviderError) {
     if (error.message.endsWith(": problem_not_open_for_submission")) {
-      return json({ error: "problem_not_open_for_submission" }, 409);
+      return diagnosticResponse(error, stage, { error: "problem_not_open_for_submission" }, 409);
     }
     const status = error.status === 409 ? 409 : error.status === 404 ? 422 : 503;
-    return json({ error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable" }, status);
+    return diagnosticResponse(error, stage, {
+      error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable",
+    }, status);
   }
   if (error instanceof GitHubStateError) {
-    return json({ error: "state_unavailable" }, 503);
+    return stage === undefined
+      ? json({ error: "state_unavailable" }, 503)
+      : diagnosticResponse(error, stage, { error: "state_unavailable" }, 503);
   }
+  if (stage !== undefined) return diagnosticResponse(error, stage, { error: "internal_error" }, 500);
   console.error(JSON.stringify({ event: "api_request_failed", error_name: error instanceof Error ? error.name : "unknown" }));
   return json({ error: "internal_error" }, 500);
 }
