@@ -4538,6 +4538,28 @@
         "ref": "71d5a462529811f3293e0b942006216e9f63443a",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-23T14:35:39Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1743,
+        "kind": "issue"
+      },
+      "problem_id": "equichordal_point_unique",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_06f08053d6eb6bd9abe520177896c7e57e6b98dbc0427da0bd5a2cb630ec7e71",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f92d352352ae8d2afc75dc3b30e4c320115ee523",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
