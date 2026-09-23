@@ -4736,6 +4736,28 @@
         "ref": "eb7fb1b40ec48af891b295039a93073928cf36b9",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-23T17:42:53Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1752,
+        "kind": "issue"
+      },
+      "problem_id": "newlander_nirenberg",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_31b960d1d9ac42e713fbe6385ebc56803450b3882ff00939c3cb207dd4ba8161",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cccb83ae82cd4d6376a25ae2889011e768ce6208",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
