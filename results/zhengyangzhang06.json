@@ -4692,6 +4692,28 @@
         "ref": "34090615aa69002bc782b7abb8b2341a25f23837",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-23T17:06:51Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1750,
+        "kind": "issue"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_4b077960c8544d010ba30bc13159e22e34a62a8beed4623882154cea6e22108d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6ff4119f7ad36bab2e5417f1256c8a4a74d8cb13",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
