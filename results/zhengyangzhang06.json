@@ -4802,6 +4802,28 @@
         "ref": "759a36a4ab4297a433f1d89ebb74458da739e084",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-23T18:59:33Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1755,
+        "kind": "issue"
+      },
+      "problem_id": "erdos_unit_distance_conjecture_false",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a400bc93dcd0c010ead8e36776461a6c2a46ef22a12e5de823bf872e8ea9f62b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d95933aa965cc8196bba9a17eec13417ee857195",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
