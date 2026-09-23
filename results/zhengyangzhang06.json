@@ -4560,6 +4560,28 @@
         "ref": "f92d352352ae8d2afc75dc3b30e4c320115ee523",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-23T15:19:25Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1744,
+        "kind": "issue"
+      },
+      "problem_id": "g2_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_4399f02a5cc234f6669cc15309134a416a952fab6fc0720f7feec8b8796fde6c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3fce04b01667cb39d0f541bc629501ec2aa78ac6",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
