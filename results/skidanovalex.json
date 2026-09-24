@@ -702,6 +702,25 @@
         "ref": "a52728e13a0d98efd7343b6a00ce9404297cb402",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-24T21:51:31Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d4ef-6571-7c23-b88e-0659ebc24f77"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {},
+      "result_id": "r2_225e28449e6d16c6a54c996516272820812213b025b1a6ca6ebb2df3ee44f3ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c5dd063f8f06ac516ddd47cacdb63c9afe815cc5",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
