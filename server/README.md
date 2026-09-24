@@ -113,9 +113,10 @@ contract testing:
 
 When a provider or staged submission operation fails, the response includes a
 `request_id` (also in the `X-Request-Id` header). Submission failures also
-include the safe `stage` name. GitHub provider failures include the upstream
-`provider_status` and, for HTTP responses, a fixed `provider_operation` label
-such as `workflow source reader repository response`. The browser displays
+include the safe `stage` name. GitHub provider failures include the status
+reported by the provider layer as `provider_status` and, for HTTP responses,
+a fixed `provider_operation` label such as
+`workflow source reader repository response`. The browser displays
 this JSON so a submitter can report the fields without sharing proof text,
 tokens, or a private repository URL. The Worker logs one structured event with
 the same request ID, stage, provider status and operation, and final HTTP
@@ -123,7 +124,9 @@ status; it does not log the provider response body. A healthy `/healthz` does
 not verify either source-reading App or the benchmark manifest path. To
 investigate a reported failure, locate its request ID in Workers Logs, then
 check the stage and provider operation before testing credentials or catalog
-data. A `404` from `workflow source reader repository response` means that
+data. If `provider_operation` is absent, the provider layer generated the
+status locally. In production, a status may also come from the broker.
+A `404` from `workflow source reader repository response` means that
 App could not read the source repository; a `404` from its commit response
 means it could not read the exact commit. A `422` remains visible as
 `provider_status: 422` even when the public HTTP status is `503`.

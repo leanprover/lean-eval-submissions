@@ -2565,31 +2565,31 @@ function diagnosticResponse(
 function errorResponse(failure: unknown): Response {
   const stage = failure instanceof SubmissionStageError ? failure.stage : undefined;
   const error = failure instanceof SubmissionStageError ? failure.originalError : failure;
+  const respond = (body: { error: string; detail?: string }, status: number): Response =>
+    stage === undefined ? json(body, status) : diagnosticResponse(error, stage, body, status);
   if (error instanceof ApiDecodeError) {
     if (error.message === "public_source_cannot_be_withheld") {
-      return json({ error: "public_source_cannot_be_withheld" }, 409);
+      return respond({ error: "public_source_cannot_be_withheld" }, 409);
     }
-    return json({ error: "invalid_request", detail: error.message }, 400);
+    return respond({ error: "invalid_request", detail: error.message }, 400);
   }
-  if (error instanceof AuthError) return json({ error: "authentication_failed" }, 401);
+  if (error instanceof AuthError) return respond({ error: "authentication_failed" }, 401);
   if (error instanceof StateUpdateOutcomeUnknownError) {
-    return stage === undefined
-      ? json({ error: "state_unavailable" }, 503)
-      : diagnosticResponse(error, stage, { error: "state_unavailable" }, 503);
+    return respond({ error: "state_unavailable" }, 503);
   }
   if (error instanceof ResultIdentityCollisionError) {
-    return json({ error: "result_identity_conflict" }, 409);
+    return respond({ error: "result_identity_conflict" }, 409);
   }
-  if (error instanceof StateEventConflictError) return json({ error: "idempotency_conflict" }, 409);
+  if (error instanceof StateEventConflictError) return respond({ error: "idempotency_conflict" }, 409);
   if (error instanceof ResultOwnerStateError) {
     return error.status === 404
-      ? json({ error: "not_found" }, 404)
-      : json({ error: "idempotency_conflict" }, 409);
+      ? respond({ error: "not_found" }, 404)
+      : respond({ error: "idempotency_conflict" }, 409);
   }
   if (error instanceof ModelIdentityStateError) {
     return error.status === 404
-      ? json({ error: "not_found" }, 404)
-      : json({ error: "idempotency_conflict" }, 409);
+      ? respond({ error: "not_found" }, 404)
+      : respond({ error: "idempotency_conflict" }, 409);
   }
   if (error instanceof GitHubProviderError) {
     if (error.message.endsWith(": problem_not_open_for_submission")) {
@@ -2601,9 +2601,7 @@ function errorResponse(failure: unknown): Response {
     }, status);
   }
   if (error instanceof GitHubStateError) {
-    return stage === undefined
-      ? json({ error: "state_unavailable" }, 503)
-      : diagnosticResponse(error, stage, { error: "state_unavailable" }, 503);
+    return respond({ error: "state_unavailable" }, 503);
   }
   if (stage !== undefined) return diagnosticResponse(error, stage, { error: "internal_error" }, 500);
   console.error(JSON.stringify({ event: "api_request_failed", error_name: error instanceof Error ? error.name : "unknown" }));
