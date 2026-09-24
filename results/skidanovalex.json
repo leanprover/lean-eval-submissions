@@ -683,6 +683,25 @@
         "ref": "e8d13b2833dc77454cabf5135adec81ae2404313",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-24T18:01:02Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d44f-cdf9-748b-af40-add1b066f23b"
+      },
+      "problem_id": "uniformization",
+      "production_metadata": {},
+      "result_id": "r2_b23a78fc7e9936f00aaaa627bc0482a513bcaed48882a56eee727bfc0a1ad329",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a52728e13a0d98efd7343b6a00ce9404297cb402",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
