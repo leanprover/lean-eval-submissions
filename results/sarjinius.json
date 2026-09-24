@@ -360,6 +360,25 @@
         "ref": "f91911f87cbeb242bd06416635f7bf14f3a51330",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-24T20:23:09Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d4ca-4589-7bd3-9c4c-658a73278b12"
+      },
+      "problem_id": "annals_reverse_minkowski",
+      "production_metadata": {},
+      "result_id": "r2_9aa9afafac8ec22fed427959e143e022f3bec738c16292f4c88f4ed60acc0c08",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d302ddb6b34fce237129cb2a53cb8af0af9ca7dc",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
