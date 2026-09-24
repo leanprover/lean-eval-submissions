@@ -221,11 +221,13 @@ function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
 
 export class GitHubProviderError extends Error {
   readonly status: number;
+  readonly operation: string | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, operation?: string) {
     super(`GitHub provider ${String(status)}: ${message}`);
     this.name = "GitHubProviderError";
     this.status = status;
+    this.operation = operation;
   }
 }
 
@@ -246,12 +248,12 @@ function providerHeaders(token?: string): Headers {
   return headers;
 }
 
-async function error(response: Response): Promise<GitHubProviderError> {
-  return new GitHubProviderError(response.status, (await response.text()).slice(0, 300));
+async function error(response: Response, operation: string): Promise<GitHubProviderError> {
+  return new GitHubProviderError(response.status, (await response.text()).slice(0, 300), operation);
 }
 
 async function jsonResponse(response: Response, label: string): Promise<Record<string, unknown>> {
-  if (!response.ok) throw await error(response);
+  if (!response.ok) throw await error(response, label);
   try {
     return object(await response.json<unknown>(), label);
   } catch (caught) {
@@ -610,7 +612,7 @@ export class GitHubProvider {
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
-    if (response.status !== 204) throw await error(response);
+    if (response.status !== 204) throw await error(response, "workflow dispatch");
   }
 
   async verifyResult(
