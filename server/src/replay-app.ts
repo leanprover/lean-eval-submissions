@@ -1660,7 +1660,7 @@ async function handleArchiveUploadFinalize(
     `cat -- ${partPaths} > "$out"`,
     `test "$(wc -c < "$out" | tr -d ' ')" = ${String(finalize.archive_bytes)}`,
     `test "$(sha256sum "$out" | cut -d ' ' -f 1)" = ${finalize.archive_sha256}`,
-    'base64 "$out" > "$encoded"',
+    'base64 --wrap=0 "$out" > "$encoded"',
     `rm -f -- "$out" ${partPaths}`,
     "trap - EXIT",
   ].join("; ");

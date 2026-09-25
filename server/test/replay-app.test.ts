@@ -1748,7 +1748,7 @@ describe("chunked archive upload routes", () => {
     expect(sandbox.commands).toHaveLength(1);
     expect(sandbox.commands[0]).toContain("cat -- /workspace/archive-part-");
     expect(sandbox.commands[0]).toContain(` = ${digest}`);
-    expect(sandbox.commands[0]).toContain("base64 \"$out\" > \"$encoded\"");
+    expect(sandbox.commands[0]).toContain("base64 --wrap=0 \"$out\" > \"$encoded\"");
     expect(await receipts.readArchiveUpload()).toMatchObject({
       assembled_path: "/workspace/archive.tar.gz.age.b64",
     });
