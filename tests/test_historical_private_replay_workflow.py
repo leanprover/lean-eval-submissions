@@ -708,6 +708,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
     def test_server_requires_reservation_and_exact_task_attempt(self) -> None:
         self.assertIn("override enableInternet = false", ENTRY)
         self.assertIn("claimReservedBinding", ENTRY)
+        self.assertIn('"POST /api/v1/replay/archive-part"', ENTRY)
+        self.assertIn('"POST /api/v1/replay/archive-finalize"', ENTRY)
+        self.assertIn("claimArchiveUpload", ENTRY)
+        self.assertIn("commitArchiveUploadPart", ENTRY)
+        self.assertIn("finalizeArchiveUpload", ENTRY)
         self.assertIn("EXPECTED_REPLAY_TASK_ID", ENTRY)
         self.assertIn("EXPECTED_REPLAY_ATTEMPT", ENTRY)
         self.assertIn("(identity.attempt as number) > 4", ENTRY)

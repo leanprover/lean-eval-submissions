@@ -23,6 +23,8 @@ const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const ALLOWED_ROUTES = new Set([
   "GET /healthz",
   "POST /api/v1/replay",
+  "POST /api/v1/replay/archive-part",
+  "POST /api/v1/replay/archive-finalize",
   "POST /api/v1/replay/status",
   "POST /api/v1/historical-private-replay/prewarm",
   "POST /api/v1/historical-private-replay/reserve",
@@ -160,6 +162,14 @@ export default {
           readReceipt: () => store.readReceipt(),
           prepareReceipt: (receipt: unknown) => store.prepareReceipt(receipt),
           confirmReceipt: () => store.confirmReceipt(),
+          readArchiveUpload: () => store.readArchiveUpload(),
+          claimArchiveUpload: (identity: unknown) => store.claimArchiveUpload(identity),
+          commitArchiveUploadPart: (identity: unknown, part: unknown) => (
+            store.commitArchiveUploadPart(identity, part)
+          ),
+          finalizeArchiveUpload: (identity: unknown, path: string) => (
+            store.finalizeArchiveUpload(identity, path)
+          ),
         };
       },
     });
