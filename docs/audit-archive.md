@@ -237,12 +237,13 @@ The cap is checked after the source has already been cloned, so it
 bounds what enters the archive, not the cost of fetching. It is not
 a fetch-side denial-of-service control.
 
-The encrypted replay path (`docs/replay.md`) has its own, separate
-ciphertext bound, currently 10 MiB, set by its transport: the
-controller ships the ciphertext base64-encoded inside one JSON body
-through a Worker isolate. Archives between 10 MiB and 100 MB are
-retained and evaluated normally but cannot yet be replayed through
-that path; widening replay is transport work, not a constant bump.
+The encrypted replay path (`docs/replay.md`) no longer carries the
+archive inside one JSON body. It uploads fixed-size parts as raw
+binary, streamed through the Worker into the Sandbox and assembled
+there before the key is unwrapped, so isolate memory is bounded by one
+chunk rather than by the archive. Its own bound is still 11 MiB of
+ciphertext while the new transport is proven; raising it to match this
+cap is now a constants change rather than transport work.
 
 A submission over the cap is rejected at the workflow level: the
 issue is commented and closed, no evaluation is run, no leaderboard

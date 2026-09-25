@@ -14,11 +14,15 @@ from scripts.key_capability_contract import (
     capability_digest,
 )
 from scripts.replay_controller import (
+    ARCHIVE_PART_BYTES,
     ReplayControllerError,
+    archive_part_count,
+    build_archive_finalize_request,
     build_executor_request,
     failure_verdict,
     prepare_unwrap,
     recover_running,
+    split_archive,
     started_event,
     terminal_event,
     unwrap_identity,
@@ -312,10 +316,16 @@ class ReplayControllerTests(unittest.TestCase):
             request = build_executor_request(
                 plan, file_key_sidecar(), ciphertext, unwrap, material_path
             )
-            self.assertEqual(request["schema_version"], 2)
+            # The transport version is now fixed at 3 and says nothing about
+            # which key form opens the archive; the envelope version does.
+            self.assertEqual(request["schema_version"], 3)
             self.assertEqual(request["archive_expectation"]["schema_version"], 2)
             self.assertEqual(request["key_material_type"], "age-file-key-v1")
             self.assertNotIn("plaintext_identity_base64", request)
+            # The archive travels as uploaded parts, never in this request.
+            self.assertNotIn("ciphertext_base64", request)
+            self.assertEqual(request["archive_ciphertext_bytes"], len(CIPHERTEXT))
+            self.assertEqual(request["archive_part_count"], 1)
             material_path.write_bytes(b"short")
             with self.assertRaisesRegex(ReplayControllerError, "exactly 16 bytes"):
                 build_executor_request(
@@ -404,3 +414,62 @@ class ReplayControllerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchiveUploadSplitTests(unittest.TestCase):
+    """The archive is uploaded in fixed-size parts, so the split is the contract."""
+
+    def test_part_count_follows_from_the_archive_length(self) -> None:
+        self.assertEqual(archive_part_count(1), 1)
+        self.assertEqual(archive_part_count(ARCHIVE_PART_BYTES), 1)
+        self.assertEqual(archive_part_count(ARCHIVE_PART_BYTES + 1), 2)
+        for invalid in (0, -1):
+            with self.assertRaisesRegex(ReplayControllerError, "size limit"):
+                archive_part_count(invalid)
+
+    def test_split_reassembles_to_the_original_archive(self) -> None:
+        # Just over one part, so the multi-part path is exercised. At the
+        # current 11 MiB archive bound two parts is the most there can be,
+        # which is why the part size sits below it rather than above.
+        payload = bytes(range(256)) * 40_000
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            archive = root / "archive.tar.age"
+            archive.write_bytes(payload)
+            manifest = split_archive(archive, root / "parts")
+            self.assertEqual(manifest["archive_bytes"], len(payload))
+            self.assertEqual(manifest["part_count"], 2)
+            self.assertEqual(
+                manifest["archive_sha256"], hashlib.sha256(payload).hexdigest()
+            )
+            joined = b""
+            for index, part in enumerate(manifest["parts"]):
+                self.assertEqual(part["index"], index)
+                chunk = pathlib.Path(part["path"]).read_bytes()
+                self.assertEqual(part["bytes"], len(chunk))
+                self.assertEqual(part["sha256"], hashlib.sha256(chunk).hexdigest())
+                joined += chunk
+            self.assertEqual(joined, payload)
+            # Every part but the last is exactly one part long, which is what
+            # lets the Worker derive the count rather than trust it.
+            for part in manifest["parts"][:-1]:
+                self.assertEqual(part["bytes"], ARCHIVE_PART_BYTES)
+
+    def test_finalize_request_drops_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            archive = root / "archive.tar.age"
+            archive.write_bytes(b"x" * 1024)
+            manifest = split_archive(archive, root / "parts")
+            request = build_archive_finalize_request(
+                manifest, "7" * 64, "authoritative-archive"
+            )
+            self.assertEqual(request["runner_nonce"], "7" * 64)
+            self.assertEqual(request["upload_kind"], "authoritative-archive")
+            self.assertEqual(request["part_count"], 1)
+            # A runner path is uploader-local and must not reach the Worker.
+            self.assertNotIn("path", request["parts"][0])
+            with self.assertRaisesRegex(ReplayControllerError, "upload kind"):
+                build_archive_finalize_request(manifest, "7" * 64, "not-a-kind")
+            with self.assertRaisesRegex(ReplayControllerError, "runner_nonce"):
+                build_archive_finalize_request(manifest, "short", "authoritative-archive")
