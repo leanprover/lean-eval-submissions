@@ -6789,6 +6789,27 @@
         "ref": "363f59c85881e19ff90f02fabcbca3e4ed6252e7",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T03:32:50Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1773,
+        "kind": "issue"
+      },
+      "problem_id": "annals_pointwise_ergodic_theorems",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_5ffb52523a7fbf34e3f34936492241b9693c18808b14d0326a00dda3a8ce96d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "aa2864fe71db6baaf26eca200bb210e1981f15ad",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
