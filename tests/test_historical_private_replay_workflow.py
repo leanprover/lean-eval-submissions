@@ -321,8 +321,10 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("/api/v1/replay/archive-part", upload)
         self.assertIn("/api/v1/replay/archive-finalize", upload)
         self.assertIn("X-Lean-Eval-Part-Sha256", upload)
-        self.assertIn('test "$part_status" = 202', upload)
-        self.assertIn('test "$finalize_status" = 200', upload)
+        self.assertIn('if [ "$part_status" != 202 ]', upload)
+        self.assertIn('if [ "$finalize_status" != 200 ]', upload)
+        self.assertIn("report_closed_upload_failure", upload)
+        self.assertIn("response=unrecognized", upload)
         self.assertIn('shred --remove "$RUNNER_TEMP/archive.tar.age"', upload)
         self.assertIn(
             'test "$(jq -r .schema_version '

@@ -805,6 +805,28 @@ jobs:
             token=$(jq -er .value "$RUNNER_TEMP/upload-oidc.json")
             rm -f "$RUNNER_TEMP/upload-oidc.json"
           }
+          report_closed_upload_failure() {
+            local phase=$1
+            local status=$2
+            local response=$3
+            local closed
+            if closed=$(jq -cer '
+              if . == {error:"invalid_request"} then .
+              elif .error == "executor_failed" and
+                   (.reason | IN("input_transfer_failed", "command_rpc_failed",
+                                 "command_failed", "command_output_invalid",
+                                 "sandbox_destroy_failed", "unexpected_failure")) and
+                   (keys | sort) == ["error", "reason"]
+              then {error, reason}
+              else error("response is not a closed executor failure")
+              end
+            ' "$response" 2>/dev/null); then
+              echo "::error title=Private archive $phase failed::http=$status response=$closed"
+            else
+              echo "::error title=Private archive $phase failed::http=$status response=unrecognized"
+            fi
+            exit 1
+          }
           for index in $(seq 0 $((part_count - 1))); do
             part_path=$(jq -er --argjson i "$index" '.parts[$i].path' \
               "$RUNNER_TEMP/archive-manifest.json")
@@ -830,11 +852,13 @@ jobs:
               --output "$RUNNER_TEMP/archive-part-response.json" \
               --write-out '%{http_code}')
             unset token
-            test "$part_status" = 202
-            jq -e --argjson index "$index" '
+            if [ "$part_status" != 202 ] || ! jq -e --argjson index "$index" '
               . == {schema_version:1, upload_kind:"authoritative-archive",
                     part_index:$index, status:"stored"}
-            ' "$RUNNER_TEMP/archive-part-response.json" >/dev/null
+            ' "$RUNNER_TEMP/archive-part-response.json" >/dev/null; then
+              report_closed_upload_failure part "$part_status" \
+                "$RUNNER_TEMP/archive-part-response.json"
+            fi
             rm -f "$part_path" "$RUNNER_TEMP/archive-part-response.json"
           done
           python scripts/replay_controller.py build-archive-finalize-request \
@@ -852,10 +876,13 @@ jobs:
             --output "$RUNNER_TEMP/archive-finalize-response.json" \
             --write-out '%{http_code}')
           unset token
-          test "$finalize_status" = 200
-          jq -e '. == {schema_version:1, upload_kind:"authoritative-archive",
+          if [ "$finalize_status" != 200 ] || ! jq -e '
+            . == {schema_version:1, upload_kind:"authoritative-archive",
                        status:"assembled"}' \
-            "$RUNNER_TEMP/archive-finalize-response.json" >/dev/null
+            "$RUNNER_TEMP/archive-finalize-response.json" >/dev/null; then
+            report_closed_upload_failure finalize "$finalize_status" \
+              "$RUNNER_TEMP/archive-finalize-response.json"
+          fi
           shred --remove "$RUNNER_TEMP/archive.tar.age"
           rm -rf "$RUNNER_TEMP/archive-parts"
           cleanup

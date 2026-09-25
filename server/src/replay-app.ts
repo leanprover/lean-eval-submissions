@@ -1468,16 +1468,15 @@ function streamedText(contents: string): ReadableStream<Uint8Array> {
   });
 }
 
-/**
- * Stream one upload part into the Sandbox, digesting and counting as it passes.
+/** Read, bound, and digest one upload part before handing it to the Sandbox.
  *
- * A pass-through transform rather than `body.tee()`: with `tee`, the digest
- * branch drains faster than the Sandbox write and the runtime buffers the whole
- * part for the slower branch, which is the memory behaviour this transport
- * exists to remove. Here nothing larger than one chunk is ever resident.
+ * Buffering one fixed-size part is safely bounded at 8 MiB and avoids relying
+ * on a streaming digest while the Sandbox RPC consumes the same stream. The
+ * old transport instead held the whole archive plus its larger base64 and JSON
+ * representations in the isolate at once.
  *
- * `content-length` is optional and client-controlled, so the count taken here is
- * the only real bound on how many bytes a part may carry.
+ * `content-length` is optional and client-controlled, so the bytes actually
+ * read remain the authoritative bound.
  */
 async function streamPartToSandbox(
   sandbox: SandboxClient,
@@ -1485,31 +1484,42 @@ async function streamPartToSandbox(
   body: ReadableStream<Uint8Array>,
   maximumBytes: number,
 ): Promise<{ bytes: number; sha256: string }> {
-  // `crypto.DigestStream`, not a bare global: the type is declared globally but
-  // the constructor only exists on the Crypto instance.
-  const digestStream = new crypto.DigestStream("SHA-256");
-  const writer = digestStream.getWriter();
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
   let bytes = 0;
-  const overflow = { hit: false };
-  const counted = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-    async transform(chunk, controller) {
-      bytes += chunk.byteLength;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
       if (bytes > maximumBytes) {
-        overflow.hit = true;
-        throw new Error("upload part exceeds its size limit");
+        throw new ArchiveUploadContractError("upload part exceeds its size limit");
       }
-      await writer.write(chunk);
-      controller.enqueue(chunk);
+      chunks.push(chunk.value);
+    }
+  } catch (error) {
+    if (error instanceof ArchiveUploadContractError || error instanceof ReplayExecutorError) {
+      throw error;
+    }
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  const contents = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    contents.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", contents));
+  const upload = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(contents);
+      controller.close();
     },
-    async flush() {
-      await writer.close();
-    },
-  }));
+  });
   let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
   try {
-    result = await sandbox.writeFile(path, counted);
+    result = await sandbox.writeFile(path, upload);
   } catch {
-    if (overflow.hit) throw new ArchiveUploadContractError("upload part exceeds its size limit");
     throw new ReplayExecutorError("input_transfer_failed");
   }
   if (!result.success || result.path !== path) {
@@ -1519,7 +1529,6 @@ async function streamPartToSandbox(
   // that the container received everything it was sent. Finalization hashes and
   // measures their concatenation before the key unwrap, which catches a
   // truncated transfer while the capability is still unspent.
-  const digest = new Uint8Array(await digestStream.digest);
   return {
     bytes,
     sha256: [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
