@@ -6852,6 +6852,27 @@
         "ref": "edd8106258f7764587a4687c979ac15600696739",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T04:30:18Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1771,
+        "kind": "issue"
+      },
+      "problem_id": "annals_motivic_invariants",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_36be716a6fe011f33a6e41c771253a72a074ef3bfb6dd1931f8a3c8412223516",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d4e70cc5ffb8e99ca0e1cd43169d8b07437aece1",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
