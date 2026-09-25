@@ -22,6 +22,8 @@ const HISTORICAL_PRIVATE_WORKFLOW_REF = `${GITHUB_REPOSITORY}/.github/workflows/
 const HISTORICAL_PRIVATE_ROUTES = new Set([
   "/api/v1/replay",
   "/api/v1/replay/status",
+  "/api/v1/replay/archive-part",
+  "/api/v1/replay/archive-finalize",
   "/api/v1/historical-private-replay/prewarm",
   "/api/v1/historical-private-replay/reserve",
   "/api/v1/historical-private-replay/cleanup",

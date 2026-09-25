@@ -811,7 +811,7 @@ jobs:
             local response=$3
             local closed
             if closed=$(jq -cer '
-              if . == {error:"invalid_request"} then .
+              if . == {error:"invalid_request"} or . == {error:"unauthorized"} then .
               elif .error == "executor_failed" and
                    (.reason | IN("input_transfer_failed", "command_rpc_failed",
                                  "command_failed", "command_output_invalid",
