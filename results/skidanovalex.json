@@ -740,6 +740,28 @@
         "ref": "6a151a786e827db84993675b1dfd01b75b48d58f",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T19:22:40Z",
+      "benchmark_commit": "4ae7061fe4b0b70dcb7fe24fdee067b68636226b",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "issue_number": 1796,
+        "kind": "issue"
+      },
+      "problem_id": "bourgain_polynomial_ergodic",
+      "production_metadata": {
+        "solution_publication_date": "2026-11-12",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_0025e24896da51b13dd9285f1e91946bf359210b62f89635b2fb45cec6f03430",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ec07ab087025fed32e27b2d4b146c9721fd73c63",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
