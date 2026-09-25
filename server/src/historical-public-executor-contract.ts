@@ -3,7 +3,6 @@ const OCI_DIGEST = /^sha256:[0-9a-f]{64}$/;
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const REQUEST_ID = /^prr_[0-9a-f]{64}$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 const ZERO_DIGEST = "0".repeat(64);
 const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
@@ -119,10 +118,20 @@ async function sha256Text(value: string): Promise<string> {
 
 function decodeCanonicalBase64(value: unknown): Uint8Array {
   const encoded = text(value, "source_archive_base64", Math.ceil(MAX_SOURCE_ARCHIVE_BYTES / 3) * 4);
-  if (!BASE64.test(encoded)) {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  const alphabetLength = encoded.length - padding;
+  let valid = encoded.length % 4 === 0 && alphabetLength > 0;
+  for (let index = 0; valid && index < alphabetLength; index += 1) {
+    const code = encoded.charCodeAt(index);
+    valid = (code >= 65 && code <= 90)
+      || (code >= 97 && code <= 122)
+      || (code >= 48 && code <= 57)
+      || code === 43
+      || code === 47;
+  }
+  if (!valid) {
     throw new HistoricalPublicExecutorContractError("source archive is not canonical base64");
   }
-  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
   const decodedLength = encoded.length / 4 * 3 - padding;
   if (decodedLength < 1 || decodedLength > MAX_SOURCE_ARCHIVE_BYTES) {
     throw new HistoricalPublicExecutorContractError("source archive exceeds its size limit");

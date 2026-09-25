@@ -765,6 +765,102 @@ jobs:
           test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-unwrap.json")" = \
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
 
+      - name: Upload and assemble the exact private archive before unwrap
+        if: steps.started.outputs.appended == 'true'
+        env:
+          EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          archive_commit=$(jq -er .task.archive_commit "$RUNNER_TEMP/private-replay-plan.json")
+          archive_path=$(jq -er .task.archive_path "$RUNNER_TEMP/private-replay-plan.json")
+          expected_sha256=$(jq -er .task.archive_ciphertext_sha256 \
+            "$RUNNER_TEMP/private-replay-plan.json")
+          git -C audit cat-file blob "$archive_commit:$archive_path" \
+            > "$RUNNER_TEMP/archive.tar.age"
+          test "$(sha256sum "$RUNNER_TEMP/archive.tar.age" | cut -d' ' -f1)" = \
+            "$expected_sha256"
+          python scripts/replay_controller.py split-archive \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --part-directory "$RUNNER_TEMP/archive-parts" \
+            --output "$RUNNER_TEMP/archive-manifest.json"
+          test "$(jq -er .archive_sha256 "$RUNNER_TEMP/archive-manifest.json")" = \
+            "$expected_sha256"
+          runner_nonce=$(jq -er .runner_nonce "$RUNNER_TEMP/prewarm-request.json")
+          archive_bytes=$(jq -er .archive_bytes "$RUNNER_TEMP/archive-manifest.json")
+          part_count=$(jq -er .part_count "$RUNNER_TEMP/archive-manifest.json")
+          cleanup() {
+            unset token
+            rm -f "$RUNNER_TEMP/upload-oidc.json" \
+              "$RUNNER_TEMP/archive-part-response.json" \
+              "$RUNNER_TEMP/archive-finalize-response.json"
+          }
+          trap cleanup EXIT
+          mint_oidc() {
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
+              --output "$RUNNER_TEMP/upload-oidc.json"
+            token=$(jq -er .value "$RUNNER_TEMP/upload-oidc.json")
+            rm -f "$RUNNER_TEMP/upload-oidc.json"
+          }
+          for index in $(seq 0 $((part_count - 1))); do
+            part_path=$(jq -er --argjson i "$index" '.parts[$i].path' \
+              "$RUNNER_TEMP/archive-manifest.json")
+            part_sha256=$(jq -er --argjson i "$index" '.parts[$i].sha256' \
+              "$RUNNER_TEMP/archive-manifest.json")
+            part_bytes=$(jq -er --argjson i "$index" '.parts[$i].bytes' \
+              "$RUNNER_TEMP/archive-manifest.json")
+            mint_oidc
+            part_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors --retry-delay 2 \
+              --header "Authorization: Bearer $token" \
+              --header 'Content-Type: application/octet-stream' \
+              --header 'X-Lean-Eval-Upload-Kind: authoritative-archive' \
+              --header "X-Lean-Eval-Runner-Nonce: $runner_nonce" \
+              --header "X-Lean-Eval-Archive-Sha256: $expected_sha256" \
+              --header "X-Lean-Eval-Archive-Bytes: $archive_bytes" \
+              --header "X-Lean-Eval-Part-Count: $part_count" \
+              --header "X-Lean-Eval-Part-Index: $index" \
+              --header "X-Lean-Eval-Part-Sha256: $part_sha256" \
+              --header "X-Lean-Eval-Part-Bytes: $part_bytes" \
+              --request POST --data-binary "@$part_path" \
+              "$EXECUTOR_URL/api/v1/replay/archive-part" \
+              --output "$RUNNER_TEMP/archive-part-response.json" \
+              --write-out '%{http_code}')
+            unset token
+            test "$part_status" = 202
+            jq -e --argjson index "$index" '
+              . == {schema_version:1, upload_kind:"authoritative-archive",
+                    part_index:$index, status:"stored"}
+            ' "$RUNNER_TEMP/archive-part-response.json" >/dev/null
+            rm -f "$part_path" "$RUNNER_TEMP/archive-part-response.json"
+          done
+          python scripts/replay_controller.py build-archive-finalize-request \
+            --manifest "$RUNNER_TEMP/archive-manifest.json" \
+            --runner-nonce "$runner_nonce" \
+            --upload-kind authoritative-archive \
+            --output "$RUNNER_TEMP/archive-finalize-request.json"
+          mint_oidc
+          finalize_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors --retry-delay 2 \
+            --header "Authorization: Bearer $token" \
+            --header 'Content-Type: application/json' --request POST \
+            --data-binary "@$RUNNER_TEMP/archive-finalize-request.json" \
+            "$EXECUTOR_URL/api/v1/replay/archive-finalize" \
+            --output "$RUNNER_TEMP/archive-finalize-response.json" \
+            --write-out '%{http_code}')
+          unset token
+          test "$finalize_status" = 200
+          jq -e '. == {schema_version:1, upload_kind:"authoritative-archive",
+                       status:"assembled"}' \
+            "$RUNNER_TEMP/archive-finalize-response.json" >/dev/null
+          shred --remove "$RUNNER_TEMP/archive.tar.age"
+          rm -rf "$RUNNER_TEMP/archive-parts"
+          cleanup
+          trap - EXIT
+
       - name: Prepare the exact ten-minute one-use unwrap capability
         if: steps.started.outputs.appended == 'true'
         run: |
@@ -872,7 +968,7 @@ jobs:
             --unwrap "$RUNNER_TEMP/unwrap-request.json" \
             --identity "$RUNNER_TEMP/archive-file-key" \
             --output "$RUNNER_TEMP/executor-request.json"
-          test "$(jq -r .schema_version "$RUNNER_TEMP/executor-request.json")" = 2
+          test "$(jq -r .schema_version "$RUNNER_TEMP/executor-request.json")" = 3
           test "$(jq -r .key_material_type "$RUNNER_TEMP/executor-request.json")" = age-file-key-v1
           test "$(jq -r '.. | objects | keys[]' "$RUNNER_TEMP/executor-request.json" \
             | grep -Eic 'aws|credential|token|session' || true)" = 0
@@ -1428,6 +1524,7 @@ jobs:
           set -euo pipefail
           unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN token
           for path in \
+            "$RUNNER_TEMP/archive.tar.age" \
             "$RUNNER_TEMP/archive-file-key" \
             "$RUNNER_TEMP/unwrap-request.json" \
             "$RUNNER_TEMP/unwrap-response.json" \
@@ -1444,6 +1541,7 @@ jobs:
             if [ -f "$path" ]; then shred --remove "$path"; fi
           done
           rm -rf audit state "$RUNNER_TEMP/state-views" \
+            "$RUNNER_TEMP/archive-parts" \
             "$RUNNER_TEMP"/started-state-publish-* \
             "$RUNNER_TEMP"/terminal-state-publish-* \
             "$RUNNER_TEMP"/failure-state-publish-* \

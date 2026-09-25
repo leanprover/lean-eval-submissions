@@ -2428,7 +2428,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 self.fixture.authority_commit,
             )
 
-    def test_schema_v2_file_key_uses_strict_existing_handoff(self) -> None:
+    def test_schema_v2_file_key_uses_schema_v3_executor_handoff(self) -> None:
         plan = self.fixture.plan()
         started = controller.started_candidate(
             plan,
@@ -2481,9 +2481,12 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 unwrap,
                 material_path,
             )
-        self.assertEqual(request["schema_version"], 2)
+        self.assertEqual(request["schema_version"], 3)
         self.assertEqual(request["key_material_type"], "age-file-key-v1")
         self.assertNotIn("plaintext_identity_base64", request)
+        self.assertNotIn("ciphertext_base64", request)
+        self.assertGreater(request["archive_ciphertext_bytes"], 0)
+        self.assertGreaterEqual(request["archive_part_count"], 1)
 
 
 class HistoricalPrivateRecoveryTests(unittest.TestCase):

@@ -306,6 +306,30 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("portReadyTimeoutMS: 600_000", private_entry)
         self.assertNotIn("600_000", sandbox)
 
+    def test_archive_is_chunked_and_assembled_before_unwrap(self) -> None:
+        upload = step(
+            "Upload and assemble the exact private archive before unwrap",
+            "Prepare the exact ten-minute one-use unwrap capability",
+        )
+        self.assertLess(
+            WORKFLOW.index("Upload and assemble the exact private archive before unwrap"),
+            WORKFLOW.index("Prepare the exact ten-minute one-use unwrap capability"),
+        )
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', upload)
+        self.assertIn("git -C audit cat-file blob", upload)
+        self.assertIn("scripts/replay_controller.py split-archive", upload)
+        self.assertIn("/api/v1/replay/archive-part", upload)
+        self.assertIn("/api/v1/replay/archive-finalize", upload)
+        self.assertIn("X-Lean-Eval-Part-Sha256", upload)
+        self.assertIn('test "$part_status" = 202', upload)
+        self.assertIn('test "$finalize_status" = 200', upload)
+        self.assertIn('shred --remove "$RUNNER_TEMP/archive.tar.age"', upload)
+        self.assertIn(
+            'test "$(jq -r .schema_version '
+            '"$RUNNER_TEMP/executor-request.json")" = 3',
+            WORKFLOW,
+        )
+
     def test_four_lanes_are_manual_dark_serialized_per_shard_and_temporary(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertNotIn("schedule:", WORKFLOW)
