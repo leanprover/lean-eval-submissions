@@ -111,6 +111,42 @@ describe("historical public executor boundary", () => {
     });
   });
 
+  it("validates a multi-megabyte source archive without regex stack overflow", async () => {
+    const body = await fixture();
+    const sourceText = "a".repeat(6 * 1024 * 1024);
+    const sourceArchive = new TextEncoder().encode(sourceText);
+    const archiveDigest = await sha256(sourceArchive);
+    const handoff = body.handoff as Record<string, unknown>;
+    const source = handoff.source as Record<string, unknown>;
+    source.archive_sha256 = archiveDigest;
+    source.archive_size_bytes = sourceArchive.byteLength;
+    body.source_archive_sha256 = archiveDigest;
+    body.source_archive_base64 = btoa(sourceText);
+    body.handoff_sha256 = await sha256(
+      new TextEncoder().encode(canonicalHistoricalPublicHandoff(handoff)),
+    );
+
+    await expect(readHistoricalPublicExecutorRequest(new Request(
+      "https://example.test",
+      { method: "POST", body: JSON.stringify(body) },
+    ), EXECUTION_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).resolves.toMatchObject({
+      source_archive_sha256: archiveDigest,
+    });
+  });
+
+  it("rejects non-canonical base64 without scanning through padding", async () => {
+    for (const encoded of ["a===", "aa=a", "aa$=", "aaa", "===="]) {
+      const body = await fixture();
+      body.source_archive_base64 = encoded;
+      await expect(readHistoricalPublicExecutorRequest(new Request(
+        "https://example.test",
+        { method: "POST", body: JSON.stringify(body) },
+      ), EXECUTION_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).rejects.toThrow(
+        "canonical base64",
+      );
+    }
+  });
+
   it("rejects handoff, archive, reviewed-runtime, and verdict drift", async () => {
     for (const mutate of [
       (value: Record<string, unknown>) => { value.handoff_sha256 = "0".repeat(64); },
