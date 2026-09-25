@@ -6957,6 +6957,27 @@
         "ref": "f728404aa5cd3223fcc6c4e09a17bf3d5e65dcda",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T22:30:52Z",
+      "benchmark_commit": "79162db14f3a01f5dba2ad7ca9c51a18898a9af8",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1801,
+        "kind": "issue"
+      },
+      "problem_id": "feit_thompson",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_826d34c5d6cf35f23d9cdf43bdfccec124e6bf7eebe6f54cbac6406d26a702f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7e13250768e8a02d2cb6642822172bc7486bbdcd",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
