@@ -78,8 +78,8 @@ while test "$#" -gt 0; do
   case "$1" in
     --output) output=$2; shift 2 ;;
     --request) method=$2; shift 2 ;;
-    --write-out|--header|--max-time|--proto) shift 2 ;;
-    --tlsv1.2|--silent|--show-error) shift ;;
+    --write-out|--header|--max-time|--proto|--retry|--retry-delay) shift 2 ;;
+    --tlsv1.2|--silent|--show-error|--retry-all-errors) shift ;;
     *) url=$1; shift ;;
   esac
 done
@@ -157,6 +157,8 @@ esac
     def test_direct_delete_then_proves_worker_and_application_absent(self) -> None:
         completed, logs = self.run_delete()
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertGreaterEqual(RESOURCE_DELETE.count("--retry 3"), 2)
+        self.assertGreaterEqual(RESOURCE_DELETE.count("--retry-all-errors"), 2)
         self.assertIn(
             f"DELETE https://api.cloudflare.com/client/v4/accounts/"
             f"a46b90978a1c29cc4795f30677e7e4b8/workers/services/{self.worker}?force=true",
