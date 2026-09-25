@@ -226,6 +226,7 @@ export class GitHubProviderError extends Error {
   readonly rateLimitReset: number | undefined;
   readonly retryAfterSeconds: number | undefined;
   readonly requestId: string | undefined;
+  readonly rateLimitKind: "primary" | "secondary" | undefined;
 
   constructor(status: number, message: string, operation?: string, headers?: Headers) {
     super(`GitHub provider ${String(status)}: ${message}`);
@@ -238,6 +239,13 @@ export class GitHubProviderError extends Error {
     const requestId = headers?.get("x-github-request-id");
     this.requestId = requestId !== null && requestId !== undefined && /^[A-Za-z0-9:-]{1,128}$/u.test(requestId)
       ? requestId
+      : undefined;
+    this.rateLimitKind = status === 403 || status === 429
+      ? /secondary rate limit/iu.test(message)
+        ? "secondary"
+        : this.rateLimitRemaining === 0
+          ? "primary"
+          : undefined
       : undefined;
   }
 }

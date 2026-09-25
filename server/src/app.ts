@@ -2556,6 +2556,7 @@ function diagnosticResponse(
     ...(provider?.rateLimitReset === undefined ? {} : { provider_rate_limit_reset: provider.rateLimitReset }),
     ...(provider?.retryAfterSeconds === undefined ? {} : { provider_retry_after_seconds: provider.retryAfterSeconds }),
     ...(provider?.requestId === undefined ? {} : { provider_request_id: provider.requestId }),
+    ...(provider?.rateLimitKind === undefined ? {} : { provider_rate_limit_kind: provider.rateLimitKind }),
   };
   console.error(JSON.stringify({
     event: stage === undefined ? "api_request_failed" : "submission_stage_failed",
