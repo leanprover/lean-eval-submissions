@@ -6978,6 +6978,27 @@
         "ref": "7e13250768e8a02d2cb6642822172bc7486bbdcd",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T23:01:22Z",
+      "benchmark_commit": "79162db14f3a01f5dba2ad7ca9c51a18898a9af8",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1804,
+        "kind": "issue"
+      },
+      "problem_id": "annals_hasse_principle_random_fano",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3c01720e9fbb9e22c8f174adbacbbdfcf1a3e0b01292865ad360bf618a751462",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ce45c375ca92bf8758d5ff6b8f46812ca4ae1a2b",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
