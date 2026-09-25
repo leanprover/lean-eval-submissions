@@ -721,6 +721,25 @@
         "ref": "c5dd063f8f06ac516ddd47cacdb63c9afe815cc5",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T00:15:39Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d5aa-3d79-7339-9840-5986a9c71220"
+      },
+      "problem_id": "annals_large_value_estimates",
+      "production_metadata": {},
+      "result_id": "r2_520b14fb4af621f1017d71a0def4149b9a42f17410bdfe89ca0e423089e6e6cb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6a151a786e827db84993675b1dfd01b75b48d58f",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
