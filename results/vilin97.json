@@ -6936,6 +6936,27 @@
         "ref": "05a6ba8b4d50fc91388f5eda84590546485f5f2d",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T22:29:26Z",
+      "benchmark_commit": "79162db14f3a01f5dba2ad7ca9c51a18898a9af8",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1802,
+        "kind": "issue"
+      },
+      "problem_id": "chudnovsky_formula_for_pi_inv",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_7221d17928e1970a5d3e85e894ebb68d8ef2e098a3c5bf06d43ca882ac774952",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f728404aa5cd3223fcc6c4e09a17bf3d5e65dcda",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
