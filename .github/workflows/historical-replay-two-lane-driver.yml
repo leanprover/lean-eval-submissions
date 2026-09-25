@@ -1,4 +1,4 @@
-name: Start bounded v1 replay lanes (temporary)
+name: Start bounded legacy replay lanes (temporary)
 
 # Temporary retained-baseline machinery. Remove this workflow with the two
 # historical controllers after both queues are terminal and executor cleanup

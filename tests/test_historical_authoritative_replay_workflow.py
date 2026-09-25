@@ -14,18 +14,10 @@ PRIVATE_WORKFLOW = (
 
 
 class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
-    def test_replay_is_limited_to_the_exact_frozen_v1_manifest(self) -> None:
-        self.assertIn(
-            "leanprover/lean-eval/6b4b87b672f5301f24983a12fda65dac608453ce/"
-            "manifests/sets/v1.toml",
-            WORKFLOW,
-        )
-        self.assertIn(
-            "546706914389696b93653189ba870550e9853a4ac653664f482ba8d4d9eb9492",
-            WORKFLOW,
-        )
-        self.assertGreaterEqual(WORKFLOW.count("--problem-set"), 3)
-        self.assertIn("non-v1 tasks remain deferred", WORKFLOW)
+    def test_replay_drains_the_complete_legacy_public_queue(self) -> None:
+        self.assertNotIn("--problem-set", WORKFLOW)
+        self.assertNotIn("manifests/sets/v1.toml", WORKFLOW)
+        self.assertIn("historical public replay queue is empty", WORKFLOW)
 
     def test_lane_is_manual_serialized_and_still_dark(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)

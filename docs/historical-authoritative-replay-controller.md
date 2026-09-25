@@ -52,7 +52,7 @@ execution attempts: the initial execution and at most three retries. Attempt
 four is terminal, and an exhausted task remains in State without starving a
 later eligible task.
 
-## Two serialized production lanes
+## Five bounded production lanes
 
 `.github/workflows/historical-authoritative-replay.yml` is manual, serialized
 within the public lane, and dark while repository variable
@@ -90,14 +90,14 @@ source, request, or verdict artifact.
 
 The temporary
 `.github/workflows/historical-replay-two-lane-driver.yml` starts at most one
-public and one private lane. Each lane retains its own non-cancelling
-concurrency group, so there is never more than one public and one private
-controller active. A successful controller may dispatch exactly one successor
-with a strictly decreasing run budget. It stops replenishing on cancellation,
-job failure, a live same-lane attempt, an empty queue, a blocked public queue,
-or budget exhaustion. The driver defaults leave headroom above the 174 public
-and 639 private retained-baseline tasks but hard-limit either lane to 1,024
-runs per start.
+public lane and exactly four deterministic private shards. Each lane retains
+its own non-cancelling concurrency group, so there is never more than one
+controller active for the same lane or shard. A successful controller may
+dispatch exactly one same-lane successor with a strictly decreasing run
+budget. It stops replenishing on cancellation, job failure, a live same-lane
+attempt, an empty queue, a blocked public queue, or budget exhaustion. The
+driver defaults leave headroom above the initial 145 public and 562 private
+non-v1 tasks and hard-limit every lane to 1,024 runs per start.
 
 The driver binds the protected commit that starts the chain. Before every
 successor dispatch and again at the beginning of every successor, the workflow
@@ -131,14 +131,19 @@ remain immutable-dispatch-tag only.
 
 ## Activation gate
 
-Implementation is not activation. Before creating the repository variable:
+Implementation is not activation. Before creating the repository variables:
 
-- commit and authorize every required qualification profile and State enqueue;
-- provision the production State read/write keys and Cloudflare deployment
-  credentials only in the protected `replay-production` environment;
-- deploy and qualify the exact historical executor code and receipt protocol;
-- run one accepted staging/public canary through the complete State lifecycle;
-- verify stale recovery, terminal idempotency, and fail-closed health.
+- merge the completion-plan amendment and this finite controller restoration;
+- confirm every selected task already binds a reviewed qualification profile
+  and State enqueue;
+- revalidate the existing production State read/write keys, AWS unwrap role,
+  and Cloudflare deployment credentials in the protected `replay-production`
+  environment without exposing their values;
+- confirm production State has no running historical replay and the current
+  public and all four private planners each return an executable or empty plan;
+- retain the prior accepted staging evidence and rerun repository tests for
+  stale recovery, terminal idempotency, network isolation, and fail-closed
+  health; do not create a new persistent qualification campaign.
 
 Production intake, ordinary private replay, and release publication are
 independent gates and do not become enabled by this controller.

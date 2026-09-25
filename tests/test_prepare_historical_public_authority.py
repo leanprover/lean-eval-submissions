@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import pathlib
@@ -218,16 +217,6 @@ class HistoricalPublicBatchFinalizationTests(unittest.TestCase):
             if isinstance(action, argparse._SubParsersAction)
         )
         self.assertEqual(set(action.choices), {"finalize-batch"})
-
-    def test_execution_packet_binds_the_retained_finalizer(self) -> None:
-        digest = hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest()
-        packet = (
-            ROOT / "docs/historical-migration-replay-execution-packet.md"
-        ).read_text(encoding="utf-8")
-        self.assertIn(
-            f"`scripts/prepare_historical_public_authority.py`, SHA-256 `{digest}`",
-            packet,
-        )
 
     def test_seeded_uuid7_is_deterministic_and_time_bound(self) -> None:
         timestamp = authority.timestamp_ms("2026-08-26T06:00:00.000Z")

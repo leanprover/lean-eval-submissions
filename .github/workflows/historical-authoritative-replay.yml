@@ -126,18 +126,6 @@ jobs:
         with:
           python-version: '3.11.10'
 
-      - name: Fetch the exact frozen v1 replay scope
-        run: |
-          set -euo pipefail
-          scope="$RUNNER_TEMP/lean-eval-v1.toml"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --max-time 30 --retry 3 --retry-max-time 90 --retry-all-errors \
-            --output "$scope" \
-            'https://raw.githubusercontent.com/leanprover/lean-eval/6b4b87b672f5301f24983a12fda65dac608453ce/manifests/sets/v1.toml'
-          printf '%s  %s\n' \
-            '546706914389696b93653189ba870550e9853a4ac653664f482ba8d4d9eb9492' \
-            "$scope" | sha256sum --check -
-
       - name: Install exact controller dependencies
         run: |
           set -euo pipefail
@@ -237,7 +225,6 @@ jobs:
           test "$(jq -r .environment "$queue")" = production
           python scripts/historical_replay_controller.py plan \
             --queue "$queue" --repository-root . \
-            --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
             --output "$RUNNER_TEMP/historical-replay-plan.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/historical-replay-plan.json")
           case "$kind" in
@@ -245,7 +232,7 @@ jobs:
               test "$(jq -r .transport.status "$RUNNER_TEMP/historical-replay-plan.json")" = ready
               test "$(jq -r .transport.contract "$RUNNER_TEMP/historical-replay-plan.json")" = historical_public_executor_v1
               ;;
-            empty) echo 'The v1 replay scope is empty; non-v1 tasks remain deferred.' >> "$GITHUB_STEP_SUMMARY" ;;
+            empty) echo 'The historical public replay queue is empty.' >> "$GITHUB_STEP_SUMMARY" ;;
             blocked) test "$(jq -r .blocker.status "$RUNNER_TEMP/historical-replay-plan.json")" = blocked ;;
             *) exit 1 ;;
           esac
@@ -370,12 +357,10 @@ jobs:
               --plan "$RUNNER_TEMP/historical-replay-plan.json" \
               --queue "$views/historical-public-replay-queue.json" \
               --repository-root . \
-              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --output "$plan"
             python scripts/historical_replay_controller.py state-event started \
               --plan "$plan" \
               --queue "$views/historical-public-replay-queue.json" \
-              --problem-set "$RUNNER_TEMP/lean-eval-v1.toml" \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
               --output "$event"
             expected=$(git -C state rev-parse HEAD)
