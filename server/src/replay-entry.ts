@@ -2,7 +2,10 @@ import { ContainerProxy, Sandbox } from "@cloudflare/sandbox";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "./replay-app";
 import { ReplayTerminalReceipt } from "./replay-terminal-receipt";
-import { replaySandbox } from "./replay-sandbox";
+import {
+  historicalReceiptObjectName,
+  replaySandbox,
+} from "./replay-sandbox";
 
 export { ContainerProxy, ReplayTerminalReceipt };
 
@@ -20,8 +23,19 @@ export default {
       sandbox(runtime, runnerNonce) {
         return replaySandbox(runtime, runnerNonce);
       },
-      receiptStore(runtime, runnerNonce) {
-        return runtime.REPLAY_TERMINAL_RECEIPT.getByName(`r-${runnerNonce.slice(0, 61)}`);
+      receiptStore(runtime, runnerNonce, historicalIdentity) {
+        const name = historicalIdentity === undefined
+          ? `r-${runnerNonce.slice(0, 61)}`
+          : historicalReceiptObjectName(
+            historicalIdentity.replay_task_id,
+            historicalIdentity.attempt,
+          );
+        return runtime.REPLAY_TERMINAL_RECEIPT.getByName(name);
+      },
+      recoveryStore(runtime, replayTaskId, attempt) {
+        return runtime.REPLAY_TERMINAL_RECEIPT.getByName(
+          historicalReceiptObjectName(replayTaskId, attempt),
+        );
       },
     });
   },

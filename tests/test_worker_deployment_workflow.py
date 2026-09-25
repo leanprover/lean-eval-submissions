@@ -490,6 +490,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
 
         self.assertIn("override enableInternet = false", REPLAY_ENTRYPOINT)
         self.assertIn("`r-${runnerNonce.slice(0, 61)}`", REPLAY_ENTRYPOINT)
+        self.assertIn("historicalReceiptObjectName", REPLAY_ENTRYPOINT)
+        self.assertIn("recoveryStore(runtime, replayTaskId, attempt)", REPLAY_ENTRYPOINT)
         self.assertIn("await sandbox.destroy()", REPLAY_APP)
         self.assertIn("AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS", REPLAY_APP)
         self.assertIn("claimBinding(binding: unknown)", REPLAY_RECEIPT)

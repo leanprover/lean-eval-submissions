@@ -194,8 +194,6 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
   ["expectation schema is invalid", "expectation_schema_invalid"],
   ["encoded input is invalid", "encoded_input_invalid"],
   ["decoded input exceeds size limit", "decoded_input_too_large"],
-  ["assembled archive is unavailable", "assembled_archive_unavailable"],
-  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["plaintext size mismatch", "plaintext_size_mismatch"],
@@ -231,10 +229,9 @@ const ARCHIVE_PART_PATH = new RegExp(
 );
 
 /** Where each upload kind assembles, and which process later consumes it. */
-const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind | "historical-public-source", string> = {
+const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind, string> = {
   "authoritative-archive": "/workspace/archive.tar.gz.age.b64",
   "staging-archive-acceptance": "/workspace/archive.tar.gz.age.b64",
-  "historical-public-source": "/workspace/historical-public-source.tar.gz",
 };
 
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
@@ -249,8 +246,6 @@ const AUTHORITATIVE_COMMAND_FAILURES = new Map([
     "measurement configuration does not match the executor limits",
     "measurement_limits_mismatch",
   ],
-  ["assembled archive is unavailable", "assembled_archive_unavailable"],
-  ["assembled archive exceeds its size limit", "assembled_archive_too_large"],
   ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
   ["archive decryption failed", "archive_decryption_failed"],
   ["archive plaintext identity mismatch", "archive_plaintext_identity_mismatch"],
@@ -1521,9 +1516,9 @@ async function streamPartToSandbox(
     throw new ReplayExecutorError("input_transfer_failed");
   }
   // `WriteFileResult` carries no byte count, so the Worker cannot confirm here
-  // that the container received everything it was sent. The assembly helper
-  // re-measures every part against the manifest before the key unwrap, which
-  // catches a truncated transfer while the capability is still unspent.
+  // that the container received everything it was sent. Finalization hashes and
+  // measures their concatenation before the key unwrap, which catches a
+  // truncated transfer while the capability is still unspent.
   const digest = new Uint8Array(await digestStream.digest);
   return {
     bytes,
@@ -1690,7 +1685,7 @@ async function readyArchiveUpload(
   }
   if (
     !sameArchiveUploadIdentity(uploadIdentity(stored as unknown as ArchiveUploadIdentity), expected)
-    || typeof stored.assembled_path !== "string"
+    || stored.assembled_path !== ARCHIVE_UPLOAD_TARGETS[expected.upload_kind]
   ) {
     throw new AuthoritativeReplayContractError("archive upload does not match the replay request");
   }
