@@ -6831,6 +6831,27 @@
         "ref": "ee8f1e56a866122c0eae019fb46ec7b775c36b05",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T04:20:08Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1776,
+        "kind": "issue"
+      },
+      "problem_id": "linnik",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_7f682978027f0df4d7bf652fe5477a1c6e0f25b8ff487b433e5425d26911d78a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "edd8106258f7764587a4687c979ac15600696739",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
