@@ -6999,6 +6999,27 @@
         "ref": "ce45c375ca92bf8758d5ff6b8f46812ca4ae1a2b",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T23:18:43Z",
+      "benchmark_commit": "79162db14f3a01f5dba2ad7ca9c51a18898a9af8",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1803,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rectangular_peg_problem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d9abb2f44f6a28a2814e92f2b4dc4f72aec640c0fffde8d8c670fd766666b017",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "98d2352ccae9fed136c3ef4f968c1b27db9d96eb",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
