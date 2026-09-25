@@ -6747,6 +6747,27 @@
         "ref": "7153dc4aa5742148cd8f9851d7053a92c00d3096",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T03:13:07Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1770,
+        "kind": "issue"
+      },
+      "problem_id": "annals_bounded_multiplicative_functions",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_6d05c3cd795bcde575c7c093b5b1dd9ef24aed0e7937dceb5824364162137ad9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "11673158d5923473e7c0a136442c4df93622d604",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
