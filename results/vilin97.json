@@ -6768,6 +6768,27 @@
         "ref": "11673158d5923473e7c0a136442c4df93622d604",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T03:25:07Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1775,
+        "kind": "issue"
+      },
+      "problem_id": "ckmrv_fourier_interpolation",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_af416918b3e3a4a3af8a35fa186febd3907e99f985a26b31ba83442163182e3d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "363f59c85881e19ff90f02fabcbca3e4ed6252e7",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
