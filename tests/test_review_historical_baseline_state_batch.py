@@ -338,5 +338,19 @@ environment,events=load_tree(a.root); validate_semantics(events,environment)
             )()
             review.verify(args)
 
+    def test_execution_packet_binds_the_state_review_mechanism(self) -> None:
+        packet = (
+            ROOT / "docs/historical-migration-replay-execution-packet.md"
+        ).read_text(encoding="utf-8")
+        for relative in (
+            ".github/workflows/append-historical-baseline-state.yml",
+            "configuration/historical-baseline-state-batch-v1.json",
+            "scripts/prepare_historical_baseline_state_batch.py",
+            "scripts/review_historical_baseline_state_batch.py",
+        ):
+            digest = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+            self.assertIn(f"`{relative}`, SHA-256 `{digest}`", packet)
+
+
 if __name__ == "__main__":
     unittest.main()
