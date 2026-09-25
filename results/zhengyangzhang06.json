@@ -4890,6 +4890,28 @@
         "ref": "a4c588c4e1aedc709823355e0b4658361dadf3dd",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T05:55:03Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1782,
+        "kind": "issue"
+      },
+      "problem_id": "zhang_bounded_prime_gaps",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_0e9ff7c6b7377a79cec915bb0d538c56e375c9263e8d7e406372d6a8be22ad1b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63e4d861906f8fe7c35b0bee2d4050e5c4ac2e88",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
