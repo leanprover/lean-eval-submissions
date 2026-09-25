@@ -120,9 +120,19 @@ a fixed `provider_operation` label such as
 this JSON so a submitter can report the fields without sharing proof text,
 tokens, or a private repository URL. The Worker logs one structured event with
 the same request ID, stage, provider status and operation, and final HTTP
-status; it does not log the provider response body. A healthy `/healthz` does
-not verify either source-reading App or the benchmark manifest path. To
-investigate a reported failure, locate its request ID in Workers Logs, then
+status; it does not log the provider response body. GitHub
+HTTP errors also carry validated `provider_rate_limit_remaining`,
+`provider_rate_limit_reset` (Unix seconds), `provider_retry_after_seconds`,
+and `provider_request_id` when GitHub supplies those headers. The safe
+`provider_rate_limit_kind` is `primary` when GitHub reports zero remaining,
+or `secondary` when its response identifies a secondary limit. A `403`
+without either signal needs further investigation and must not be called
+a rate limit.
+The fields are present in both the response and structured event so a
+submitter can report them without sharing the provider's response body.
+A healthy `/healthz` does not verify either source-reading App or the
+benchmark manifest path. To investigate a reported failure, locate its
+request ID in Workers Logs, then
 check the stage and provider operation before testing credentials or catalog
 data. If `provider_operation` is absent, the provider layer generated the
 status locally. In production, a status may also come from the broker.
