@@ -64,7 +64,7 @@ function assembledUploadForTest(
     archive_bytes: archiveBytes,
     part_count: partCount,
     parts: [],
-    assembled_path: "/workspace/archive.tar.gz.age",
+    assembled_path: "/workspace/archive.tar.gz.age.b64",
   };
 }
 
@@ -1721,12 +1721,6 @@ describe("chunked archive upload routes", () => {
     const payload = crypto.getRandomValues(new Uint8Array(1024));
     const digest = await hexDigest(payload);
     expect((await uploadPart(sandbox, receipts, payload)).status).toBe(202);
-    sandbox.setAssembleStdout(JSON.stringify({
-      schema_version: 1,
-      assembled_path: "/workspace/archive.tar.gz.age",
-      archive_bytes: payload.byteLength,
-      archive_sha256: digest,
-    }));
     const finalize = await handleReplayRequest(
       new Request("https://example.test/api/v1/replay/archive-finalize", {
         method: "POST",
@@ -1749,15 +1743,14 @@ describe("chunked archive upload routes", () => {
     );
     expect(finalize.status).toBe(200);
     expect(await finalize.json()).toMatchObject({ status: "assembled" });
-    // Assembly is a fixed baked command driven by a manifest the Worker writes.
-    expect(sandbox.commands).toEqual(["/opt/lean-eval/replay-assemble-archive"]);
-    const manifest = sandbox.files.get("/workspace/archive-assembly.json");
-    expect(JSON.parse(new TextDecoder().decode(manifest))).toMatchObject({
-      output_path: "/workspace/archive.tar.gz.age",
-      archive_sha256: digest,
-    });
+    // Assembly uses only a validated, server-generated part path and utilities
+    // already present in every qualified replay image.
+    expect(sandbox.commands).toHaveLength(1);
+    expect(sandbox.commands[0]).toContain("cat -- /workspace/archive-part-");
+    expect(sandbox.commands[0]).toContain(` = ${digest}`);
+    expect(sandbox.commands[0]).toContain("base64 \"$out\" > \"$encoded\"");
     expect(await receipts.readArchiveUpload()).toMatchObject({
-      assembled_path: "/workspace/archive.tar.gz.age",
+      assembled_path: "/workspace/archive.tar.gz.age.b64",
     });
   });
 

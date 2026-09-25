@@ -151,7 +151,6 @@ COPY scripts/replay_orchestrator.py /opt/lean-eval/replay_orchestrator.py
 COPY server/replay-image/replay-authoritative /opt/lean-eval/replay-authoritative
 COPY server/replay-image/replay-staging-acceptance /opt/lean-eval/replay-staging-acceptance
 COPY server/replay-image/replay-archive-acceptance /opt/lean-eval/replay-archive-acceptance
-COPY server/replay-image/replay-assemble-archive /opt/lean-eval/replay-assemble-archive
 COPY server/replay-image/replay-measure /opt/lean-eval/replay-measure
 COPY server/replay-image/replay-profile-lock-v433.json /opt/lean-eval/replay-profile-lock.json
 
@@ -159,7 +158,6 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
       /opt/lean-eval/replay-authoritative \
       /opt/lean-eval/replay-staging-acceptance \
       /opt/lean-eval/replay-archive-acceptance \
-      /opt/lean-eval/replay-assemble-archive \
       /opt/lean-eval/replay-measure \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
       /opt/lean-eval/benchmark/.replay-workspaces \

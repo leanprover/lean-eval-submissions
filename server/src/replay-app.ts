@@ -221,29 +221,19 @@ const HISTORICAL_PUBLIC_COMMAND =
   + "> /workspace/historical-public-source.tar.gz "
   + "&& rm /workspace/historical-public-source.tar.gz.b64 "
   + "&& /opt/lean-eval/historical-public-runner";
-// Assembly is a fixed baked command with no arguments; it reads the manifest the
-// Worker writes. Running it at finalize, before the one-use key unwrap, means a
-// missing part or a Sandbox that idled out is discovered while the capability is
-// still unspent and the upload can simply be retried.
-const ARCHIVE_ASSEMBLE_COMMAND = "/opt/lean-eval/replay-assemble-archive";
-const ARCHIVE_ASSEMBLE_MANIFEST = "/workspace/archive-assembly.json";
 const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
 // Parts sit directly in /workspace under a fixed prefix rather than in a baked
 // subdirectory, which a runtime mount over /workspace could shadow.
 const ARCHIVE_PART_PREFIX = "/workspace/archive-part-";
-const ARCHIVE_ASSEMBLE_FAILURES = new Map([
-  ["archive assembly manifest is invalid", "assembly_manifest_invalid"],
-  ["archive assembly part is missing", "assembly_part_missing"],
-  ["archive assembly part size mismatch", "assembly_part_size_mismatch"],
-  ["archive assembly size mismatch", "assembly_size_mismatch"],
-  ["archive assembly digest mismatch", "assembly_digest_mismatch"],
-]);
-const ARCHIVE_ASSEMBLE_PREFIX = "replay-assemble-archive: ";
+const ARCHIVE_PART_PATH = new RegExp(
+  "^/workspace/archive-part-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}"
+    + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+);
 
 /** Where each upload kind assembles, and which process later consumes it. */
 const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind | "historical-public-source", string> = {
-  "authoritative-archive": "/workspace/archive.tar.gz.age",
-  "staging-archive-acceptance": "/workspace/archive.tar.gz.age",
+  "authoritative-archive": "/workspace/archive.tar.gz.age.b64",
+  "staging-archive-acceptance": "/workspace/archive.tar.gz.age.b64",
   "historical-public-source": "/workspace/historical-public-source.tar.gz",
 };
 
@@ -379,14 +369,6 @@ function safeCommandFailureDetail(command: string, stderr: string): string | und
   }
   if (command === "/opt/lean-eval/replay-archive-acceptance") {
     return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
-  }
-  if (command === ARCHIVE_ASSEMBLE_COMMAND) {
-    const output = stderr.trim();
-    if (output.includes("\n") || !output.startsWith(ARCHIVE_ASSEMBLE_PREFIX)) {
-      return "unclassified_assembly_failure";
-    }
-    return ARCHIVE_ASSEMBLE_FAILURES.get(output.slice(ARCHIVE_ASSEMBLE_PREFIX.length))
-      ?? "unclassified_assembly_failure";
   }
   return undefined;
 }
@@ -1654,40 +1636,40 @@ async function handleArchiveUploadFinalize(
       match?.sha256 !== expected.sha256
       || match.bytes !== expected.bytes
       || typeof match.path !== "string"
+      || !ARCHIVE_PART_PATH.test(match.path)
     ) {
       throw new ArchiveUploadContractError("archive upload part does not match the finalize request");
     }
     return { index: expected.index, path: match.path, bytes: expected.bytes, sha256: expected.sha256 };
   });
   const target = ARCHIVE_UPLOAD_TARGETS[finalize.upload_kind];
-  await writeSandboxFile(sandbox, ARCHIVE_ASSEMBLE_MANIFEST, JSON.stringify({
-    schema_version: 1,
-    output_path: target,
-    archive_sha256: finalize.archive_sha256,
-    archive_bytes: finalize.archive_bytes,
-    parts: ordered,
-  }));
-  const stdout = await executeSandboxCommand(
+  // Keep the qualified replay image unchanged. The command contains only
+  // server-generated UUID paths plus digest and size values already accepted by
+  // the strict contract above. It verifies the concatenation before encoding it
+  // in the format consumed by every existing replay-image profile.
+  const binary = "/workspace/archive.tar.gz.age";
+  const partPaths = ordered.map((part) => part.path).join(" ");
+  const command = [
+    "set -eu",
+    `out=${binary}`,
+    `encoded=${target}`,
+    'cleanup() { rm -f -- "$out" "$encoded"; }',
+    "trap cleanup EXIT",
+    'test ! -e "$out"',
+    'test ! -e "$encoded"',
+    `cat -- ${partPaths} > "$out"`,
+    `test "$(wc -c < "$out" | tr -d ' ')" = ${String(finalize.archive_bytes)}`,
+    `test "$(sha256sum "$out" | cut -d ' ' -f 1)" = ${finalize.archive_sha256}`,
+    'base64 "$out" > "$encoded"',
+    `rm -f -- "$out" ${partPaths}`,
+    "trap - EXIT",
+  ].join("; ");
+  await executeSandboxCommand(
     sandbox,
-    ARCHIVE_ASSEMBLE_COMMAND,
+    command,
     ARCHIVE_ASSEMBLE_TIMEOUT_MS,
-    4096,
+    0,
   );
-  let assembled: Record<string, unknown> | null;
-  try {
-    assembled = objectValue(JSON.parse(stdout) as unknown);
-  } catch {
-    throw new ReplayExecutorError("command_output_invalid");
-  }
-  if (assembled === null) throw new ReplayExecutorError("command_output_invalid");
-  if (
-    assembled.schema_version !== 1
-    || assembled.assembled_path !== target
-    || assembled.archive_bytes !== finalize.archive_bytes
-    || assembled.archive_sha256 !== finalize.archive_sha256
-  ) {
-    throw new ReplayExecutorError("command_output_invalid");
-  }
   await store.finalizeArchiveUpload(identity, target);
   return json({
     schema_version: 1,
