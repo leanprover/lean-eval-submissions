@@ -6915,6 +6915,27 @@
         "ref": "8c23e47c45610e2c3feca86f77d175cdf520d5f5",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T08:47:31Z",
+      "benchmark_commit": "4ae7061fe4b0b70dcb7fe24fdee067b68636226b",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1786,
+        "kind": "issue"
+      },
+      "problem_id": "annals_finite_time_singularity",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0d5155548ac63a4c37f2a83793e1116c93f94ddff35afbced9fe9ec257d7a90f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "05a6ba8b4d50fc91388f5eda84590546485f5f2d",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
