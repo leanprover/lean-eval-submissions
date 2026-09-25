@@ -6873,6 +6873,27 @@
         "ref": "d4e70cc5ffb8e99ca0e1cd43169d8b07437aece1",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T05:38:57Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1780,
+        "kind": "issue"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_2e40d75c02f6e0a5d1ebd1a930ad3fe451ac2225f40c0f3a646d85fa36dfb449",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6b0a5775b4c2203d5292a5532b345d18afa95a17",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
