@@ -41,7 +41,8 @@ worker_delete_requested=false
 worker_absent=false
 for retry in 1 2 3 4; do
   code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-    --max-time 30 --output "$scratch/worker-after.json" --write-out '%{http_code}' \
+    --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 \
+    --output "$scratch/worker-after.json" --write-out '%{http_code}' \
     --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$worker_endpoint")
   if test "$code" = 404; then
     worker_absent=true
@@ -50,7 +51,8 @@ for retry in 1 2 3 4; do
   test "$code" = 200
   if test "$worker_delete_requested" = false; then
     delete_code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-      --max-time 30 --request DELETE \
+      --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 \
+      --request DELETE \
       --output "$scratch/worker-delete.json" --write-out '%{http_code}' \
       --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "$worker_delete_endpoint")
