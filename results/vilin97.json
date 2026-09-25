@@ -6894,6 +6894,27 @@
         "ref": "6b0a5775b4c2203d5292a5532b345d18afa95a17",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-25T06:04:30Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1778,
+        "kind": "issue"
+      },
+      "problem_id": "riemann_hypothesis_iff_lagarias_elementary_criterion",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_02dd909d1ec1ef0b1b05251adf83e70b1e0c3bc3f4905a3aefcb1b8602239727",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8c23e47c45610e2c3feca86f77d175cdf520d5f5",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
