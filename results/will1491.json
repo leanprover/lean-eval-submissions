@@ -18,6 +18,28 @@
         "ref": "94644fc8ed2cdcaa4881fbdf6cf1e7ade37fd90b",
         "repo": "will1491/uniformization"
       }
+    },
+    {
+      "accepted_at": "2026-09-26T22:44:17Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Fable 5.1 and GPT-6",
+      "intake": {
+        "issue_number": 1816,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_high_dim_topological",
+      "production_metadata": {
+        "solution_publication_date": "2026-10-26",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_6506501e81c522c6777045dce1f3ff87ea117ee768d6ae927befab3a6bbb08e9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c267446c3dd5c4c0628a2de7506ea307f6cf24a1",
+        "repo": "will1491/Poincare-High-Dim"
+      }
     }
   ],
   "schema_version": 2,
