@@ -328,6 +328,84 @@ def _share_packages(
     return None
 
 
+def _normalize_git_url(url: str) -> str:
+    url = url.rstrip("/")
+    return url[: -len(".git")] if url.endswith(".git") else url
+
+
+def _manifest_package_name(name: str) -> str:
+    return name.removeprefix("\u00ab").removesuffix("\u00bb")
+
+
+def _check_requires_match_manifest(
+    lakefile: pathlib.Path,
+    root_manifest: pathlib.Path,
+) -> None:
+    """Require every `[[require]]` of a workspace to be pinned identically
+    (package name, git URL up to a trailing `.git`, rev and subDir) by the
+    benchmark root manifest, so installing that manifest changes nothing
+    the workspace asked for."""
+    try:
+        config = tomllib.loads(lakefile.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise EvaluateError(f"Cannot read workspace config {lakefile}: {exc}") from exc
+    try:
+        manifest = json.loads(root_manifest.read_text(encoding="utf-8"))
+        packages = manifest["packages"]
+        pinned = {
+            _manifest_package_name(package["name"]): package for package in packages
+        }
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise EvaluateError(
+            f"Cannot read benchmark root manifest {root_manifest}: {exc}"
+        ) from exc
+    requires = config.get("require", [])
+    if not isinstance(requires, list):
+        raise EvaluateError(f"{lakefile}: `require` must be an array of tables")
+    for require in requires:
+        if not isinstance(require, dict) or not set(require) <= {
+            "name", "git", "rev", "subDir"
+        }:
+            raise EvaluateError(
+                f"{lakefile}: unsupported require {require!r}; only git requires "
+                "with a name, git URL and rev can be pinned by the root manifest"
+            )
+        name, git, rev = require.get("name"), require.get("git"), require.get("rev")
+        if not all(isinstance(value, str) and value for value in (name, git, rev)):
+            raise EvaluateError(
+                f"{lakefile}: require {require!r} must set name, git and rev"
+            )
+        package = pinned.get(name)
+        if package is None:
+            raise EvaluateError(
+                f"{lakefile} requires {name} at {rev}, but the benchmark root "
+                f"manifest {root_manifest} does not pin {name}"
+            )
+        mismatches = []
+        if package.get("type") != "git":
+            mismatches.append(f"type {package.get('type')!r} (expected 'git')")
+        manifest_url = package.get("url")
+        if not isinstance(manifest_url, str) or (
+            _normalize_git_url(manifest_url) != _normalize_git_url(git)
+        ):
+            mismatches.append(f"git URL {manifest_url!r} (workspace: {git!r})")
+        if package.get("rev") != rev:
+            mismatches.append(f"rev {package.get('rev')!r} (workspace: {rev!r})")
+        if package.get("subDir") != require.get("subDir"):
+            mismatches.append(
+                f"subDir {package.get('subDir')!r} "
+                f"(workspace: {require.get('subDir')!r})"
+            )
+        if mismatches:
+            raise EvaluateError(
+                f"{lakefile} requires {name} differently from the benchmark "
+                f"root manifest {root_manifest}: manifest has "
+                + "; ".join(mismatches)
+                + ". Regenerate the benchmark's generated workspaces so they "
+                "match the root pins."
+            )
+
+
 def _install_root_manifest(
     target: pathlib.Path,
     root_manifest: pathlib.Path | None,
@@ -347,6 +425,11 @@ def _install_root_manifest(
     populated at the benchmark root before evaluation, including Mathlib's
     decompressed build cache, which lives inside the shared directory.
 
+    Lake resolves a require whose rev differs from the manifest by warning
+    and using the manifest's rev, so the copy would silently override the
+    workspace's own pins. `_check_requires_match_manifest` refuses that
+    before anything is evaluated.
+
     SECURITY: the manifest is read only from the trusted benchmark
     checkout. Submitter content is never consulted; `overlay_match` copies
     only `Submission.lean` and `Submission/**/*.lean` from it, so any
@@ -360,6 +443,7 @@ def _install_root_manifest(
         raise EvaluateError(
             f"Benchmark root manifest is unavailable: {root_manifest}"
         )
+    _check_requires_match_manifest(target / "lakefile.toml", root_manifest)
     destination = target / "lake-manifest.json"
     if destination.is_symlink() or destination.exists():
         destination.unlink()

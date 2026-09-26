@@ -465,7 +465,73 @@ class OverlayMatchTests(unittest.TestCase):
                 )
 
 
-ROOT_MANIFEST = '{"version": "1.1.0", "packages": [{"name": "TauCeti"}]}\n'
+# Real pins: lean-eval's root after https://github.com/leanprover/lean-eval/pull/650
+# moved Mathlib to db1c574, while generated workspaces still said d13f23b.
+TAUCETI_REV = "9965de63baed364af97a4148480b71072a4d21e3"
+ROOT_MATHLIB_REV = "db1c5741da0acf96c97584de6ccf0e3bfbc0ae99"
+STALE_MATHLIB_REV = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+
+
+def _manifest_package(name: str, url: str, rev: str, *, inherited: bool = False) -> dict:
+    return {
+        "url": url,
+        "type": "git",
+        "subDir": None,
+        "scope": "",
+        "rev": rev,
+        "name": name,
+        "manifestFile": "lake-manifest.json",
+        "inputRev": rev,
+        "inherited": inherited,
+        "configFile": "lakefile.toml",
+    }
+
+
+ROOT_MANIFEST = json.dumps(
+    {
+        "version": "1.1.0",
+        "packagesDir": ".lake/packages",
+        "packages": [
+            _manifest_package(
+                "\u00ablean-eval-generator\u00bb",
+                "https://github.com/leanprover/lean-eval-generator.git",
+                "2de74049bd91d2c592e7009df8f5e5968599a272",
+            ),
+            _manifest_package(
+                "mathlib",
+                "https://github.com/leanprover-community/mathlib4.git",
+                ROOT_MATHLIB_REV,
+            ),
+            _manifest_package(
+                "TauCeti", "https://github.com/TauCetiProject/TauCeti", TAUCETI_REV
+            ),
+            _manifest_package(
+                "batteries",
+                "https://github.com/leanprover-community/batteries",
+                "f2effa3d803fda822b1f97b806c47cf2adfbcbc2",
+                inherited=True,
+            ),
+        ],
+        "name": "\u00ablean-eval\u00bb",
+        "lakeDir": ".lake",
+    },
+    indent=1,
+) + "\n"
+
+
+def _requires(*entries: tuple[str, str, str]) -> str:
+    return "".join(
+        f'\n[[require]]\nname = "{name}"\ngit = "{git}"\nrev = "{rev}"\n'
+        for name, git, rev in entries
+    )
+
+
+CFSG_REQUIRES = _requires(
+    # Workspaces spell TauCeti's URL without `.git` like the manifest, and
+    # Mathlib's with `.git`; both must match up to that suffix.
+    ("TauCeti", "https://github.com/TauCetiProject/TauCeti.git", TAUCETI_REV),
+    ("mathlib", "https://github.com/leanprover-community/mathlib4.git", ROOT_MATHLIB_REV),
+)
 
 
 class WorkspacePrimingTests(unittest.TestCase):
@@ -474,9 +540,14 @@ class WorkspacePrimingTests(unittest.TestCase):
         tmp_path: pathlib.Path,
         *,
         submitter_extra_files: dict[str, str] | None = None,
+        workspace_requires: str = CFSG_REQUIRES,
     ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
         generated = tmp_path / "generated"
         _write_pristine(generated, "two_plus_two")
+        with (generated / "two_plus_two" / "lakefile.toml").open(
+            "a", encoding="utf-8"
+        ) as lakefile:
+            lakefile.write(workspace_requires)
         root_manifest = tmp_path / "lake-manifest.json"
         root_manifest.write_text(ROOT_MANIFEST, encoding="utf-8")
         packages = tmp_path / ".lake" / "packages"
@@ -547,6 +618,93 @@ class WorkspacePrimingTests(unittest.TestCase):
                                 root_manifest=candidate,
                             )
                     run.assert_not_called()
+
+    def _install_with_requires(self, requires: str) -> tuple[pathlib.Path, mock.Mock]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        tmp_path = pathlib.Path(tmp.name)
+        generated, root_manifest, packages, src, workspaces = self._setup(
+            tmp_path, workspace_requires=requires
+        )
+        target = workspaces / "two_plus_two"
+        with mock.patch.object(ev.subprocess, "run") as run:
+            try:
+                ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                )
+            except ev.EvaluateError:
+                # Refused before the manifest is installed or lake runs.
+                self.assertFalse((target / "lake-manifest.json").exists())
+                run.assert_not_called()
+                raise
+        return target, run
+
+    def test_root_manifest_must_not_override_stale_workspace_pins(self) -> None:
+        # Lake would only warn and silently use the root's Mathlib here.
+        stale = _requires(
+            ("TauCeti", "https://github.com/TauCetiProject/TauCeti", TAUCETI_REV),
+            (
+                "mathlib",
+                "https://github.com/leanprover-community/mathlib4.git",
+                STALE_MATHLIB_REV,
+            ),
+        )
+        with self.assertRaises(ev.EvaluateError) as caught:
+            self._install_with_requires(stale)
+        message = str(caught.exception)
+        self.assertIn("requires mathlib differently", message)
+        self.assertIn(ROOT_MATHLIB_REV, message)
+        self.assertIn(STALE_MATHLIB_REV, message)
+        self.assertIn("Regenerate", message)
+
+    def test_root_manifest_rejects_other_require_mismatches(self) -> None:
+        cases = (
+            (
+                _requires(
+                    ("TauCeti", "https://github.com/evil/TauCeti", TAUCETI_REV)
+                ),
+                "git URL",
+            ),
+            (
+                _requires(
+                    ("Cli", "https://github.com/leanprover/lean4-cli",
+                     "e92c9f15fdfacc8536f31cfb3b7ad26c3c8cd204")
+                ),
+                "does not pin Cli",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\nscope = "leanprover-community"\n',
+                "unsupported require",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\n'
+                'git = "https://github.com/leanprover-community/mathlib4.git"\n',
+                "must set name, git and rev",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\n'
+                'git = "https://github.com/leanprover-community/mathlib4.git"\n'
+                f'rev = "{ROOT_MATHLIB_REV}"\nsubDir = "Mathlib"\n',
+                "subDir",
+            ),
+        )
+        for requires, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ev.EvaluateError, message):
+                    self._install_with_requires(requires)
+
+    def test_root_manifest_accepts_matching_pins_up_to_git_suffix(self) -> None:
+        target, run = self._install_with_requires(CFSG_REQUIRES)
+        run.assert_not_called()
+        self.assertEqual((target / "lake-manifest.json").read_text(), ROOT_MANIFEST)
+
+    def test_root_manifest_accepts_workspace_without_requires(self) -> None:
+        target, _ = self._install_with_requires("")
+        self.assertEqual((target / "lake-manifest.json").read_text(), ROOT_MANIFEST)
 
     def test_unshared_workspace_still_runs_lake_update_and_cache_get(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
