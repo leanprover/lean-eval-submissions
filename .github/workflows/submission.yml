@@ -372,6 +372,35 @@ jobs:
           # the token available to the job that runs untrusted Lean.
           # Mathlib's independent `lake exe cache get` remains enabled above.
           use-github-cache: false
+          # Built by the next step, after dependency caches are configured.
+          build: false
+          test: false
+          lint: false
+
+      - name: Build the benchmark root with downloaded dependency caches
+        # Trusted phase: runs before the submission source is unpacked or
+        # any untrusted Lean runs.
+        # Newer benchmarks ship scripts/fetch_dependency_caches.sh, which
+        # checks that the pinned TauCeti matches the benchmark's toolchain
+        # and Mathlib and fetches TauCeti's Lake cache mappings, so this
+        # build downloads TauCeti's oleans instead of compiling them. Older
+        # pinned benchmarks lack the script and need no extra cache.
+        #
+        # The resulting LAKE_CONFIG / LAKE_ARTIFACT_CACHE settings stay
+        # scoped to this step (not $GITHUB_ENV), and LAKE_RESTORE_ARTIFACTS
+        # copies every downloaded output into the shared
+        # .lake/packages/<pkg>/.lake/build tree. Later workspace builds,
+        # including comparator's sandboxed one (whose env is reduced to
+        # PATH, HOME and LEAN_ABORT_ON_PANIC), then find TauCeti up to date
+        # there and need neither the artifact cache nor the network.
+        working-directory: lean-eval
+        run: |
+          set -euo pipefail
+          if [ -f scripts/fetch_dependency_caches.sh ]; then
+            exports="$(env -u GITHUB_ENV bash scripts/fetch_dependency_caches.sh .)"
+            eval "$exports"
+          fi
+          LAKE_RESTORE_ARTIFACTS=true lake build
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e

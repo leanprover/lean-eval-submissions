@@ -64,6 +64,28 @@ class PublicReplayWorkflowTests(unittest.TestCase):
         self.assertIn("test -z \"$(find . -type d -name .git -print -quit)\"", self.text)
         self.assertNotIn("submission-source", self.text)
 
+    def test_root_build_downloads_dependency_caches_before_untrusted_lean(self) -> None:
+        lean_action = self.text.index("uses: leanprover/lean-action@")
+        build = self.text.index(
+            "name: Build the benchmark root with downloaded dependency caches"
+        )
+        action_block = self.text[lean_action:build]
+        for line in ("build: false", "test: false", "lint: false"):
+            self.assertIn(f"          {line}\n", action_block)
+        self.assertLess(
+            build,
+            self.text.index("name: Prove the untrusted sandbox and environment boundary"),
+        )
+        self.assertLess(build, self.text.index("python evaluator/scripts/evaluate_submission.py"))
+        step = self.text[build:].split("\n      - ", 1)[0]
+        self.assertIn("working-directory: lean-eval", step)
+        self.assertIn("if [ -f scripts/fetch_dependency_caches.sh ]; then", step)
+        self.assertIn(
+            'exports="$(env -u GITHUB_ENV bash scripts/fetch_dependency_caches.sh .)"',
+            step,
+        )
+        self.assertIn("LAKE_RESTORE_ARTIFACTS=true lake build", step)
+
     def test_component_and_action_dependencies_are_commit_pinned(self) -> None:
         actions = re.findall(r"uses:\s+[^@\s]+@([^\s]+)", self.text)
         self.assertTrue(actions)
