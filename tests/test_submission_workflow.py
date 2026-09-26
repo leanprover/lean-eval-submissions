@@ -221,15 +221,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertLess(build, evaluate.index("name: Extract submission source"))
         self.assertLess(build, evaluate.index("python scripts/evaluate_submission.py"))
         step = evaluate[build:].split("\n      - ", 1)[0]
-        self.assertIn("working-directory: lean-eval", step)
-        self.assertIn("if [ -f scripts/fetch_dependency_caches.sh ]; then", step)
-        # The cache settings stay scoped to the trusted build step.
-        self.assertIn(
-            'exports="$(env -u GITHUB_ENV bash scripts/fetch_dependency_caches.sh .)"',
-            step,
-        )
-        self.assertIn("LAKE_RESTORE_ARTIFACTS=true lake build", step)
-        self.assertEqual(self.text.count("LAKE_RESTORE_ARTIFACTS=true lake build"), 1)
+        self.assertIn("run: python scripts/build_benchmark_root.py lean-eval\n", step)
+        # The Lake cache settings must stay inside that trusted step.
+        self.assertNotIn("GITHUB_ENV", self.text)
+        self.assertNotIn("fetch_dependency_caches.sh", self.text)
 
     def test_notify_does_not_assert_a_compile_error(self) -> None:
         # A submission whose proof does not compile exits 0 with

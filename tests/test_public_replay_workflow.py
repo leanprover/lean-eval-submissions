@@ -78,13 +78,10 @@ class PublicReplayWorkflowTests(unittest.TestCase):
         )
         self.assertLess(build, self.text.index("python evaluator/scripts/evaluate_submission.py"))
         step = self.text[build:].split("\n      - ", 1)[0]
-        self.assertIn("working-directory: lean-eval", step)
-        self.assertIn("if [ -f scripts/fetch_dependency_caches.sh ]; then", step)
-        self.assertIn(
-            'exports="$(env -u GITHUB_ENV bash scripts/fetch_dependency_caches.sh .)"',
-            step,
-        )
-        self.assertIn("LAKE_RESTORE_ARTIFACTS=true lake build", step)
+        self.assertIn("run: python scripts/build_benchmark_root.py lean-eval\n", step)
+        # The Lake cache settings must stay inside that trusted step.
+        self.assertNotIn("GITHUB_ENV", self.text)
+        self.assertNotIn("fetch_dependency_caches.sh", self.text)
 
     def test_component_and_action_dependencies_are_commit_pinned(self) -> None:
         actions = re.findall(r"uses:\s+[^@\s]+@([^\s]+)", self.text)
