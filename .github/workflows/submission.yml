@@ -449,12 +449,14 @@ jobs:
 
       - name: Run evaluate_submission.py
         # Sharing the benchmark repo's .lake/packages tree across every
-        # per-submission workspace lets each `lake update` reuse Mathlib
+        # per-submission workspace lets each workspace reuse Mathlib
         # (~3GB unpacked) instead of cloning + decompressing it per
         # workspace. Required to handle submissions that overlay several
         # generated workspaces on a single runner without "no space left
-        # on device". Assumes generated workspaces stay in lock-step with
-        # the benchmark repo on dependency revs (they do, by construction).
+        # on device". Each shared workspace gets a copy of the benchmark's
+        # root lake-manifest.json, which pins every package any workspace
+        # requires, instead of running `lake update` (which could check out
+        # different revisions inside the shared tree).
         env:
           PROBLEM_ID: ${{ inputs.problem_id }}
           STATEMENT_REVISION: ${{ inputs.statement_revision }}

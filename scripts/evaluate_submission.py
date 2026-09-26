@@ -309,7 +309,8 @@ def _share_packages(
     share could not be set up.
 
     Assumes the benchmark and its generated workspaces stay in lock-step on
-    every dependency rev; no rev assertion is performed.
+    every dependency rev; no rev assertion is performed. A shared workspace
+    is pinned by `_install_root_manifest`, not by `lake update`.
     """
     resolved_source = packages_source.resolve()
     if not resolved_source.is_dir():
@@ -325,6 +326,44 @@ def _share_packages(
             shutil.rmtree(target_packages)
     target_packages.symlink_to(resolved_source)
     return None
+
+
+def _install_root_manifest(
+    target: pathlib.Path,
+    root_manifest: pathlib.Path | None,
+) -> None:
+    """Pin a shared-packages workspace with the benchmark's root manifest.
+
+    A workspace whose `.lake/packages` is a symlink to the benchmark root's
+    package directory must not run `lake update`: resolution can pick
+    different revisions for transitive dependencies than the root pins and
+    check them out inside the shared directory, corrupting it for every
+    other workspace and for the root itself. The root `lake-manifest.json`
+    pins every package any generated workspace requires (Mathlib, its
+    transitive dependencies, and extra packages such as TauCeti), and Lake
+    ignores its entries for packages the workspace does not require.
+
+    `lake exe cache get` is not run either: the shared packages were
+    populated at the benchmark root before evaluation, including Mathlib's
+    decompressed build cache, which lives inside the shared directory.
+
+    SECURITY: the manifest is read only from the trusted benchmark
+    checkout. Submitter content is never consulted; `overlay_match` copies
+    only `Submission.lean` and `Submission/**/*.lean` from it, so any
+    `lake-manifest.json` a submission carries is ignored.
+    """
+    if root_manifest is None:
+        raise EvaluateError(
+            "Shared packages require the benchmark root lake-manifest.json"
+        )
+    if root_manifest.is_symlink() or not root_manifest.is_file():
+        raise EvaluateError(
+            f"Benchmark root manifest is unavailable: {root_manifest}"
+        )
+    destination = target / "lake-manifest.json"
+    if destination.is_symlink() or destination.exists():
+        destination.unlink()
+    shutil.copyfile(root_manifest, destination)
 
 
 def _configure_measurement(
@@ -370,6 +409,10 @@ def _prime_workspace(target: pathlib.Path) -> None:
     `lake-manifest.json` writes lake update performs. Neither command
     elaborates project source files, so neither violates comparator's
     trust model.
+
+    This is only for workspaces with their own package directory. A
+    workspace sharing the benchmark root's packages is primed by
+    `_install_root_manifest` instead.
 
     SECURITY: do NOT add `lake build <target>` here for any target
     whose transitive imports include `Submission` (the user-controlled
@@ -451,12 +494,17 @@ def overlay_match(
     generated_root: pathlib.Path,
     workspaces_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
+    root_manifest: pathlib.Path | None = None,
     measurement_command: list[str] | None = None,
     authoritative_checker: str | None = None,
     prime: bool = True,
     require_preprimed: bool = False,
 ) -> dict:
     """Copy generated/<id>/ to workspaces/<id>/, overlay submitter content.
+
+    When `prime` is set and `shared_packages` was symlinked successfully,
+    the workspace gets a copy of the trusted `root_manifest` instead of
+    running `lake update` + `lake exe cache get`.
 
     Returns a record with fields:
       - problem_id
@@ -540,11 +588,16 @@ def overlay_match(
             "shared_packages": shared_state,
         }
 
-    # 4. Prime the workspace with `lake update` + `lake exe cache get`
-    #    so comparator's sandboxed lake build does not try to clone
-    #    packages into paths landrun will deny.
+    # 4. Prime the workspace so comparator's sandboxed lake build does not
+    #    try to clone packages into paths landrun will deny: with shared
+    #    packages, copy the trusted root manifest (never `lake update`,
+    #    which could rewrite the shared tree); otherwise run `lake update`
+    #    + `lake exe cache get` into the workspace's own package directory.
     if prime:
-        _prime_workspace(target)
+        if shared_state is True:
+            _install_root_manifest(target, root_manifest)
+        else:
+            _prime_workspace(target)
     elif require_preprimed:
         _require_preprimed_workspace(target)
 
@@ -736,7 +789,8 @@ def evaluate_submission(
     `shared_packages` optionally points at a directory containing an
     already-populated `.lake/packages/...` layout (e.g. the benchmark
     repo's `.lake/packages`) that per-workspace builds can reuse instead of
-    re-unpacking Mathlib for each.
+    re-unpacking Mathlib for each. Such workspaces are pinned with a copy of
+    `repo_root/lake-manifest.json` rather than by running `lake update`.
 
     `workspace_parent` optionally selects an existing directory inside
     `repo_root` for the temporary per-submission workspace. This supports a
@@ -798,11 +852,12 @@ def evaluate_submission(
                 generated_root=generated_root,
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
+                root_manifest=repo_root / "lake-manifest.json",
                 measurement_command=measurement_command,
                 authoritative_checker=authoritative_checker,
                 # If a fake run-eval runner is injected (tests), the
                 # synthetic pristine workspaces don't carry a real lakefile
-                # so skip the real `lake update` + `lake exe cache get`.
+                # so skip priming them.
                 prime=run_eval_runner is None and not preprimed_workspaces,
                 require_preprimed=preprimed_workspaces,
             )
@@ -907,8 +962,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Directory containing an already-populated .lake/packages tree "
             "that per-workspace builds should reuse via symlink. Typically "
-            "<repo-root>/.lake/packages. Assumes every generated workspace "
-            "stays in lock-step with the benchmark on dep revs."
+            "<repo-root>/.lake/packages, already primed with "
+            "`lake exe cache get`. Each shared workspace gets a copy of "
+            "<repo-root>/lake-manifest.json instead of running `lake update`."
         ),
     )
     parser.add_argument(

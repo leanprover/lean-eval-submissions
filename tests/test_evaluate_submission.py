@@ -465,6 +465,194 @@ class OverlayMatchTests(unittest.TestCase):
                 )
 
 
+ROOT_MANIFEST = '{"version": "1.1.0", "packages": [{"name": "TauCeti"}]}\n'
+
+
+class WorkspacePrimingTests(unittest.TestCase):
+    def _setup(
+        self,
+        tmp_path: pathlib.Path,
+        *,
+        submitter_extra_files: dict[str, str] | None = None,
+    ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
+        generated = tmp_path / "generated"
+        _write_pristine(generated, "two_plus_two")
+        root_manifest = tmp_path / "lake-manifest.json"
+        root_manifest.write_text(ROOT_MANIFEST, encoding="utf-8")
+        packages = tmp_path / ".lake" / "packages"
+        (packages / "mathlib").mkdir(parents=True)
+        src = tmp_path / "src"
+        _write_submitter_workspace(
+            src, ".", "two_plus_two", extra_files=submitter_extra_files
+        )
+        workspaces = tmp_path / "ws"
+        workspaces.mkdir()
+        return generated, root_manifest, packages, src, workspaces
+
+    def test_shared_packages_install_root_manifest_without_running_lake(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(
+                tmp_path,
+                submitter_extra_files={
+                    "lake-manifest.json": '{"version": "1.1.0", "packages": ["EVIL"]}\n',
+                },
+            )
+            with mock.patch.object(ev.subprocess, "run") as run:
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                )
+            target = workspaces / "two_plus_two"
+            self.assertTrue(record["overlaid"])
+            self.assertIs(record["shared_packages"], True)
+            run.assert_not_called()
+            manifest = target / "lake-manifest.json"
+            self.assertFalse(manifest.is_symlink())
+            self.assertEqual(manifest.read_text(), ROOT_MANIFEST)
+            self.assertEqual(
+                (target / ".lake" / "packages").resolve(), packages.resolve()
+            )
+            # The trusted root manifest is copied, not linked, so nothing in the
+            # workspace can write through to the benchmark checkout.
+            manifest.write_text("{}\n", encoding="utf-8")
+            self.assertEqual(root_manifest.read_text(), ROOT_MANIFEST)
+
+    def test_shared_packages_fail_closed_without_trusted_root_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(tmp_path)
+            linked_manifest = tmp_path / "linked-manifest.json"
+            linked_manifest.symlink_to(root_manifest)
+            cases = (
+                (None, "require the benchmark root"),
+                (tmp_path / "missing.json", "unavailable"),
+                (linked_manifest, "unavailable"),
+                (tmp_path / "generated", "unavailable"),
+            )
+            for candidate, message in cases:
+                with self.subTest(root_manifest=candidate):
+                    with mock.patch.object(ev.subprocess, "run") as run:
+                        with self.assertRaisesRegex(ev.EvaluateError, message):
+                            ev.overlay_match(
+                                ev.WorkspaceMatch(
+                                    problem_id="two_plus_two", source_dir=src
+                                ),
+                                generated_root=generated,
+                                workspaces_root=workspaces,
+                                shared_packages=packages,
+                                root_manifest=candidate,
+                            )
+                    run.assert_not_called()
+
+    def test_unshared_workspace_still_runs_lake_update_and_cache_get(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, _, src, workspaces = self._setup(tmp_path)
+            completed = mock.Mock(returncode=0, stdout="", stderr="")
+            with (
+                mock.patch.object(ev.subprocess, "run", return_value=completed) as run,
+                redirect_stderr(io.StringIO()),
+            ):
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    root_manifest=root_manifest,
+                )
+            target = workspaces / "two_plus_two"
+            self.assertTrue(record["overlaid"])
+            self.assertIs(record["shared_packages"], False)
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list],
+                [["lake", "update"], ["lake", "exe", "cache", "get"]],
+            )
+            for call in run.call_args_list:
+                self.assertEqual(call.kwargs["cwd"], target)
+            self.assertFalse((target / "lake-manifest.json").exists())
+
+    def test_failed_package_share_falls_back_to_private_lake_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, _, src, workspaces = self._setup(tmp_path)
+            completed = mock.Mock(returncode=0, stdout="", stderr="")
+            with (
+                mock.patch.object(ev.subprocess, "run", return_value=completed) as run,
+                redirect_stderr(io.StringIO()),
+            ):
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=tmp_path / "no-such-packages",
+                    root_manifest=root_manifest,
+                )
+            self.assertIn("not a directory", record["shared_packages"])
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list],
+                [["lake", "update"], ["lake", "exe", "cache", "get"]],
+            )
+            self.assertFalse(
+                (workspaces / "two_plus_two" / "lake-manifest.json").exists()
+            )
+
+    def test_preprimed_shared_workspace_keeps_baked_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(tmp_path)
+            pristine = generated / "two_plus_two"
+            (pristine / "lake-manifest.json").write_text(
+                '{"baked": true}\n', encoding="utf-8"
+            )
+            (pristine / ".lake").mkdir()
+            (pristine / ".lake" / "package-overrides.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            with mock.patch.object(ev.subprocess, "run") as run:
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                    prime=False,
+                    require_preprimed=True,
+                )
+            self.assertTrue(record["overlaid"])
+            run.assert_not_called()
+            self.assertEqual(
+                (workspaces / "two_plus_two" / "lake-manifest.json").read_text(),
+                '{"baked": true}\n',
+            )
+
+    def test_evaluate_submission_takes_manifest_from_repo_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, _, packages, src, _ = self._setup(tmp_path)
+            manifest_dir = tmp_path / "manifests" / "problems"
+            _write_manifest(manifest_dir, ["two_plus_two"])
+            with mock.patch.object(
+                ev, "overlay_match", wraps=ev.overlay_match
+            ) as overlay:
+                ev.evaluate_submission(
+                    source_dir=src,
+                    generated_root=generated,
+                    manifest_dir=manifest_dir,
+                    output_dir=tmp_path / "out",
+                    repo_root=tmp_path,
+                    shared_packages=packages,
+                    run_eval_runner=_fake_runner_factory(["two_plus_two"]),
+                )
+            overlay.assert_called_once()
+            self.assertEqual(
+                overlay.call_args.kwargs["root_manifest"],
+                tmp_path / "lake-manifest.json",
+            )
+
+
 class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def _setup_repo_like(self, tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
         generated = tmp_path / "generated"
