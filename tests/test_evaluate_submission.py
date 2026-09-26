@@ -470,6 +470,9 @@ class OverlayMatchTests(unittest.TestCase):
 TAUCETI_REV = "9965de63baed364af97a4148480b71072a4d21e3"
 ROOT_MATHLIB_REV = "db1c5741da0acf96c97584de6ccf0e3bfbc0ae99"
 STALE_MATHLIB_REV = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+# ... and the root's toolchain to v4.34.0, while they still said v4.34.1.
+ROOT_TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
+STALE_TOOLCHAIN = "leanprover/lean4:v4.34.1\n"
 
 
 def _manifest_package(name: str, url: str, rev: str, *, inherited: bool = False) -> dict:
@@ -541,6 +544,7 @@ class WorkspacePrimingTests(unittest.TestCase):
         *,
         submitter_extra_files: dict[str, str] | None = None,
         workspace_requires: str = CFSG_REQUIRES,
+        workspace_toolchain: str = ROOT_TOOLCHAIN,
     ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
         generated = tmp_path / "generated"
         _write_pristine(generated, "two_plus_two")
@@ -550,6 +554,10 @@ class WorkspacePrimingTests(unittest.TestCase):
             lakefile.write(workspace_requires)
         root_manifest = tmp_path / "lake-manifest.json"
         root_manifest.write_text(ROOT_MANIFEST, encoding="utf-8")
+        (tmp_path / "lean-toolchain").write_text(ROOT_TOOLCHAIN, encoding="utf-8")
+        (generated / "two_plus_two" / "lean-toolchain").write_text(
+            workspace_toolchain, encoding="utf-8"
+        )
         packages = tmp_path / ".lake" / "packages"
         (packages / "mathlib").mkdir(parents=True)
         src = tmp_path / "src"
@@ -619,12 +627,14 @@ class WorkspacePrimingTests(unittest.TestCase):
                             )
                     run.assert_not_called()
 
-    def _install_with_requires(self, requires: str) -> tuple[pathlib.Path, mock.Mock]:
+    def _install_with_requires(
+        self, requires: str, toolchain: str = ROOT_TOOLCHAIN
+    ) -> tuple[pathlib.Path, mock.Mock]:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         tmp_path = pathlib.Path(tmp.name)
         generated, root_manifest, packages, src, workspaces = self._setup(
-            tmp_path, workspace_requires=requires
+            tmp_path, workspace_requires=requires, workspace_toolchain=toolchain
         )
         target = workspaces / "two_plus_two"
         with mock.patch.object(ev.subprocess, "run") as run:
@@ -659,6 +669,15 @@ class WorkspacePrimingTests(unittest.TestCase):
         self.assertIn("requires mathlib differently", message)
         self.assertIn(ROOT_MATHLIB_REV, message)
         self.assertIn(STALE_MATHLIB_REV, message)
+        self.assertIn("Regenerate", message)
+
+    def test_root_manifest_refuses_workspace_on_another_toolchain(self) -> None:
+        # Every shared dependency would be recompiled inside the sandbox.
+        with self.assertRaises(ev.EvaluateError) as caught:
+            self._install_with_requires(CFSG_REQUIRES, toolchain=STALE_TOOLCHAIN)
+        message = str(caught.exception)
+        self.assertIn("leanprover/lean4:v4.34.1", message)
+        self.assertIn("leanprover/lean4:v4.34.0", message)
         self.assertIn("Regenerate", message)
 
     def test_root_manifest_rejects_other_require_mismatches(self) -> None:

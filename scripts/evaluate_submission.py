@@ -337,6 +337,33 @@ def _manifest_package_name(name: str) -> str:
     return name.removeprefix("\u00ab").removesuffix("\u00bb")
 
 
+def _check_toolchain_matches_root(
+    target: pathlib.Path,
+    benchmark_root: pathlib.Path,
+) -> None:
+    """Require the workspace to use the benchmark root's Lean toolchain.
+
+    Every trace in the shared package tree was produced with the root's
+    toolchain; a workspace on another toolchain would recompile all of its
+    dependencies (Mathlib, TauCeti, ...) inside comparator's sandbox.
+    """
+    toolchains = {}
+    for label, path in (
+        ("workspace", target / "lean-toolchain"),
+        ("benchmark root", benchmark_root / "lean-toolchain"),
+    ):
+        if path.is_symlink() or not path.is_file():
+            raise EvaluateError(f"The {label} lean-toolchain is unavailable: {path}")
+        toolchains[label] = path.read_text(encoding="utf-8").strip()
+    if toolchains["workspace"] != toolchains["benchmark root"]:
+        raise EvaluateError(
+            f"{target / 'lean-toolchain'} pins {toolchains['workspace']!r} but the "
+            f"benchmark root pins {toolchains['benchmark root']!r}, so the shared "
+            "packages were built with a different toolchain. Regenerate the "
+            "benchmark's generated workspaces so they match the root pins."
+        )
+
+
 def _check_requires_match_manifest(
     lakefile: pathlib.Path,
     root_manifest: pathlib.Path,
@@ -428,7 +455,8 @@ def _install_root_manifest(
     Lake resolves a require whose rev differs from the manifest by warning
     and using the manifest's rev, so the copy would silently override the
     workspace's own pins. `_check_requires_match_manifest` refuses that
-    before anything is evaluated.
+    before anything is evaluated, as `_check_toolchain_matches_root` does
+    for a workspace on a different Lean toolchain than the shared packages.
 
     SECURITY: the manifest is read only from the trusted benchmark
     checkout. Submitter content is never consulted; `overlay_match` copies
@@ -443,6 +471,7 @@ def _install_root_manifest(
         raise EvaluateError(
             f"Benchmark root manifest is unavailable: {root_manifest}"
         )
+    _check_toolchain_matches_root(target, root_manifest.parent)
     _check_requires_match_manifest(target / "lakefile.toml", root_manifest)
     destination = target / "lake-manifest.json"
     if destination.is_symlink() or destination.exists():
