@@ -16,7 +16,10 @@ body:
         `2026-09-30T06:57:10Z`. Closure is not automatic: issue intake will
         remain open if a severity-high incident is unresolved or the adoption,
         service-stability, or final historical cutoff and append-only delta
-        gates have not passed. Any closure will be confirmed separately.
+        gates have not passed. Any closure will be confirmed separately. Once
+        the confirmed cutoff takes effect, this form remains visible while the
+        final corpus is reconciled, but new issue submissions are not processed;
+        use the submission service instead.
 
         You can submit anything that contains at least one `lakefile.toml`
         whose `name` field matches a benchmark problem id **and** has a
