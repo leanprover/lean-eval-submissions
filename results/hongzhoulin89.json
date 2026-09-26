@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-26T20:17:54Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1813,
+        "kind": "issue"
+      },
+      "problem_id": "bourgain_polynomial_ergodic",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using GPT 5.6 sol to migrate and verify the completed proof on Lean 4.34.1 / Mathlib d13f23b723b8a846827a245b89c10fc7d3f11612. Full build, comparator, Nanoda, and the default Lean kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3400f72b35434798c661d3993a2083adad5a1b514cb626b031edbaf5d1e6f888",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "53b38c3e76ceda1c34e556218102059a012ad219",
+        "repo": "hongzhoulin89/lean-eval-bourgain-polynomial-ergodic"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "hongzhoulin89"
+}
