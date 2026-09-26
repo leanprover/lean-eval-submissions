@@ -204,6 +204,28 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             ),
         )
 
+    def test_root_build_downloads_dependency_caches_before_untrusted_lean(self) -> None:
+        # TauCeti must never be compiled during evaluation. lean-action must
+        # not build the root before the dependency caches are configured,
+        # and the trusted root build must restore every downloaded output
+        # into the shared package tree before any untrusted Lean runs.
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
+        lean_action = evaluate.index("uses: leanprover/lean-action@")
+        build = evaluate.index(
+            "name: Build the benchmark root with downloaded dependency caches"
+        )
+        action_block = evaluate[lean_action:build]
+        for line in ("build: false", "test: false", "lint: false"):
+            self.assertIn(f"          {line}\n", action_block)
+        self.assertLess(build, evaluate.index("name: Probe sandbox is engaged"))
+        self.assertLess(build, evaluate.index("name: Extract submission source"))
+        self.assertLess(build, evaluate.index("python scripts/evaluate_submission.py"))
+        step = evaluate[build:].split("\n      - ", 1)[0]
+        self.assertIn("run: python scripts/build_benchmark_root.py lean-eval\n", step)
+        # The Lake cache settings must stay inside that trusted step.
+        self.assertNotIn("GITHUB_ENV", self.text)
+        self.assertNotIn("fetch_dependency_caches.sh", self.text)
+
     def test_notify_does_not_assert_a_compile_error(self) -> None:
         # A submission whose proof does not compile exits 0 with
         # `succeeded: false` and is reported by `record`. So a failing

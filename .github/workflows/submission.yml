@@ -372,6 +372,22 @@ jobs:
           # the token available to the job that runs untrusted Lean.
           # Mathlib's independent `lake exe cache get` remains enabled above.
           use-github-cache: false
+          # Built by the next step, after dependency caches are configured.
+          build: false
+          test: false
+          lint: false
+
+      - name: Build the benchmark root with downloaded dependency caches
+        # Trusted phase: runs before the submission source is unpacked or
+        # any untrusted Lean runs.
+        # TauCeti must never be compiled here: the script downloads its
+        # build outputs into the shared package tree (the whole library,
+        # so a submission may import any TauCeti module) and fails on a
+        # cache miss. The Lake cache settings stay inside this step, and
+        # later workspace builds, including comparator's sandboxed one,
+        # find TauCeti up to date on disk without the network. Benchmarks
+        # that pin no TauCeti get a plain `lake build`. See the script.
+        run: python scripts/build_benchmark_root.py lean-eval
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -449,12 +465,14 @@ jobs:
 
       - name: Run evaluate_submission.py
         # Sharing the benchmark repo's .lake/packages tree across every
-        # per-submission workspace lets each `lake update` reuse Mathlib
+        # per-submission workspace lets each workspace reuse Mathlib
         # (~3GB unpacked) instead of cloning + decompressing it per
         # workspace. Required to handle submissions that overlay several
         # generated workspaces on a single runner without "no space left
-        # on device". Assumes generated workspaces stay in lock-step with
-        # the benchmark repo on dependency revs (they do, by construction).
+        # on device". Each shared workspace gets a copy of the benchmark's
+        # root lake-manifest.json, which pins every package any workspace
+        # requires, instead of running `lake update` (which could check out
+        # different revisions inside the shared tree).
         env:
           PROBLEM_ID: ${{ inputs.problem_id }}
           STATEMENT_REVISION: ${{ inputs.statement_revision }}

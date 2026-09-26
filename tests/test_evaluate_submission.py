@@ -465,6 +465,371 @@ class OverlayMatchTests(unittest.TestCase):
                 )
 
 
+# Real pins: lean-eval's root after https://github.com/leanprover/lean-eval/pull/650
+# moved Mathlib to db1c574, while generated workspaces still said d13f23b.
+TAUCETI_REV = "9965de63baed364af97a4148480b71072a4d21e3"
+ROOT_MATHLIB_REV = "db1c5741da0acf96c97584de6ccf0e3bfbc0ae99"
+STALE_MATHLIB_REV = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+# ... and the root's toolchain to v4.34.0, while they still said v4.34.1.
+ROOT_TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
+STALE_TOOLCHAIN = "leanprover/lean4:v4.34.1\n"
+
+
+def _manifest_package(name: str, url: str, rev: str, *, inherited: bool = False) -> dict:
+    return {
+        "url": url,
+        "type": "git",
+        "subDir": None,
+        "scope": "",
+        "rev": rev,
+        "name": name,
+        "manifestFile": "lake-manifest.json",
+        "inputRev": rev,
+        "inherited": inherited,
+        "configFile": "lakefile.toml",
+    }
+
+
+ROOT_MANIFEST = json.dumps(
+    {
+        "version": "1.1.0",
+        "packagesDir": ".lake/packages",
+        "packages": [
+            _manifest_package(
+                "\u00ablean-eval-generator\u00bb",
+                "https://github.com/leanprover/lean-eval-generator.git",
+                "2de74049bd91d2c592e7009df8f5e5968599a272",
+            ),
+            _manifest_package(
+                "mathlib",
+                "https://github.com/leanprover-community/mathlib4.git",
+                ROOT_MATHLIB_REV,
+            ),
+            _manifest_package(
+                "TauCeti", "https://github.com/TauCetiProject/TauCeti", TAUCETI_REV
+            ),
+            _manifest_package(
+                "batteries",
+                "https://github.com/leanprover-community/batteries",
+                "f2effa3d803fda822b1f97b806c47cf2adfbcbc2",
+                inherited=True,
+            ),
+        ],
+        "name": "\u00ablean-eval\u00bb",
+        "lakeDir": ".lake",
+    },
+    indent=1,
+) + "\n"
+
+
+def _requires(*entries: tuple[str, str, str]) -> str:
+    return "".join(
+        f'\n[[require]]\nname = "{name}"\ngit = "{git}"\nrev = "{rev}"\n'
+        for name, git, rev in entries
+    )
+
+
+CFSG_REQUIRES = _requires(
+    # Workspaces spell TauCeti's URL without `.git` like the manifest, and
+    # Mathlib's with `.git`; both must match up to that suffix.
+    ("TauCeti", "https://github.com/TauCetiProject/TauCeti.git", TAUCETI_REV),
+    ("mathlib", "https://github.com/leanprover-community/mathlib4.git", ROOT_MATHLIB_REV),
+)
+
+
+class WorkspacePrimingTests(unittest.TestCase):
+    def _setup(
+        self,
+        tmp_path: pathlib.Path,
+        *,
+        submitter_extra_files: dict[str, str] | None = None,
+        workspace_requires: str = CFSG_REQUIRES,
+        workspace_toolchain: str = ROOT_TOOLCHAIN,
+    ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
+        generated = tmp_path / "generated"
+        _write_pristine(generated, "two_plus_two")
+        with (generated / "two_plus_two" / "lakefile.toml").open(
+            "a", encoding="utf-8"
+        ) as lakefile:
+            lakefile.write(workspace_requires)
+        root_manifest = tmp_path / "lake-manifest.json"
+        root_manifest.write_text(ROOT_MANIFEST, encoding="utf-8")
+        (tmp_path / "lean-toolchain").write_text(ROOT_TOOLCHAIN, encoding="utf-8")
+        (generated / "two_plus_two" / "lean-toolchain").write_text(
+            workspace_toolchain, encoding="utf-8"
+        )
+        packages = tmp_path / ".lake" / "packages"
+        (packages / "mathlib").mkdir(parents=True)
+        src = tmp_path / "src"
+        _write_submitter_workspace(
+            src, ".", "two_plus_two", extra_files=submitter_extra_files
+        )
+        workspaces = tmp_path / "ws"
+        workspaces.mkdir()
+        return generated, root_manifest, packages, src, workspaces
+
+    def test_shared_packages_install_root_manifest_without_running_lake(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(
+                tmp_path,
+                submitter_extra_files={
+                    "lake-manifest.json": '{"version": "1.1.0", "packages": ["EVIL"]}\n',
+                },
+            )
+            with mock.patch.object(ev.subprocess, "run") as run:
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                )
+            target = workspaces / "two_plus_two"
+            self.assertTrue(record["overlaid"])
+            self.assertIs(record["shared_packages"], True)
+            run.assert_not_called()
+            manifest = target / "lake-manifest.json"
+            self.assertFalse(manifest.is_symlink())
+            self.assertEqual(manifest.read_text(), ROOT_MANIFEST)
+            self.assertEqual(
+                (target / ".lake" / "packages").resolve(), packages.resolve()
+            )
+            # The trusted root manifest is copied, not linked, so nothing in the
+            # workspace can write through to the benchmark checkout.
+            manifest.write_text("{}\n", encoding="utf-8")
+            self.assertEqual(root_manifest.read_text(), ROOT_MANIFEST)
+
+    def test_shared_packages_fail_closed_without_trusted_root_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(tmp_path)
+            linked_manifest = tmp_path / "linked-manifest.json"
+            linked_manifest.symlink_to(root_manifest)
+            cases = (
+                (None, "require the benchmark root"),
+                (tmp_path / "missing.json", "unavailable"),
+                (linked_manifest, "unavailable"),
+                (tmp_path / "generated", "unavailable"),
+            )
+            for candidate, message in cases:
+                with self.subTest(root_manifest=candidate):
+                    with mock.patch.object(ev.subprocess, "run") as run:
+                        with self.assertRaisesRegex(ev.EvaluateError, message):
+                            ev.overlay_match(
+                                ev.WorkspaceMatch(
+                                    problem_id="two_plus_two", source_dir=src
+                                ),
+                                generated_root=generated,
+                                workspaces_root=workspaces,
+                                shared_packages=packages,
+                                root_manifest=candidate,
+                            )
+                    run.assert_not_called()
+
+    def _install_with_requires(
+        self, requires: str, toolchain: str = ROOT_TOOLCHAIN
+    ) -> tuple[pathlib.Path, mock.Mock]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        tmp_path = pathlib.Path(tmp.name)
+        generated, root_manifest, packages, src, workspaces = self._setup(
+            tmp_path, workspace_requires=requires, workspace_toolchain=toolchain
+        )
+        target = workspaces / "two_plus_two"
+        with mock.patch.object(ev.subprocess, "run") as run:
+            try:
+                ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                )
+            except ev.EvaluateError:
+                # Refused before the manifest is installed or lake runs.
+                self.assertFalse((target / "lake-manifest.json").exists())
+                run.assert_not_called()
+                raise
+        return target, run
+
+    def test_root_manifest_must_not_override_stale_workspace_pins(self) -> None:
+        # Lake would only warn and silently use the root's Mathlib here.
+        stale = _requires(
+            ("TauCeti", "https://github.com/TauCetiProject/TauCeti", TAUCETI_REV),
+            (
+                "mathlib",
+                "https://github.com/leanprover-community/mathlib4.git",
+                STALE_MATHLIB_REV,
+            ),
+        )
+        with self.assertRaises(ev.EvaluateError) as caught:
+            self._install_with_requires(stale)
+        message = str(caught.exception)
+        self.assertIn("requires mathlib differently", message)
+        self.assertIn(ROOT_MATHLIB_REV, message)
+        self.assertIn(STALE_MATHLIB_REV, message)
+        self.assertIn("Regenerate", message)
+
+    def test_root_manifest_refuses_workspace_on_another_toolchain(self) -> None:
+        # Every shared dependency would be recompiled inside the sandbox.
+        with self.assertRaises(ev.EvaluateError) as caught:
+            self._install_with_requires(CFSG_REQUIRES, toolchain=STALE_TOOLCHAIN)
+        message = str(caught.exception)
+        self.assertIn("leanprover/lean4:v4.34.1", message)
+        self.assertIn("leanprover/lean4:v4.34.0", message)
+        self.assertIn("Regenerate", message)
+
+    def test_root_manifest_rejects_other_require_mismatches(self) -> None:
+        cases = (
+            (
+                _requires(
+                    ("TauCeti", "https://github.com/evil/TauCeti", TAUCETI_REV)
+                ),
+                "git URL",
+            ),
+            (
+                _requires(
+                    ("Cli", "https://github.com/leanprover/lean4-cli",
+                     "e92c9f15fdfacc8536f31cfb3b7ad26c3c8cd204")
+                ),
+                "does not pin Cli",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\nscope = "leanprover-community"\n',
+                "unsupported require",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\n'
+                'git = "https://github.com/leanprover-community/mathlib4.git"\n',
+                "must set name, git and rev",
+            ),
+            (
+                '\n[[require]]\nname = "mathlib"\n'
+                'git = "https://github.com/leanprover-community/mathlib4.git"\n'
+                f'rev = "{ROOT_MATHLIB_REV}"\nsubDir = "Mathlib"\n',
+                "subDir",
+            ),
+        )
+        for requires, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ev.EvaluateError, message):
+                    self._install_with_requires(requires)
+
+    def test_root_manifest_accepts_matching_pins_up_to_git_suffix(self) -> None:
+        target, run = self._install_with_requires(CFSG_REQUIRES)
+        run.assert_not_called()
+        self.assertEqual((target / "lake-manifest.json").read_text(), ROOT_MANIFEST)
+
+    def test_root_manifest_accepts_workspace_without_requires(self) -> None:
+        target, _ = self._install_with_requires("")
+        self.assertEqual((target / "lake-manifest.json").read_text(), ROOT_MANIFEST)
+
+    def test_unshared_workspace_still_runs_lake_update_and_cache_get(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, _, src, workspaces = self._setup(tmp_path)
+            completed = mock.Mock(returncode=0, stdout="", stderr="")
+            with (
+                mock.patch.object(ev.subprocess, "run", return_value=completed) as run,
+                redirect_stderr(io.StringIO()),
+            ):
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    root_manifest=root_manifest,
+                )
+            target = workspaces / "two_plus_two"
+            self.assertTrue(record["overlaid"])
+            self.assertIs(record["shared_packages"], False)
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list],
+                [["lake", "update"], ["lake", "exe", "cache", "get"]],
+            )
+            for call in run.call_args_list:
+                self.assertEqual(call.kwargs["cwd"], target)
+            self.assertFalse((target / "lake-manifest.json").exists())
+
+    def test_failed_package_share_falls_back_to_private_lake_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, _, src, workspaces = self._setup(tmp_path)
+            completed = mock.Mock(returncode=0, stdout="", stderr="")
+            with (
+                mock.patch.object(ev.subprocess, "run", return_value=completed) as run,
+                redirect_stderr(io.StringIO()),
+            ):
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=tmp_path / "no-such-packages",
+                    root_manifest=root_manifest,
+                )
+            self.assertIn("not a directory", record["shared_packages"])
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list],
+                [["lake", "update"], ["lake", "exe", "cache", "get"]],
+            )
+            self.assertFalse(
+                (workspaces / "two_plus_two" / "lake-manifest.json").exists()
+            )
+
+    def test_preprimed_shared_workspace_keeps_baked_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(tmp_path)
+            pristine = generated / "two_plus_two"
+            (pristine / "lake-manifest.json").write_text(
+                '{"baked": true}\n', encoding="utf-8"
+            )
+            (pristine / ".lake").mkdir()
+            (pristine / ".lake" / "package-overrides.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            with mock.patch.object(ev.subprocess, "run") as run:
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                    prime=False,
+                    require_preprimed=True,
+                )
+            self.assertTrue(record["overlaid"])
+            run.assert_not_called()
+            self.assertEqual(
+                (workspaces / "two_plus_two" / "lake-manifest.json").read_text(),
+                '{"baked": true}\n',
+            )
+
+    def test_evaluate_submission_takes_manifest_from_repo_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, _, packages, src, _ = self._setup(tmp_path)
+            manifest_dir = tmp_path / "manifests" / "problems"
+            _write_manifest(manifest_dir, ["two_plus_two"])
+            with mock.patch.object(
+                ev, "overlay_match", wraps=ev.overlay_match
+            ) as overlay:
+                ev.evaluate_submission(
+                    source_dir=src,
+                    generated_root=generated,
+                    manifest_dir=manifest_dir,
+                    output_dir=tmp_path / "out",
+                    repo_root=tmp_path,
+                    shared_packages=packages,
+                    run_eval_runner=_fake_runner_factory(["two_plus_two"]),
+                )
+            overlay.assert_called_once()
+            self.assertEqual(
+                overlay.call_args.kwargs["root_manifest"],
+                tmp_path / "lake-manifest.json",
+            )
+
+
 class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def _setup_repo_like(self, tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
         generated = tmp_path / "generated"
