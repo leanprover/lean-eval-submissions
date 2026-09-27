@@ -65,6 +65,28 @@
         "ref": "87e32ee3d2e56d234fc6be502e1f703ee9613e41",
         "repo": "hongzhoulin89/lean-eval-mostow-rigidity"
       }
+    },
+    {
+      "accepted_at": "2026-09-27T01:19:24Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1824,
+        "kind": "issue"
+      },
+      "problem_id": "pardon_torus_knot_distortion",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using GPT 5.6 sol to migrate and verify the completed proof on Lean 4.34.1 / Mathlib d13f23b723b8a846827a245b89c10fc7d3f11612. Full build, comparator, Nanoda, and the default Lean kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8ddecf837284a51293d88e1d0cc73c12dcb00510f3df1819b59a1b8bafe2f686",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "db265a96fc3b45f8bb747af39619da9ccd4b1a35",
+        "repo": "hongzhoulin89/lean-eval-pardon-torus-knot-distortion"
+      }
     }
   ],
   "schema_version": 2,
