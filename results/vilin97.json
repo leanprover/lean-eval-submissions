@@ -7020,6 +7020,27 @@
         "ref": "98d2352ccae9fed136c3ef4f968c1b27db9d96eb",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-27T07:09:25Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1826,
+        "kind": "issue"
+      },
+      "problem_id": "martinet_totally_real_towers",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_6a55ef51a747f10d0ed3c3b4fa6ac8266dfd3571aa35b22053eed15ca81fcc46",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "edb2019684256b7861b7c6d2a1ffb9cfc66b0b72",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
