@@ -631,6 +631,27 @@
         "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-27T22:08:53Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1830,
+        "kind": "issue"
+      },
+      "problem_id": "szemeredi",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c1916a4d481f9d605453575f4eb943367b9e6aad272c778558fc580500d429b0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d4b3b2141ff8acfdb7e3f414101ca31d9f1fb69b",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
