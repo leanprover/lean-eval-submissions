@@ -21,6 +21,28 @@
         "ref": "53b38c3e76ceda1c34e556218102059a012ad219",
         "repo": "hongzhoulin89/lean-eval-bourgain-polynomial-ergodic"
       }
+    },
+    {
+      "accepted_at": "2026-09-27T00:26:38Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Humanifa + GPT-5.6 sol",
+      "intake": {
+        "issue_number": 1819,
+        "kind": "issue"
+      },
+      "problem_id": "pardon_torus_knot_distortion",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using GPT-5.6 sol to migrate and verify the completed proof on Lean 4.34.1 / Mathlib d13f23b723b8a846827a245b89c10fc7d3f11612. Full build, comparator, Nanoda, and the default Lean kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_64e450def525e49ba59aa5d06a7e8408a09471ae491c05b81168a0eebe61f4e1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "db265a96fc3b45f8bb747af39619da9ccd4b1a35",
+        "repo": "hongzhoulin89/lean-eval-pardon-torus-knot-distortion"
+      }
     }
   ],
   "schema_version": 2,
