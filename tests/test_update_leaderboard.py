@@ -34,6 +34,8 @@ def default_call(
     production_description: str | None = None,
     solution_publication_status: str | None = None,
     solution_publication_date: str | None = None,
+    verification_run_id: int | None = None,
+    verification_run_attempt: int | None = None,
 ) -> dict:
     return ul.update_leaderboard(
         user=user,
@@ -51,6 +53,8 @@ def default_call(
         solution_publication_status=solution_publication_status,
         solution_publication_date=solution_publication_date,
         now=now,
+        verification_run_id=verification_run_id,
+        verification_run_attempt=verification_run_attempt,
     )
 
 
@@ -92,6 +96,36 @@ def v1_file() -> dict:
 
 
 class UpdateLeaderboardTests(unittest.TestCase):
+    def test_original_verification_is_recorded_and_duplicate_does_not_replace_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            default_call(leaderboard_dir=root, passed=["alpha"], verification_run_id=123, verification_run_attempt=2)
+            record = load_user(root)["results"][0]
+            path = root / "verification" / f"{record['result_id']}.json"
+            evidence = json.loads(path.read_text())
+            self.assertEqual(evidence, {
+                "schema_version": 1, "result_id": record["result_id"],
+                "benchmark_commit": BENCHMARK_COMMIT, "run_id": 123, "run_attempt": 2,
+            })
+            before = path.read_bytes()
+            outcome = default_call(leaderboard_dir=root, passed=["alpha"], verification_run_id=456, verification_run_attempt=1)
+            self.assertFalse(outcome["changed"])
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_rejected_submission_has_no_verification_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            default_call(leaderboard_dir=root, passed=[], verification_run_id=123, verification_run_attempt=1)
+            self.assertFalse((root / "verification").exists())
+
+    def test_verification_identity_validation_precedes_writes(self) -> None:
+        for run, attempt in [(123, None), (None, 1), (0, 1), (123, 0), (True, 1)]:
+            with self.subTest(run=run, attempt=attempt), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                with self.assertRaises(ul.UpdateError):
+                    default_call(leaderboard_dir=root, passed=["alpha"], verification_run_id=run, verification_run_attempt=attempt)
+                self.assertFalse((root / "results").exists())
+
     def test_server_intake_records_uuid_and_structured_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)

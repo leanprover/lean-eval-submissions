@@ -158,12 +158,19 @@ def update_leaderboard(
     production_metadata: dict | None = None,
     solution_publication_status: str | None = None,
     solution_publication_date: str | None = None,
+    verification_run_id: int | None = None,
+    verification_run_attempt: int | None = None,
 ) -> dict:
     _require_login(user)
     _require_sha("benchmark-commit", benchmark_commit)
     _require_sha("submission-ref", submission_ref)
     _require_submission_kind(submission_kind)
     _require_owner_name(submission_repo)
+    if (verification_run_id is None) != (verification_run_attempt is None):
+        raise UpdateError("verification run ID and attempt must be provided together")
+    for value in (verification_run_id, verification_run_attempt):
+        if value is not None and (type(value) is not int or value <= 0):
+            raise UpdateError("verification run ID and attempt must be positive integers")
     if (issue_number is None) == (submission_id is None):
         raise UpdateError("exactly one of issue-number or submission-id is required")
     if issue_number is not None and issue_number <= 0:
@@ -202,6 +209,7 @@ def update_leaderboard(
     existing = _load_existing(target, user)
     known_ids = {record["result_id"] for record in existing["results"]}
     added: list[str] = []
+    evidence: list[tuple[pathlib.Path, dict]] = []
     for problem_id in list(dict.fromkeys(passed)):
         if problem_id not in statement_revisions:
             raise UpdateError(f"missing statement revision for {problem_id!r}")
@@ -216,6 +224,17 @@ def update_leaderboard(
             raise UpdateError(str(exc)) from exc
         if identifier in known_ids:
             continue
+        if verification_run_id is not None:
+            evidence_path = leaderboard_dir / "verification" / f"{identifier}.json"
+            if evidence_path.exists():
+                raise UpdateError("verification evidence already exists for a new result")
+            evidence.append((evidence_path, {
+                "schema_version": 1,
+                "result_id": identifier,
+                "benchmark_commit": benchmark_commit,
+                "run_id": verification_run_id,
+                "run_attempt": verification_run_attempt,
+            }))
         record = {
             "result_id": identifier,
             "problem_id": problem_id,
@@ -254,6 +273,10 @@ def update_leaderboard(
 
     if added:
         _write_json(target, existing)
+        for path, document in evidence:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("x", encoding="utf-8") as stream:
+                stream.write(json.dumps(document, sort_keys=True, indent=2) + "\n")
 
     return {
         "changed": bool(added),
@@ -336,6 +359,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     intake = parser.add_mutually_exclusive_group(required=True)
     intake.add_argument("--issue-number", type=int)
     intake.add_argument("--submission-id")
+    parser.add_argument("--verification-run-id", type=int)
+    parser.add_argument("--verification-run-attempt", type=int)
     parser.add_argument(
         "--production-description",
         default=None,
@@ -411,6 +436,8 @@ def main(argv: list[str] | None = None) -> int:
             solution_publication_date=args.solution_publication_date,
             now=now,
             statement_revisions=statement_revisions,
+            verification_run_id=args.verification_run_id,
+            verification_run_attempt=args.verification_run_attempt,
         )
     except UpdateError as exc:
         print(str(exc), file=sys.stderr)
