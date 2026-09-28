@@ -232,9 +232,6 @@ def expected_health(
         "service": replay_service,
         "environment": environment,
         "replay_enabled": replay_enabled,
-        "historical_public_replay_enabled": _boolean_variable(
-            replay_vars, "HISTORICAL_PUBLIC_REPLAY_ENABLED", environment
-        ),
         "staging_acceptance_enabled": staging_enabled,
         "staging_memory_limit_bytes": memory,
         "production_memory_gate_bytes": gate,
@@ -319,9 +316,7 @@ def verify_snapshot(
             }
         if environment == "production":
             observations[environment]["capabilities"] = {
-                "historical_public_replay_enabled": expected_replay[
-                    "historical_public_replay_enabled"
-                ],
+                "replay_enabled": expected_replay["replay_enabled"],
                 "intake_enabled": expected_intake["intake_enabled"],
                 "legacy_result_owner_api_enabled": expected_intake[
                     "legacy_result_owner_api_enabled"

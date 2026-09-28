@@ -145,3 +145,52 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthoritativeReplayUploadOrderingTests(unittest.TestCase):
+    """The archive transfer must sit between the audit checkout and the unwrap."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = WORKFLOW.read_text(encoding="utf-8")
+
+    def test_archive_uploads_and_assembles_before_any_unwrap_or_aws_authority(self) -> None:
+        split = self.text.index("Bind ciphertext and split it into upload parts")
+        upload = self.text.index("Upload and assemble the archive before any unwrap authority")
+        unwrap = self.text.index("Prepare one five-minute unwrap for the assembled archive")
+        aws = self.text.index("Assume only the staging replay Invoke role")
+        consume = self.text.index("Consume once, validate the exact identity")
+        start = self.text.index("Invoke the reviewed endpoint without AWS or State write authority")
+        self.assertLess(split, upload)
+        # The capability lasts five minutes. Minting it after the transfer keeps
+        # that window around the Lambda round trip rather than the whole upload.
+        self.assertLess(upload, unwrap)
+        self.assertLess(unwrap, aws)
+        self.assertLess(aws, consume)
+        self.assertLess(consume, start)
+
+    def test_nonce_is_minted_before_the_archive_is_split_or_bound(self) -> None:
+        nonce = self.text.index("replay_controller.py mint-nonce")
+        split = self.text.index("replay_controller.py split-archive")
+        unwrap = self.text.index("replay_controller.py prepare-unwrap")
+        self.assertLess(nonce, split)
+        self.assertLess(split, unwrap)
+        self.assertIn('--runner-nonce "$(cat "$RUNNER_TEMP/runner-nonce")"', self.text)
+
+    def test_upload_carries_no_aws_authority_and_checks_every_part(self) -> None:
+        upload = self.text.index("Upload and assemble the archive before any unwrap authority")
+        unwrap = self.text.index("Prepare one five-minute unwrap for the assembled archive")
+        section = self.text[upload:unwrap]
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', section)
+        self.assertIn('test "$part_status" = 202', section)
+        self.assertIn('test "$finalize_status" = 200', section)
+        self.assertIn("X-Lean-Eval-Part-Sha256", section)
+        # Parts are removed as they are accepted, so a failure part way through
+        # does not leave archive fragments on the runner.
+        self.assertIn('rm -f "$part_path"', section)
+
+    def test_status_requests_use_the_status_schema_not_the_transport_schema(self) -> None:
+        # The status contract is schema 1 and does not track the transport
+        # version, which is now 3.
+        self.assertIn("schema_version: 1,", self.text)
+        self.assertNotIn("            schema_version,\n", self.text)

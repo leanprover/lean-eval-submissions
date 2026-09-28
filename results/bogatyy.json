@@ -1,0 +1,118 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-19T05:23:05Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b7f5-9869-78c1-b09a-2c23fd2f101d"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Source-informed formalization consulting Gardam's paper, Siddhartha Gadgil's public formalization, and LikC1606's gist 7570e284ff8b474a4139db2092de6eec at revision 1062b1e6c3d5bda6ae4a218e41bd34dbf11a2c35. Full provenance and proof strategy are in PROOF_NOTES.md. The exact Lean source passed local official comparator, nanoda and Lean kernel checks under Lean v4.34.0 and pinned Mathlib; edited files passed with warnings treated as errors. Prior legacy intake issue #1740 failed at infrastructure fetch before evaluating the proof. The source is also publicly available at bogatyy/lean-eval-proofs at this same commit; this private mirror is used because the archive workflow currently requires a private source repository. Web submission 01a0b7e6-42a1-7ea7-acfd-71563dd75115 failed before proof evaluation for that visibility requirement.",
+        "web_access": true
+      },
+      "result_id": "r2_d0eaf56b4bd496015fa942bee78600e9bcfbd9e3fe35c9777333dca814c4d408",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7acc2752bd45c6fbb8d3a347e630079a88205a1d",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
+    },
+    {
+      "accepted_at": "2026-09-19T16:21:15Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba43-4571-7ce6-a4ff-cbd1f35c399c"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of mlgraham/lean-eval-dimitrov-submission at 661e66a9fb0830eea5084f2b6ca88a10813749df, with its Apache-2.0 license retained. Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib. This is a source-informed adaptation, not an independent new proof. All 87 proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Provenance and verification details are in generated/dimitrov/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_21c2bbab06647ba53aece35c8400bef41227f0957305babffabe8d0f5059f653",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "304e322466b2465d1ee55830699576c8e5340abe",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
+    },
+    {
+      "accepted_at": "2026-09-19T16:28:51Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba44-3b89-7914-825e-10cbc60a572a"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of mlgraham/lean-eval-klartag-submission at 270b3358a135f64a6688636660c07772e8db0173, with its Apache-2.0 license retained. Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib, including a measurability compatibility argument for Gaussian pushforward measures. This is a source-informed adaptation, not an independent new proof. All 178 proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Provenance and verification details are in generated/klartag_packing/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_5eac3da25640128dd0fd929dec6c91a689bdd65ab0333b66891ebc0f5efb0b5e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "304e322466b2465d1ee55830699576c8e5340abe",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
+    },
+    {
+      "accepted_at": "2026-09-19T17:34:29Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Ivan Bogatyy",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ba7b-5501-7535-a0b0-6c91eb6b66f9"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "component_models": [
+          "GPT-6"
+        ],
+        "credit_identity": "Ivan Bogatyy",
+        "harness": "Codex",
+        "human_involvement": "Directed by Ivan Bogatyy (@bogatyy).",
+        "notes": "Attributed adaptation of lixiang90/chen_theorem at 947f7990ef9b9a0f1bd021f5ed489020d42e0d5b (original proof revision 3264ad6acafa64ada18a309f48350d9acfd261ef). Codex ported the public formalization from Lean 4.33 to the benchmark's Lean 4.34 and pinned Mathlib. This is a source-informed adaptation, not an independent new proof. All 411 imported proof modules match the source that passed strict macOS and Linux builds, the official comparator, nanoda and Lean kernel checks. Source attribution, upstream provenance, and the Apache-2.0 license and notices for the PrimeNumberTheoremAnd subset are retained. Publication is withheld because no repository-wide license was found for the remaining upstream Chen formalization; no authority to relicense that code under Apache-2.0 is asserted. The source snapshot is separate from the scheduled-release submissions. Details are in generated/chen_theorem/PROOF_NOTES.md. Credit identity and submitter requested by Ivan Bogatyy (@bogatyy).",
+        "web_access": true
+      },
+      "result_id": "r2_e730c95d0868468f04a7293e29ba13717dfc7d4c3c6428fc729b71cb4c3f230f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7e5be33f96ab2ceaa2142de0b309d78a1a639f89",
+        "repo": "bogatyy/lean-eval-proofs-intake"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "bogatyy"
+}

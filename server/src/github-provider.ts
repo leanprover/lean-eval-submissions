@@ -221,12 +221,40 @@ function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
 
 export class GitHubProviderError extends Error {
   readonly status: number;
+  readonly operation: string | undefined;
+  readonly rateLimitRemaining: number | undefined;
+  readonly rateLimitReset: number | undefined;
+  readonly retryAfterSeconds: number | undefined;
+  readonly requestId: string | undefined;
+  readonly rateLimitKind: "primary" | "secondary" | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, operation?: string, headers?: Headers) {
     super(`GitHub provider ${String(status)}: ${message}`);
     this.name = "GitHubProviderError";
     this.status = status;
+    this.operation = operation;
+    this.rateLimitRemaining = boundedHeaderInteger(headers, "x-ratelimit-remaining", 1_000_000_000);
+    this.rateLimitReset = boundedHeaderInteger(headers, "x-ratelimit-reset", 10_000_000_000);
+    this.retryAfterSeconds = boundedHeaderInteger(headers, "retry-after", 86_400);
+    const requestId = headers?.get("x-github-request-id");
+    this.requestId = requestId !== null && requestId !== undefined && /^[A-Za-z0-9:-]{1,128}$/u.test(requestId)
+      ? requestId
+      : undefined;
+    this.rateLimitKind = status === 403 || status === 429
+      ? /secondary rate limit/iu.test(message)
+        ? "secondary"
+        : this.rateLimitRemaining === 0
+          ? "primary"
+          : undefined
+      : undefined;
   }
+}
+
+function boundedHeaderInteger(headers: Headers | undefined, name: string, maximum: number): number | undefined {
+  const value = headers?.get(name);
+  if (value === null || value === undefined || !/^\d{1,12}$/u.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed <= maximum ? parsed : undefined;
 }
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -246,12 +274,12 @@ function providerHeaders(token?: string): Headers {
   return headers;
 }
 
-async function error(response: Response): Promise<GitHubProviderError> {
-  return new GitHubProviderError(response.status, (await response.text()).slice(0, 300));
+async function error(response: Response, operation: string): Promise<GitHubProviderError> {
+  return new GitHubProviderError(response.status, (await response.text()).slice(0, 300), operation, response.headers);
 }
 
 async function jsonResponse(response: Response, label: string): Promise<Record<string, unknown>> {
-  if (!response.ok) throw await error(response);
+  if (!response.ok) throw await error(response, label);
   try {
     return object(await response.json<unknown>(), label);
   } catch (caught) {
@@ -610,7 +638,7 @@ export class GitHubProvider {
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
-    if (response.status !== 204) throw await error(response);
+    if (response.status !== 204) throw await error(response, "workflow dispatch");
   }
 
   async verifyResult(

@@ -1587,6 +1587,51 @@ describe("agent intake in workerd", () => {
     expect(sourceBroker).not.toHaveBeenCalled();
   });
 
+  it("preserves safe GitHub rate limit headers from a failed gist fetch", async () => {
+    const anonymousFetch = vi.fn<typeof fetch>(() => Promise.resolve(new Response("private gist response", {
+      status: 403,
+      headers: {
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": "1800000000",
+        "retry-after": "60",
+        "x-github-request-id": "ABCD:1234:5678",
+      },
+    })));
+    const provider = new GitHubProvider(anonymousFetch);
+    await expect(provider.verifySecretGist("abcde", "alice", "challenge")).rejects.toMatchObject({
+      status: 403,
+      operation: "gist response",
+      rateLimitRemaining: 0,
+      rateLimitKind: "primary",
+      rateLimitReset: 1_800_000_000,
+      retryAfterSeconds: 60,
+      requestId: "ABCD:1234:5678",
+    });
+  });
+
+  it("identifies a secondary GitHub limit without echoing untrusted headers", async () => {
+    const anonymousFetch = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      message: "You have exceeded a secondary rate limit.",
+    }, {
+      status: 403,
+      headers: {
+        "x-ratelimit-remaining": "59",
+        "x-ratelimit-reset": "invalid",
+        "retry-after": "tomorrow",
+        "x-github-request-id": "private owner/path",
+      },
+    })));
+    const provider = new GitHubProvider(anonymousFetch);
+    await expect(provider.verifySecretGist("abcde", "alice", "challenge")).rejects.toMatchObject({
+      status: 403,
+      rateLimitKind: "secondary",
+      rateLimitRemaining: 59,
+      rateLimitReset: undefined,
+      retryAfterSeconds: undefined,
+      requestId: undefined,
+    });
+  });
+
   it("verifies secret gist ownership and tag-at-exact-commit before one atomic append", async () => {
     const state = new MemoryState();
     let challenge = "";
@@ -1910,12 +1955,43 @@ describe("agent intake in workerd", () => {
       { now: () => NOW_MS, provider, state, dispatch },
     );
     expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: "source_not_found",
+      stage: "source_repository_verification",
+      provider_status: 404,
+      provider_operation: "workflow source reader repository response",
+    });
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/u);
     expect(sourceReader).toHaveBeenCalled();
     expect(workflowReader).toHaveBeenCalledOnce();
     expect(state.events).toHaveLength(0);
     expect(state.views).toHaveLength(0);
     expect(state.outbox).toHaveLength(0);
     expect(dispatch).not.toHaveBeenCalled();
+
+    workflowReader.mockImplementation(() =>
+      Promise.resolve(Response.json({ message: "Validation Failed" }, { status: 422 })));
+    const invalidProviderResponse = await handleRequest(
+      new Request("https://submit.test/api/v1/browser/submissions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `lean_eval_session=${sessionToken}`,
+          origin: "https://submit.test",
+        },
+        body: JSON.stringify({ grant: grantToken, submission: INTAKE_SUBMISSION }),
+      }),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, provider, state, dispatch },
+    );
+    expect(invalidProviderResponse.status).toBe(503);
+    expect(await invalidProviderResponse.json()).toMatchObject({
+      error: "provider_unavailable",
+      stage: "source_repository_verification",
+      provider_status: 422,
+      provider_operation: "workflow source reader repository response",
+    });
   });
 
   it("fails headless intake before State when the legacy workflow reader cannot read the repository", async () => {
@@ -3638,7 +3714,15 @@ describe("authenticated legacy result owner routes", () => {
 
   it("does not expose private provider details in a response or structured log", async () => {
     const sensitive = "private-owner/repository oauth-secret-value";
-    const resultFetch = vi.fn<typeof fetch>(() => Promise.resolve(new Response(sensitive, { status: 503 })));
+    const resultFetch = vi.fn<typeof fetch>(() => Promise.resolve(new Response(sensitive, {
+      status: 403,
+      headers: {
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": "1800000000",
+        "retry-after": "60",
+        "x-github-request-id": "ABCD:1234:5678",
+      },
+    })));
     const logged: string[] = [];
     const errorLog = vi.spyOn(console, "error").mockImplementation((value: unknown) => {
       logged.push(String(value));
@@ -3658,13 +3742,34 @@ describe("authenticated legacy result owner routes", () => {
         state: new MemoryState(),
       });
       const publicBody = await response.text();
+      const publicJson: unknown = JSON.parse(publicBody);
+      if (
+        typeof publicJson !== "object" || publicJson === null ||
+        !("request_id" in publicJson) || typeof publicJson.request_id !== "string"
+      ) throw new Error("missing diagnostic request ID");
       expect(response.status).toBe(503);
       expect(publicBody).not.toContain(sensitive);
       expect(logged.join("\n")).not.toContain(sensitive);
+      expect(publicJson).toMatchObject({
+        provider_rate_limit_remaining: 0,
+        provider_rate_limit_kind: "primary",
+        provider_rate_limit_reset: 1_800_000_000,
+        provider_retry_after_seconds: 60,
+        provider_request_id: "ABCD:1234:5678",
+      });
       expect(logged).toEqual([JSON.stringify({
         event: "submission_stage_failed",
+        request_id: publicJson.request_id,
         stage: "legacy_result_verification",
+        provider_status: 403,
+        provider_operation: "protected Results branch response",
+        provider_rate_limit_remaining: 0,
+        provider_rate_limit_reset: 1_800_000_000,
+        provider_retry_after_seconds: 60,
+        provider_request_id: "ABCD:1234:5678",
+        provider_rate_limit_kind: "primary",
         error_name: "GitHubProviderError",
+        response_status: 503,
       })]);
     } finally {
       errorLog.mockRestore();

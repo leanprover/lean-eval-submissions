@@ -6,7 +6,13 @@ const ACTIVE_BINDING_KEY = "authoritative-active-binding:v1";
 const RECEIPT_KEY = "authoritative-terminal-receipt:v1";
 const RESERVATION_KEY = "historical-cleanup-reservation:v1";
 const CLEANUP_KEY = "authoritative-sandbox-cleanup:v1";
+const ARCHIVE_UPLOAD_KEY = "authoritative-archive-upload:v1";
 const CLEANUP_RETRY_MS = 5 * 60 * 1000;
+// An archive upload precedes the key unwrap, so its Sandbox exists before any
+// replay binding does. Without a deadline of its own an abandoned upload would
+// hold the single permitted container until it idled out, with nothing durable
+// recording that it should be destroyed.
+const ARCHIVE_UPLOAD_LEASE_MS = 30 * 60 * 1000;
 const SANDBOX_DESTROY_TIMEOUT_MS = 4 * 60 * 1000;
 const CONFIRMATION_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -109,6 +115,112 @@ function sameIdentity(left: CleanupIdentity, right: CleanupIdentity): boolean {
     && left.attempt === right.attempt;
 }
 
+type ArchiveUploadIdentityRecord = {
+  schema_version: 1;
+  upload_kind: string;
+  runner_nonce: string;
+  archive_sha256: string;
+  archive_bytes: number;
+  part_count: number;
+};
+
+type ArchiveUploadPartRecord = {
+  index: number;
+  sha256: string;
+  bytes: number;
+  path: string;
+};
+
+type ArchiveUploadRecord = ArchiveUploadIdentityRecord & {
+  expires_at_epoch_ms: number;
+  parts: ArchiveUploadPartRecord[];
+  assembled_path: string | null;
+};
+
+function archiveUploadIdentity(value: unknown): ArchiveUploadIdentityRecord {
+  const stored = record(value, "durable archive upload");
+  if (
+    stored.schema_version !== 1
+    || typeof stored.upload_kind !== "string"
+    || stored.upload_kind.length === 0
+    || typeof stored.runner_nonce !== "string"
+    || !/^[0-9a-f]{64}$/.test(stored.runner_nonce)
+    || typeof stored.archive_sha256 !== "string"
+    || !/^[0-9a-f]{64}$/.test(stored.archive_sha256)
+    || !Number.isSafeInteger(stored.archive_bytes)
+    || (stored.archive_bytes as number) < 1
+    || !Number.isSafeInteger(stored.part_count)
+    || (stored.part_count as number) < 1
+  ) {
+    throw new Error("durable archive upload identity is invalid");
+  }
+  return {
+    schema_version: 1,
+    upload_kind: stored.upload_kind,
+    runner_nonce: stored.runner_nonce,
+    archive_sha256: stored.archive_sha256,
+    archive_bytes: stored.archive_bytes as number,
+    part_count: stored.part_count as number,
+  };
+}
+
+function sameArchiveUpload(
+  left: ArchiveUploadIdentityRecord,
+  right: ArchiveUploadIdentityRecord,
+): boolean {
+  return left.upload_kind === right.upload_kind
+    && left.runner_nonce === right.runner_nonce
+    && left.archive_sha256 === right.archive_sha256
+    && left.archive_bytes === right.archive_bytes
+    && left.part_count === right.part_count;
+}
+
+function archiveUploadPart(value: unknown, partCount: number): ArchiveUploadPartRecord {
+  const part = record(value, "durable archive upload part");
+  if (
+    !Number.isSafeInteger(part.index)
+    || (part.index as number) < 0
+    || (part.index as number) >= partCount
+    || typeof part.sha256 !== "string"
+    || !/^[0-9a-f]{64}$/.test(part.sha256)
+    || !Number.isSafeInteger(part.bytes)
+    || (part.bytes as number) < 1
+    || typeof part.path !== "string"
+    || part.path.length === 0
+  ) {
+    throw new Error("durable archive upload part is invalid");
+  }
+  return {
+    index: part.index as number,
+    sha256: part.sha256,
+    bytes: part.bytes as number,
+    path: part.path,
+  };
+}
+
+function archiveUploadRecord(value: unknown): ArchiveUploadRecord {
+  const stored = record(value, "durable archive upload");
+  const identity = archiveUploadIdentity(stored);
+  if (
+    !Number.isSafeInteger(stored.expires_at_epoch_ms)
+    || !Array.isArray(stored.parts)
+    || stored.parts.length > identity.part_count
+    || (stored.assembled_path !== null && typeof stored.assembled_path !== "string")
+  ) {
+    throw new Error("durable archive upload is invalid");
+  }
+  const parts = stored.parts.map((entry) => archiveUploadPart(entry, identity.part_count));
+  if (new Set(parts.map((part) => part.index)).size !== parts.length) {
+    throw new Error("durable archive upload part is invalid");
+  }
+  return {
+    ...identity,
+    expires_at_epoch_ms: stored.expires_at_epoch_ms as number,
+    parts,
+    assembled_path: stored.assembled_path,
+  };
+}
+
 function historicalBinding(value: unknown): boolean {
   const binding = record(value, "durable replay binding");
   return Object.hasOwn(binding, "request_id") || Object.hasOwn(binding, "result_id");
@@ -149,6 +261,113 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
 
   async claimReservedBinding(binding: unknown): Promise<unknown> {
     return this.claimBindingWithReservation(binding, true, true);
+  }
+
+  async readArchiveUpload(): Promise<unknown> {
+    const upload = await this.ctx.storage.get(ARCHIVE_UPLOAD_KEY);
+    return upload === undefined ? null : upload;
+  }
+
+  /**
+   * First-writer-wins on the upload identity. An exact repeat returns the stored
+   * record so a lost response can be retried; a different archive under the same
+   * nonce is refused rather than blended into the first one.
+   */
+  async claimArchiveUpload(identity: unknown): Promise<unknown> {
+    const wanted = archiveUploadIdentity(identity);
+    const now = Date.now();
+    return this.ctx.storage.transaction(async (transaction) => {
+      // A nonce that already reached a terminal outcome is spent. Reusing it
+      // would attach a fresh archive to a destroyed or destroying Sandbox.
+      if (
+        await transaction.get(CLEANUP_KEY) !== undefined
+        || await transaction.get(RECEIPT_KEY) !== undefined
+      ) {
+        throw new Error("runner nonce has already been finalized");
+      }
+      const existing = await transaction.get(ARCHIVE_UPLOAD_KEY);
+      if (existing !== undefined) {
+        const stored = archiveUploadRecord(existing);
+        if (!sameArchiveUpload(stored, wanted)) {
+          throw new Error("runner nonce is already bound to a different archive upload");
+        }
+        return stored;
+      }
+      const claimed: ArchiveUploadRecord = {
+        ...wanted,
+        expires_at_epoch_ms: now + ARCHIVE_UPLOAD_LEASE_MS,
+        parts: [],
+        assembled_path: null,
+      };
+      await transaction.put(ARCHIVE_UPLOAD_KEY, claimed);
+      // The upload owns the only alarm until a replay binding is claimed, so an
+      // abandoned upload still has something durable that will destroy it.
+      const alarm = await transaction.getAlarm();
+      if (alarm === null || alarm > claimed.expires_at_epoch_ms) {
+        await transaction.setAlarm(claimed.expires_at_epoch_ms);
+      }
+      return claimed;
+    });
+  }
+
+  /**
+   * Record one part at its committed Sandbox path. The path is chosen by the
+   * caller per request and never reused, so a retry cannot overwrite the bytes
+   * an earlier part already committed.
+   */
+  async commitArchiveUploadPart(identity: unknown, part: unknown): Promise<unknown> {
+    const wanted = archiveUploadIdentity(identity);
+    const committed = record(part, "archive upload part");
+    return this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get(ARCHIVE_UPLOAD_KEY);
+      if (existing === undefined) throw new Error("archive upload was not claimed");
+      const stored = archiveUploadRecord(existing);
+      if (!sameArchiveUpload(stored, wanted)) {
+        throw new Error("archive upload identity mismatch");
+      }
+      if (stored.assembled_path !== null) {
+        throw new Error("archive upload was already finalized");
+      }
+      const added = archiveUploadPart(committed, stored.part_count);
+      const previous = stored.parts.find((entry) => entry.index === added.index);
+      if (previous !== undefined) {
+        // Same bytes twice is a retry and succeeds. Different bytes at the same
+        // index is two different archives racing, and must not silently win.
+        if (previous.sha256 !== added.sha256 || previous.bytes !== added.bytes) {
+          throw new Error("archive upload part conflicts with a committed part");
+        }
+        return stored;
+      }
+      const updated: ArchiveUploadRecord = { ...stored, parts: [...stored.parts, added] };
+      await transaction.put(ARCHIVE_UPLOAD_KEY, updated);
+      return updated;
+    });
+  }
+
+  /** Mark the upload assembled. Only a complete, digest-matched part set qualifies. */
+  async finalizeArchiveUpload(identity: unknown, assembledPath: string): Promise<unknown> {
+    const wanted = archiveUploadIdentity(identity);
+    if (assembledPath.length === 0) throw new Error("assembled archive path is invalid");
+    return this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get(ARCHIVE_UPLOAD_KEY);
+      if (existing === undefined) throw new Error("archive upload was not claimed");
+      const stored = archiveUploadRecord(existing);
+      if (!sameArchiveUpload(stored, wanted)) {
+        throw new Error("archive upload identity mismatch");
+      }
+      if (stored.parts.length !== stored.part_count) {
+        throw new Error("archive upload is incomplete");
+      }
+      if (stored.assembled_path !== null) {
+        if (stored.assembled_path !== assembledPath) {
+          throw new Error("archive upload was already finalized at a different path");
+        }
+        return stored;
+      }
+      const updated: ArchiveUploadRecord = { ...stored, assembled_path: assembledPath };
+      await transaction.put(ARCHIVE_UPLOAD_KEY, updated);
+      return updated;
+    });
   }
 
   private async claimBindingWithReservation(
@@ -360,6 +579,7 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
             ACTIVE_BINDING_KEY,
             RECEIPT_KEY,
             RESERVATION_KEY,
+            ARCHIVE_UPLOAD_KEY,
           ]);
         });
       } else {
@@ -368,7 +588,31 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       return;
     }
     const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);
-    if (binding === undefined) return;
+    if (binding === undefined) {
+      // An upload that never reached a replay start still created a Sandbox.
+      // Nothing else will destroy it, so the upload lease does.
+      const upload = await this.ctx.storage.get(ARCHIVE_UPLOAD_KEY);
+      if (upload === undefined) return;
+      const stored = archiveUploadRecord(upload);
+      if (stored.expires_at_epoch_ms > Date.now()) {
+        await this.ctx.storage.setAlarm(stored.expires_at_epoch_ms);
+        return;
+      }
+      try {
+        await destroySandboxWithTimeout(replaySandbox(this.env, stored.runner_nonce));
+      } catch {
+        console.error(JSON.stringify({
+          event: "lean_eval_replay_sandbox_cleanup_retry",
+          reason: "abandoned_archive_upload_destroy_failed",
+        }));
+        await this.ctx.storage.setAlarm(Date.now() + CLEANUP_RETRY_MS);
+        return;
+      }
+      // No tombstone: an upload that never started has no State lifecycle to
+      // reconcile, and the record is nonce-bearing so it should not be retained.
+      await this.ctx.storage.delete(ARCHIVE_UPLOAD_KEY);
+      return;
+    }
     try {
       await this.destroyAndConfirm(binding);
     } catch {

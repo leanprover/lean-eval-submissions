@@ -109,6 +109,21 @@ jobs:
           lake-package-directory: lean-eval
           use-mathlib-cache: true
           use-github-cache: false
+          # Built by the next step, after dependency caches are configured.
+          build: false
+          test: false
+          lint: false
+
+      - name: Build the benchmark root with downloaded dependency caches
+        # Trusted phase: runs before any untrusted Lean runs.
+        # TauCeti must never be compiled here: the script downloads its
+        # build outputs into the shared package tree (the whole library,
+        # so a submission may import any TauCeti module) and fails on a
+        # cache miss. The Lake cache settings stay inside this step, and
+        # later workspace builds, including comparator's sandboxed one,
+        # find TauCeti up to date on disk without the network. Benchmarks
+        # that pin no TauCeti get a plain `lake build`. See the script.
+        run: python scripts/build_benchmark_root.py lean-eval
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e

@@ -22,6 +22,17 @@ import {
   type ReplayVerdict,
   validateReplayVerdict,
 } from "./authoritative-replay-contract";
+import {
+  ArchiveUploadContractError,
+  MAX_PART_BYTES,
+  readArchiveUploadFinalizeRequest,
+  readArchiveUploadPartHeader,
+  sameArchiveUploadIdentity,
+  type ArchiveUploadFinalizeRequest,
+  type ArchiveUploadIdentity,
+  type ArchiveUploadKind,
+  type ArchiveUploadPartHeader,
+} from "./archive-upload-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
 import {
   ReplayArchiveContractError,
@@ -46,11 +57,25 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REVIEWED_EXECUTION_PROFILE_DIGEST: string;
   REVIEWED_MEASUREMENT_CONFIG_DIGEST: string;
   REVIEWED_VM_IMAGE_DIGEST: string;
+  EXPECTED_REPLAY_TASK_ID?: string;
+  EXPECTED_REPLAY_ATTEMPT?: string;
+  EXECUTOR_OWNERSHIP_TAG?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
   Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
 
+type ArchiveUploadStore = Pick<
+  ReplayTerminalReceipt,
+  | "readArchiveUpload"
+  | "claimArchiveUpload"
+  | "commitArchiveUploadPart"
+  | "finalizeArchiveUpload"
+>;
+
+// The upload methods are optional for the same reason `startProcess` is on
+// SandboxClient: routes that never touch an upload should not have to supply
+// them, and the routes that do fail closed when they are absent.
 type TerminalReceiptStore = Pick<
   ReplayTerminalReceipt,
   | "claimBinding"
@@ -58,7 +83,19 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
->;
+> & Partial<ArchiveUploadStore>;
+
+function requireArchiveUploadStore(store: TerminalReceiptStore): ArchiveUploadStore {
+  if (
+    store.readArchiveUpload === undefined
+    || store.claimArchiveUpload === undefined
+    || store.commitArchiveUploadPart === undefined
+    || store.finalizeArchiveUpload === undefined
+  ) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return store as ArchiveUploadStore;
+}
 
 type HistoricalCleanupStore = Pick<
   ReplayTerminalReceipt,
@@ -125,8 +162,30 @@ function terminalReceiptStore(
   return dependencies.receiptStore(env, runnerNonce, historicalIdentity);
 }
 
+function stagingAcceptanceEnabled(env: ReplayRuntimeEnv): boolean {
+  return env.DEPLOYMENT_ENVIRONMENT === "staging"
+    && env.STAGING_ACCEPTANCE_ENABLED === "true";
+}
+
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
+}
+
+function requireHistoricalPrivateBinding(
+  env: ReplayRuntimeEnv,
+  value: { replay_task_id: string; attempt: number },
+): void {
+  if (env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay") return;
+  if (
+    env.EXPECTED_REPLAY_TASK_ID === undefined
+    || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
+    || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
+    || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
+  ) {
+    throw new AuthoritativeReplayContractError(
+      "execution is not the exact historical private replay binding",
+    );
+  }
 }
 
 const ARCHIVE_COMMAND_FAILURES = new Map([
@@ -160,6 +219,21 @@ const HISTORICAL_PUBLIC_COMMAND =
   + "> /workspace/historical-public-source.tar.gz "
   + "&& rm /workspace/historical-public-source.tar.gz.b64 "
   + "&& /opt/lean-eval/historical-public-runner";
+const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
+// Parts sit directly in /workspace under a fixed prefix rather than in a baked
+// subdirectory, which a runtime mount over /workspace could shadow.
+const ARCHIVE_PART_PREFIX = "/workspace/archive-part-";
+const ARCHIVE_PART_PATH = new RegExp(
+  "^/workspace/archive-part-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}"
+    + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+);
+
+/** Where each upload kind assembles, and which process later consumes it. */
+const ARCHIVE_UPLOAD_TARGETS: Record<ArchiveUploadKind, string> = {
+  "authoritative-archive": "/workspace/archive.tar.gz.age.b64",
+  "staging-archive-acceptance": "/workspace/archive.tar.gz.age.b64",
+};
+
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
 const AUTHORITATIVE_CLEANUP_AFTER_MS = 7 * 60 * 60 * 1000;
 const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -1377,8 +1451,8 @@ async function writeSandboxFile(
 }
 
 function streamedText(contents: string): ReadableStream<Uint8Array> {
-  // Keep large base64 archives off the inline Sandbox RPC message path while
-  // preserving the exact text file consumed by the locked executor image.
+  // Keep large base64 public-source archives off the inline Sandbox RPC message
+  // path. Private archives use the binary chunk-upload routes below.
   const encoder = new TextEncoder();
   let offset = 0;
   return new ReadableStream<Uint8Array>({
@@ -1392,6 +1466,230 @@ function streamedText(contents: string): ReadableStream<Uint8Array> {
       offset = end;
     },
   });
+}
+
+/**
+ * Stream one upload part into the Sandbox, digesting and counting as it passes.
+ *
+ * A pass-through transform rather than `body.tee()`: with `tee`, the digest
+ * branch drains faster than the Sandbox write and the runtime buffers the whole
+ * part for the slower branch, which is the memory behaviour this transport
+ * exists to remove. Here nothing larger than one chunk is ever resident.
+ *
+ * `content-length` is optional and client-controlled, so the count taken here is
+ * the only real bound on how many bytes a part may carry.
+ */
+async function streamPartToSandbox(
+  sandbox: SandboxClient,
+  path: string,
+  body: ReadableStream<Uint8Array>,
+  maximumBytes: number,
+): Promise<{ bytes: number; sha256: string }> {
+  // `crypto.DigestStream`, not a bare global: the type is declared globally but
+  // the constructor only exists on the Crypto instance.
+  const digestStream = new crypto.DigestStream("SHA-256");
+  const writer = digestStream.getWriter();
+  let bytes = 0;
+  const overflow = { hit: false };
+  const counted = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    async transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      if (bytes > maximumBytes) {
+        overflow.hit = true;
+        throw new Error("upload part exceeds its size limit");
+      }
+      await writer.write(chunk);
+      controller.enqueue(chunk);
+    },
+    async flush() {
+      await writer.close();
+    }
+  }));
+  let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
+  try {
+    result = await sandbox.writeFile(path, counted);
+  } catch {
+    if (overflow.hit) throw new ArchiveUploadContractError("upload part exceeds its size limit");
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  if (!result.success || result.path !== path) {
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  // `WriteFileResult` carries no byte count, so the Worker cannot confirm here
+  // that the container received everything it was sent. Finalization hashes and
+  // measures their concatenation before the key unwrap, which catches a
+  // truncated transfer while the capability is still unspent.
+  const digest = new Uint8Array(await digestStream.digest);
+  return {
+    bytes,
+    sha256: [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+  };
+}
+
+function uploadIdentity(value: {
+  upload_kind: ArchiveUploadKind;
+  runner_nonce: string;
+  archive_sha256: string;
+  archive_bytes: number;
+  part_count: number;
+}): ArchiveUploadIdentity {
+  return {
+    schema_version: 1,
+    upload_kind: value.upload_kind,
+    runner_nonce: value.runner_nonce,
+    archive_sha256: value.archive_sha256,
+    archive_bytes: value.archive_bytes,
+    part_count: value.part_count,
+  };
+}
+
+/**
+ * Accept one part. Claiming happens here, on the first part, rather than at the
+ * replay start: the upload creates the Sandbox, so the durable record that will
+ * later destroy an abandoned one has to exist from the first byte.
+ */
+async function handleArchiveUploadPart(
+  request: Request,
+  header: ArchiveUploadPartHeader,
+  receipts: TerminalReceiptStore,
+  sandbox: SandboxClient,
+): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
+  const body = request.body;
+  if (body === null) throw new ArchiveUploadContractError("upload part requires a body");
+  const identity = uploadIdentity(header);
+  // The Durable Object enforces this atomically; checking first turns a nonce
+  // already bound to a different archive into a 400 the caller can act on
+  // rather than an opaque executor failure.
+  const existing = objectValue(await store.readArchiveUpload());
+  if (
+    existing !== null
+    && !sameArchiveUploadIdentity(uploadIdentity(existing as unknown as ArchiveUploadIdentity), identity)
+  ) {
+    throw new ArchiveUploadContractError("runner nonce is already bound to a different archive upload");
+  }
+  await store.claimArchiveUpload(identity);
+  // A fresh path per request. Deterministic per-index names would let a retry or
+  // a delayed duplicate rewrite bytes that an earlier part already committed,
+  // including after finalize had accepted them.
+  const path = `${ARCHIVE_PART_PREFIX}${crypto.randomUUID()}`;
+  const written = await streamPartToSandbox(
+    sandbox,
+    path,
+    body as ReadableStream<Uint8Array>,
+    MAX_PART_BYTES,
+  );
+  if (written.bytes !== header.part_bytes || written.sha256 !== header.part_sha256) {
+    throw new ArchiveUploadContractError("upload part does not match its declared digest");
+  }
+  await store.commitArchiveUploadPart(identity, {
+    index: header.part_index,
+    sha256: written.sha256,
+    bytes: written.bytes,
+    path,
+  });
+  return json({
+    schema_version: 1,
+    upload_kind: header.upload_kind,
+    part_index: header.part_index,
+    status: "stored",
+  }, 202);
+}
+
+/**
+ * Assemble and verify inside the container, before any key unwrap. Verifying
+ * only in the replay image would be enough for integrity but not for readiness:
+ * a missing part or an idled-out container would then surface after the one-use
+ * capability had been spent.
+ */
+async function handleArchiveUploadFinalize(
+  finalize: ArchiveUploadFinalizeRequest,
+  receipts: TerminalReceiptStore,
+  sandbox: SandboxClient,
+): Promise<Response> {
+  const store = requireArchiveUploadStore(receipts);
+  const identity = uploadIdentity(finalize);
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) throw new ArchiveUploadContractError("archive upload was not claimed");
+  const committed = Array.isArray(stored.parts) ? stored.parts : [];
+  if (
+    !sameArchiveUploadIdentity(
+      uploadIdentity(stored as unknown as ArchiveUploadIdentity),
+      identity,
+    )
+    || committed.length !== finalize.part_count
+  ) {
+    throw new ArchiveUploadContractError("archive upload does not match the finalize request");
+  }
+  const ordered = finalize.parts.map((expected) => {
+    const match = committed
+      .map((entry) => objectValue(entry))
+      .find((entry): entry is Record<string, unknown> => (
+        entry !== null && entry.index === expected.index
+      ));
+    if (
+      match?.sha256 !== expected.sha256
+      || match.bytes !== expected.bytes
+      || typeof match.path !== "string"
+      || !ARCHIVE_PART_PATH.test(match.path)
+    ) {
+      throw new ArchiveUploadContractError("archive upload part does not match the finalize request");
+    }
+    return { index: expected.index, path: match.path, bytes: expected.bytes, sha256: expected.sha256 };
+  });
+  const target = ARCHIVE_UPLOAD_TARGETS[finalize.upload_kind];
+  // Keep the qualified replay image unchanged. The command contains only
+  // server-generated UUID paths plus digest and size values already accepted by
+  // the strict contract above. It verifies the concatenation before encoding it
+  // in the format consumed by every existing replay-image profile.
+  const binary = "/workspace/archive.tar.gz.age";
+  const partPaths = ordered.map((part) => part.path).join(" ");
+  const command = [
+    "set -eu",
+    `out=${binary}`,
+    `encoded=${target}`,
+    'cleanup() { rm -f -- "$out" "$encoded"; }',
+    "trap cleanup EXIT",
+    'test ! -e "$out"',
+    'test ! -e "$encoded"',
+    `cat -- ${partPaths} > "$out"`,
+    `test "$(wc -c < "$out" | tr -d ' ')" = ${String(finalize.archive_bytes)}`,
+    `test "$(sha256sum "$out" | cut -d ' ' -f 1)" = ${finalize.archive_sha256}`,
+    'base64 --wrap=0 "$out" > "$encoded"',
+    `rm -f -- "$out" ${partPaths}`,
+    "trap - EXIT",
+  ].join("; ");
+  await executeSandboxCommand(
+    sandbox,
+    command,
+    ARCHIVE_ASSEMBLE_TIMEOUT_MS,
+    0,
+  );
+  await store.finalizeArchiveUpload(identity, target);
+  return json({
+    schema_version: 1,
+    upload_kind: finalize.upload_kind,
+    status: "assembled",
+  }, 200);
+}
+
+/** The assembled archive a replay start may use, or null if none is ready. */
+async function readyArchiveUpload(
+  receipts: TerminalReceiptStore,
+  expected: ArchiveUploadIdentity,
+): Promise<string> {
+  const store = requireArchiveUploadStore(receipts);
+  const stored = objectValue(await store.readArchiveUpload());
+  if (stored === null) {
+    throw new AuthoritativeReplayContractError("archive upload was not completed");
+  }
+  if (
+    !sameArchiveUploadIdentity(uploadIdentity(stored as unknown as ArchiveUploadIdentity), expected)
+    || stored.assembled_path !== ARCHIVE_UPLOAD_TARGETS[expected.upload_kind]
+  ) {
+    throw new AuthoritativeReplayContractError("archive upload does not match the replay request");
+  }
+  return stored.assembled_path;
 }
 
 async function executeSandboxCommand(
@@ -1468,6 +1766,11 @@ function health(env: ReplayRuntimeEnv): Response {
     reviewed_execution_profile_digest: env.REVIEWED_EXECUTION_PROFILE_DIGEST,
     reviewed_measurement_config_digest: env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
     reviewed_vm_image_digest: env.REVIEWED_VM_IMAGE_DIGEST,
+    ...(env.EXECUTOR_OWNERSHIP_TAG === undefined ? {} : {
+      executor_ownership_tag: env.EXECUTOR_OWNERSHIP_TAG,
+      expected_replay_task_id: env.EXPECTED_REPLAY_TASK_ID,
+      expected_replay_attempt: env.EXPECTED_REPLAY_ATTEMPT,
+    }),
   });
 }
 
@@ -1482,6 +1785,12 @@ export async function handleReplayRequest(
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
+  const authoritativePart = url.pathname === "/api/v1/replay/archive-part";
+  const authoritativeFinalize = url.pathname === "/api/v1/replay/archive-finalize";
+  const archivePart = url.pathname === "/api/v1/staging-archive-acceptance/archive-part";
+  const archiveFinalize = url.pathname === "/api/v1/staging-archive-acceptance/archive-finalize";
+  const authoritativePrewarm = url.pathname
+    === "/api/v1/historical-private-replay/prewarm";
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
   const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
@@ -1493,6 +1802,11 @@ export async function handleReplayRequest(
       && !archiveAcceptance
       && !authoritativeReplay
       && !authoritativeStatus
+      && !authoritativePart
+      && !authoritativeFinalize
+      && !archivePart
+      && !archiveFinalize
+      && !authoritativePrewarm
       && !historicalPublicReplay
       && !historicalPublicStatus
       && !historicalPublicCleanup
@@ -1502,8 +1816,24 @@ export async function handleReplayRequest(
   ) {
     return json({ error: "not_found" }, 404);
   }
-  if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
+  // Upload shares the replay flag: it creates the same Sandbox the start would,
+  // so it must not be reachable while replay is disabled.
+  if (
+    (
+      authoritativeReplay
+      || authoritativePart
+      || authoritativeFinalize
+      || authoritativePrewarm
+    )
+    && env.REPLAY_ENABLED !== "true"
+  ) {
     return json({ error: "replay_disabled" }, 503);
+  }
+  if (
+    authoritativePrewarm
+    && env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay"
+  ) {
+    return json({ error: "not_found" }, 404);
   }
   if (
     (
@@ -1515,6 +1845,43 @@ export async function handleReplayRequest(
     && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true"
   ) {
     return json({ error: "historical_public_replay_disabled" }, 503);
+  }
+  if (authoritativePart || authoritativeFinalize || archivePart || archiveFinalize) {
+    const kind: ArchiveUploadKind = authoritativePart || authoritativeFinalize
+      ? "authoritative-archive"
+      : "staging-archive-acceptance";
+    const route = `${kind === "authoritative-archive" ? "authoritative" : "staging_archive"}_upload`;
+    if (kind === "staging-archive-acceptance" && !stagingAcceptanceEnabled(env)) {
+      return json({ error: "staging_acceptance_disabled" }, 503);
+    }
+    try {
+      await dependencies.authenticate(request, env);
+      // Parse before resolving the Sandbox: the runner nonce names the Sandbox
+      // and the durable record, and a body can only be read once.
+      if (authoritativePart || archivePart) {
+        const header = readArchiveUploadPartHeader(request);
+        if (header.upload_kind !== kind) {
+          throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
+        }
+        const store = terminalReceiptStore(dependencies, env, header.runner_nonce);
+        const sandbox = await dependencies.sandbox(env, header.runner_nonce);
+        return await handleArchiveUploadPart(request, header, store, sandbox);
+      }
+      const finalize = await readArchiveUploadFinalizeRequest(request);
+      if (finalize.upload_kind !== kind) {
+        throw new ArchiveUploadContractError("upload_kind does not match this endpoint");
+      }
+      const store = terminalReceiptStore(dependencies, env, finalize.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, finalize.runner_nonce);
+      return await handleArchiveUploadFinalize(finalize, store, sandbox);
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof ArchiveUploadContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure(route, error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (historicalPublicReservation) {
     try {
@@ -1643,6 +2010,45 @@ export async function handleReplayRequest(
       return authoritativeExecutorFailure(error);
     }
   }
+  if (authoritativePrewarm) {
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readAuthoritativeReplayStatusRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      requireHistoricalPrivateBinding(env, input);
+      // Claim the cleanup reservation before the first sandbox RPC. A prewarm
+      // creates the nonce-named sandbox even though it transfers no source. If
+      // the controller later fails before /api/v1/replay, cleanup must still
+      // know that exact nonce rather than treating the reservation as proof
+      // that no sandbox exists.
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      await claimActiveBinding(store, input);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
+      if (sandbox.getProcess === undefined) {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      try {
+        // This is deliberately the only container RPC. It makes Cloudflare
+        // provision the exact sandbox before State records an attempt and
+        // before any private archive key or ciphertext reaches the Worker.
+        await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
+      } catch {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      return json({ ...input, status: "ready" });
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_private_replay_prewarm", error);
+      return authoritativeExecutorFailure(error);
+    }
+  }
   if (authoritativeStatus) {
     let sandbox: SandboxClient | undefined;
     try {
@@ -1653,6 +2059,7 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
       sandbox = await dependencies.sandbox(env, input.runner_nonce);
@@ -1675,6 +2082,10 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      requireHistoricalPrivateBinding(env, {
+        replay_task_id: String(input.request.replay_task_id),
+        attempt: Number(input.request.attempt),
+      });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
       await claimActiveBinding(store, binding);
@@ -1687,6 +2098,18 @@ export async function handleReplayRequest(
           status: "running",
         }, 202);
       }
+      // The archive is already in the Sandbox, assembled and digest-checked by
+      // the finalize that ran before the key unwrap. A start that cannot see it
+      // must not proceed: the capability is spent by now, but a refusal here is
+      // recoverable by re-uploading under a fresh nonce, and a start is not.
+      await readyArchiveUpload(store, {
+        schema_version: 1,
+        upload_kind: "authoritative-archive",
+        runner_nonce: input.runner_nonce,
+        archive_sha256: input.archive_expectation.archive_ciphertext_sha256,
+        archive_bytes: input.archive_ciphertext_bytes,
+        part_count: input.archive_part_count,
+      });
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         await startAuthoritativeProcess(sandbox, async () => {
@@ -1696,13 +2119,8 @@ export async function handleReplayRequest(
             "/workspace/archive-expectation.json",
             JSON.stringify(input.archive_expectation),
           );
-          await writeSandboxFile(
-            sandbox,
-            "/workspace/archive.tar.gz.age.b64",
-            streamedText(input.ciphertext_base64),
-          );
-          if (input.schema_version === 1) {
-            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          if (input.key_material_type === "age-identity-v1") {
+            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_key_material_base64);
           } else {
             await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
           }
@@ -1721,7 +2139,11 @@ export async function handleReplayRequest(
       }, 202);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+      if (
+        error instanceof AuthoritativeReplayContractError
+        || error instanceof ArchiveUploadContractError
+        || error instanceof SyntaxError
+      ) {
         return json({ error: "invalid_request" }, 400);
       }
       recordExecutorFailure("authoritative_replay", error);
@@ -1735,9 +2157,20 @@ export async function handleReplayRequest(
     await dependencies.authenticate(request, env);
     if (archiveAcceptance) {
       const input = await readArchiveAcceptanceRequest(request);
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      // The archive was uploaded and assembled under this nonce before this
+      // request; refusing here keeps a stale or absent upload from being read
+      // as a decryption failure by the acceptance run.
+      await readyArchiveUpload(store, {
+        schema_version: 1,
+        upload_kind: "staging-archive-acceptance",
+        runner_nonce: input.runner_nonce,
+        archive_sha256: input.archive_ciphertext_sha256,
+        archive_bytes: input.archive_ciphertext_bytes,
+        part_count: input.archive_part_count,
+      });
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       const evidence = await withSandboxDestruction(sandbox, async () => {
-          await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
           await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
           await writeSandboxFile(
             sandbox,

@@ -109,33 +109,47 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. The Lean Eval controller performs a source-free prewarm before State start
-   or archive unwrap. The prewarm atomically claims a durable, nonce-specific
-   binding to the exact task, attempt, execution profile, measurement config,
-   and image before its first Sandbox RPC, then creates the fresh Sandbox. The
-   later source-bearing start refreshes and reuses that same nonce and binding;
-   every start and status call must match it before the Sandbox is looked up.
-   It starts one fixed background process. A duplicate matching start is
-   idempotent; a differently bound duplicate fails closed. A persistent or
-   shared generic replay executor is a configuration error.
-4. The trusted controller verifies the exact ciphertext, consumes the one-use
-   unwrap capability, drops AWS authority, and sends only that ciphertext, its
-   per-archive identity, the nonce, and public expectations to the Sandbox.
-   The Sandbox has public network access disabled and decrypts only inside its
-   ephemeral filesystem.
-5. Before untrusted Lean runs, all `.git` directories and workflow credentials
+3. The controller mints the runner nonce, splits the ciphertext into
+   fixed-size parts, and uploads them before it holds any unwrap authority.
+   Each part is one `application/octet-stream` request whose identity travels
+   in `x-lean-eval-*` headers; the Worker streams it straight into the Sandbox,
+   digesting and counting as it passes, and commits it at a server-generated
+   path that is never reused. The first part atomically claims a durable,
+   nonce-specific upload record, which is what will destroy the Sandbox if the
+   replay is abandoned before it starts. A repeated part with the same bytes is
+   idempotent; the same index with different bytes, or a second archive under
+   the same nonce, fails closed.
+4. A finalize call runs one fixed baked command in the Sandbox that assembles
+   the committed parts in order, re-measures each against the manifest, and
+   hashes the whole archive. Readiness is recorded only when that digest
+   matches. Assembling here rather than in the replay runner is deliberate: a
+   missing part, a truncated transfer, or a Sandbox that idled out and lost its
+   filesystem is discovered while the one-use capability is still unspent, so
+   the upload can simply be retried instead of burning a key.
+5. Only then does the trusted controller mint and consume the one-use unwrap
+   capability, drop AWS authority, and send the per-archive identity, the
+   nonce, and public expectations to the Sandbox. The archive itself is already
+   there. The start refuses unless the durable record shows an assembled
+   archive matching the request, and it claims the same nonce-specific replay
+   binding that every later status call must match. It starts one fixed
+   background process. A duplicate matching start is idempotent; a differently
+   bound duplicate fails closed. A persistent or shared generic replay executor
+   is a configuration error. The Sandbox has public network access disabled and
+   decrypts only inside its ephemeral filesystem, re-checking the archive
+   digest immediately before decryption.
+6. Before untrusted Lean runs, all `.git` directories and workflow credentials
    are removed. Evaluation uses the same Comparator/landrun boundary and
    resource caps as normal intake. Plaintext, source-derived paths, and command
    output that could reproduce source are excluded from logs and artifacts.
-6. Short status requests each use a fresh protected-environment OIDC token and
+7. Short status requests each use a fresh protected-environment OIDC token and
    bind the same nonce, task, attempt, execution profile, measurement config,
    and image. Transient client disconnects and control-plane RPC failures do
    not stop or duplicate the fixed process.
-7. The image deletes encoded key/ciphertext inputs after decoding and removes
+8. The image deletes encoded key/ciphertext inputs after decoding and removes
    plaintext, extracted source, metrics, and evaluator output in an
    unconditional `finally` path. The job publishes only the reviewed
    result/audit projection.
-8. The terminal poll validates bounded process output and durably records the
+9. The terminal poll validates bounded process output and durably records the
    exact source-free HTTP status/body in a separate nonce-specific receipt
    Durable Object, bound to the nonce, task, attempt, execution profile,
    measurement configuration, and image. Receipt preparation is an atomic
@@ -148,7 +162,7 @@ boundary and is not sufficient for automated replay.
    and deleted after 24 hours. Terminal receipt retention starts when the
    terminal outcome is observed, beyond both the six-hour job bound and the
    seven-hour stale-runner recovery threshold.
-9. Failure to confirm destruction fails the request and is retried within the
+10. Failure to confirm destruction fails the request and is retried within the
    controller deadline. If the controller disappears, the process cleanup
    still removes private material and the five-minute idle timeout stops the
    disposable Sandbox; State recovery records the lost runner before any retry.

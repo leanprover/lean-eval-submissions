@@ -10,15 +10,15 @@ const PROFILE_DIGEST = "4".repeat(64);
 const MEASUREMENT_DIGEST = "5".repeat(64);
 const VM_IMAGE_DIGEST = `sha256:${"6".repeat(64)}`;
 
+const FIXTURE_ARCHIVE = "age-encryption.org/v1\nauthoritative-fixture";
+
 async function fixture(): Promise<Record<string, unknown>> {
-  const ciphertextBase64 = btoa("age-encryption.org/v1\nauthoritative-fixture");
-  const bytes = Uint8Array.from(atob(ciphertextBase64), (character) => character.charCodeAt(0));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(FIXTURE_ARCHIVE));
   const archiveDigest = [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const submissionId = "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584";
   return {
-    schema_version: 1,
+    schema_version: 3,
     runner_nonce: "1".repeat(64),
     request: {
       replay_task_id: `rt1_${"2".repeat(64)}`,
@@ -42,8 +42,10 @@ async function fixture(): Promise<Record<string, unknown>> {
       plaintext_tar_sha256: "3".repeat(64),
       plaintext_tar_size: 712,
     },
-    ciphertext_base64: ciphertextBase64,
-    plaintext_identity_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
+    archive_ciphertext_bytes: FIXTURE_ARCHIVE.length,
+    archive_part_count: 1,
+    key_material_type: "age-identity-v1",
+    plaintext_key_material_base64: btoa("AGE-SECRET-KEY-1FIXTURE"),
   };
 }
 
@@ -80,10 +82,8 @@ describe("authoritative replay boundary contract", () => {
     expect(validateReplayVerdict(zeroCounter, input).checker_outcome).toBe("accepted");
   });
 
-  it("accepts only the exact 16-byte historical file-key variant", async () => {
+  it("accepts only the exact 16-byte file-key variant for a v2 envelope", async () => {
     const body = await fixture();
-    body.schema_version = 2;
-    delete body.plaintext_identity_base64;
     body.key_material_type = "age-file-key-v1";
     body.plaintext_key_material_base64 = btoa("0123456789abcdef");
     const expectation = body.archive_expectation as Record<string, unknown>;
@@ -93,8 +93,9 @@ describe("authoritative replay boundary contract", () => {
       method: "POST",
       body: JSON.stringify(body),
     }), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST);
-    expect(parsed.schema_version).toBe(2);
-    if (parsed.schema_version !== 2) throw new Error("unexpected schema");
+    // The transport version stays 3; only the envelope version moved.
+    expect(parsed.schema_version).toBe(3);
+    expect(parsed.archive_expectation.schema_version).toBe(2);
     expect(atob(parsed.plaintext_key_material_base64)).toBe("0123456789abcdef");
     body.plaintext_key_material_base64 = btoa("short");
     await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {

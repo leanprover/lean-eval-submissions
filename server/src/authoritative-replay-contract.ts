@@ -4,16 +4,26 @@ const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
-// Replay carries the ciphertext base64-encoded inside one JSON body through a
-// Worker isolate, so its bound is set by that transport and is deliberately
-// independent of the 100 MB audit-archive cap (docs/audit-archive.md).
-const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
-const MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024;
+// The archive no longer travels in this body; it is uploaded in parts and
+// assembled in the Sandbox before this request is made. What remains is the
+// execution request and the key material, both small, so the body bound is now
+// a few hundred kilobytes rather than a few megabytes.
+const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_IDENTITY_BYTES = 4096;
 const MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
 const MAX_REPLAY_ATTEMPTS = 4;
+const MAX_ARCHIVE_PART_COUNT = 32;
 
-type AuthoritativeReplayCommon = {
+/**
+ * The transport version and the archive key-envelope version are separate.
+ * Envelope v1 wraps an age identity and v2 a 16-byte file key; the transport
+ * carries either, named explicitly, so widening the transport does not force a
+ * new envelope version on archives that were sealed years earlier.
+ */
+export type ReplayKeyMaterialType = "age-identity-v1" | "age-file-key-v1";
+
+export type AuthoritativeReplayInput = {
+  schema_version: 3;
   runner_nonce: string;
   request: Record<string, unknown>;
   archive_expectation: {
@@ -24,17 +34,11 @@ type AuthoritativeReplayCommon = {
     plaintext_tar_size: number;
     key_material_type?: "age-file-key-v1";
   };
-  ciphertext_base64: string;
-};
-
-export type AuthoritativeReplayInput = AuthoritativeReplayCommon & ({
-  schema_version: 1;
-  plaintext_identity_base64: string;
-} | {
-  schema_version: 2;
-  key_material_type: "age-file-key-v1";
+  archive_ciphertext_bytes: number;
+  archive_part_count: number;
+  key_material_type: ReplayKeyMaterialType;
   plaintext_key_material_base64: string;
-});
+};
 
 export type ReplayVerdict = {
   schema_version: 1;
@@ -107,12 +111,6 @@ function canonicalBase64(value: unknown, label: string, maximumBytes: number): s
   return encoded;
 }
 
-async function sha256Base64(encoded: string): Promise<string> {
-  const binary = atob(encoded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 function requireReviewedDigests(
   reviewedProfileDigest: string,
@@ -157,23 +155,19 @@ export async function readAuthoritativeReplayRequest(
     throw new AuthoritativeReplayContractError("request is not one UTF-8 JSON object");
   }
   const outer = object(parsed, "request");
-  if (outer.schema_version !== 1 && outer.schema_version !== 2) {
-    throw new AuthoritativeReplayContractError("request schema_version must be integer 1 or 2");
+  if (outer.schema_version !== 3) {
+    throw new AuthoritativeReplayContractError("request schema_version must be integer 3");
   }
-  const commonFields = [
+  exactFields(outer, [
     "schema_version",
     "runner_nonce",
     "request",
     "archive_expectation",
-    "ciphertext_base64",
-  ];
-  exactFields(
-    outer,
-    outer.schema_version === 1
-      ? [...commonFields, "plaintext_identity_base64"]
-      : [...commonFields, "key_material_type", "plaintext_key_material_base64"],
-    "request",
-  );
+    "archive_ciphertext_bytes",
+    "archive_part_count",
+    "key_material_type",
+    "plaintext_key_material_base64",
+  ], "request");
   const runnerNonce = text(outer.runner_nonce, "runner_nonce", 64);
   if (!DIGEST.test(runnerNonce)) throw new AuthoritativeReplayContractError("runner_nonce is invalid");
   const execution = object(outer.request, "execution request");
@@ -203,61 +197,75 @@ export async function readAuthoritativeReplayRequest(
     throw new AuthoritativeReplayContractError("archive identity is invalid");
   }
   const expectation = object(outer.archive_expectation, "archive expectation");
+  // The envelope version lives here and is independent of the transport version
+  // above: v1 sealed the archive to an age identity, v2 to a 16-byte file key.
+  const envelopeVersion = expectation.schema_version;
+  if (envelopeVersion !== 1 && envelopeVersion !== 2) {
+    throw new AuthoritativeReplayContractError("archive expectation schema_version must be integer 1 or 2");
+  }
   exactFields(expectation, [
     "schema_version",
     "submission_id",
     "archive_ciphertext_sha256",
     "plaintext_tar_sha256",
     "plaintext_tar_size",
-    ...(outer.schema_version === 2 ? ["key_material_type"] : []),
+    ...(envelopeVersion === 2 ? ["key_material_type"] : []),
   ], "archive expectation");
   const plaintextDigest = text(expectation.plaintext_tar_sha256, "plaintext digest", 64);
   const plaintextSize = safeInteger(expectation.plaintext_tar_size, "plaintext size", MAX_PLAINTEXT_BYTES);
   if (
-    expectation.schema_version !== outer.schema_version ||
     expectation.submission_id !== submissionId ||
     expectation.archive_ciphertext_sha256 !== archiveDigest ||
     !DIGEST.test(plaintextDigest)
   ) {
     throw new AuthoritativeReplayContractError("archive expectation does not match execution request");
   }
-  if (outer.schema_version === 2 && expectation.key_material_type !== "age-file-key-v1") {
+  if (envelopeVersion === 2 && expectation.key_material_type !== "age-file-key-v1") {
     throw new AuthoritativeReplayContractError("archive expectation key material type is invalid");
   }
-  const ciphertext = canonicalBase64(outer.ciphertext_base64, "ciphertext_base64", MAX_CIPHERTEXT_BYTES);
-  const keyMaterial = outer.schema_version === 1
-    ? canonicalBase64(outer.plaintext_identity_base64, "plaintext_identity_base64", MAX_IDENTITY_BYTES)
-    : canonicalBase64(outer.plaintext_key_material_base64, "plaintext_key_material_base64", 16);
-  if (outer.schema_version === 2 && outer.key_material_type !== "age-file-key-v1") {
+  const keyMaterialType = outer.key_material_type;
+  if (keyMaterialType !== "age-identity-v1" && keyMaterialType !== "age-file-key-v1") {
     throw new AuthoritativeReplayContractError("key material type is invalid");
   }
-  if (outer.schema_version === 2 && (keyMaterial.length !== 24 || !keyMaterial.endsWith("=="))) {
+  // The envelope decides which key form can open the archive, so a request that
+  // names the other one is refused rather than handed to the image to fail on.
+  if ((envelopeVersion === 2) !== (keyMaterialType === "age-file-key-v1")) {
+    throw new AuthoritativeReplayContractError("key material type does not match the archive envelope");
+  }
+  const keyMaterial = canonicalBase64(
+    outer.plaintext_key_material_base64,
+    "plaintext_key_material_base64",
+    keyMaterialType === "age-file-key-v1" ? 16 : MAX_IDENTITY_BYTES,
+  );
+  if (keyMaterialType === "age-file-key-v1" && (keyMaterial.length !== 24 || !keyMaterial.endsWith("=="))) {
     throw new AuthoritativeReplayContractError("age file key must contain exactly 16 bytes");
   }
-  if (await sha256Base64(ciphertext) !== archiveDigest) {
-    throw new AuthoritativeReplayContractError("ciphertext digest does not match execution request");
-  }
-  const common: AuthoritativeReplayCommon = {
+  // The archive itself is not in this request; these two fields only have to
+  // name the upload that already assembled it, and the upload record is the
+  // thing that must agree with them.
+  const archiveBytes = safeInteger(
+    outer.archive_ciphertext_bytes,
+    "archive_ciphertext_bytes",
+    Number.MAX_SAFE_INTEGER,
+  );
+  const partCount = safeInteger(outer.archive_part_count, "archive_part_count", MAX_ARCHIVE_PART_COUNT);
+  return {
+    schema_version: 3,
     runner_nonce: runnerNonce,
     request: execution,
     archive_expectation: {
-      schema_version: outer.schema_version,
+      schema_version: envelopeVersion,
       submission_id: submissionId,
       archive_ciphertext_sha256: archiveDigest,
       plaintext_tar_sha256: plaintextDigest,
       plaintext_tar_size: plaintextSize,
-      ...(outer.schema_version === 2 ? { key_material_type: "age-file-key-v1" as const } : {}),
+      ...(envelopeVersion === 2 ? { key_material_type: "age-file-key-v1" as const } : {}),
     },
-    ciphertext_base64: ciphertext,
+    archive_ciphertext_bytes: archiveBytes,
+    archive_part_count: partCount,
+    key_material_type: keyMaterialType,
+    plaintext_key_material_base64: keyMaterial,
   };
-  return outer.schema_version === 1
-    ? { schema_version: 1, ...common, plaintext_identity_base64: keyMaterial }
-    : {
-        schema_version: 2,
-        ...common,
-        key_material_type: "age-file-key-v1",
-        plaintext_key_material_base64: keyMaterial,
-      };
 }
 
 export async function readAuthoritativeReplayStatusRequest(

@@ -2,11 +2,10 @@ const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{
 const DIGEST = /^[0-9a-f]{64}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
-// Replay carries the ciphertext base64-encoded inside one JSON body through a
-// Worker isolate, so its bound is set by that transport and is deliberately
-// independent of the 100 MB audit-archive cap (docs/audit-archive.md).
-const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
-const MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024;
+// The archive is uploaded in parts and assembled in the Sandbox before this
+// request is made, so what remains here is identity plus the age identity file.
+const MAX_REQUEST_BYTES = 256 * 1024;
+const MAX_ARCHIVE_PART_COUNT = 32;
 const MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
 const MAX_IDENTITY_BYTES = 4096;
 
@@ -18,7 +17,8 @@ export type ReplayArchiveAcceptanceRequest = {
   archive_ciphertext_sha256: string;
   plaintext_tar_sha256: string;
   plaintext_tar_size: number;
-  ciphertext_base64: string;
+  archive_ciphertext_bytes: number;
+  archive_part_count: number;
   plaintext_identity_base64: string;
 };
 
@@ -76,12 +76,6 @@ function canonicalBase64(value: unknown, label: string, maximumBytes: number): s
   return encoded;
 }
 
-async function sha256Base64(encoded: string): Promise<string> {
-  const binary = atob(encoded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 export async function readArchiveAcceptanceRequest(
   request: Request,
@@ -109,7 +103,8 @@ export async function readArchiveAcceptanceRequest(
     "archive_ciphertext_sha256",
     "plaintext_tar_sha256",
     "plaintext_tar_size",
-    "ciphertext_base64",
+    "archive_ciphertext_bytes",
+    "archive_part_count",
     "plaintext_identity_base64",
   ], "request");
   if (value.schema_version !== 1) throw new ReplayArchiveContractError("schema_version must be integer 1");
@@ -125,15 +120,19 @@ export async function readArchiveAcceptanceRequest(
     throw new ReplayArchiveContractError("digest is not canonical");
   }
   const plaintextSize = safeInteger(value.plaintext_tar_size, "plaintext_tar_size", MAX_PLAINTEXT_BYTES);
-  const ciphertext = canonicalBase64(value.ciphertext_base64, "ciphertext_base64", MAX_CIPHERTEXT_BYTES);
   const identity = canonicalBase64(
     value.plaintext_identity_base64,
     "plaintext_identity_base64",
     MAX_IDENTITY_BYTES,
   );
-  if (await sha256Base64(ciphertext) !== archiveDigest) {
-    throw new ReplayArchiveContractError("ciphertext digest does not match request");
-  }
+  // These name the upload that already assembled the archive; the bytes
+  // themselves are verified in the Sandbox, not here.
+  const archiveBytes = safeInteger(
+    value.archive_ciphertext_bytes,
+    "archive_ciphertext_bytes",
+    Number.MAX_SAFE_INTEGER,
+  );
+  const partCount = safeInteger(value.archive_part_count, "archive_part_count", MAX_ARCHIVE_PART_COUNT);
   return {
     schema_version: 1,
     request_id: requestId,
@@ -142,7 +141,8 @@ export async function readArchiveAcceptanceRequest(
     archive_ciphertext_sha256: archiveDigest,
     plaintext_tar_sha256: plaintextDigest,
     plaintext_tar_size: plaintextSize,
-    ciphertext_base64: ciphertext,
+    archive_ciphertext_bytes: archiveBytes,
+    archive_part_count: partCount,
     plaintext_identity_base64: identity,
   };
 }

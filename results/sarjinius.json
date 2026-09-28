@@ -1,0 +1,659 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-19T00:10:48Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b6d1-fff9-709e-916f-02146207cc18"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_1a33fec6949c545e4b6f147a53203e8e8855ded7cfbd486246d04fea165d4cdd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "79af4788ee793450a7b9f4219b00e5b97860efa3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-19T02:32:59Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0b746-e5c1-76c0-a0d9-b935fea9b9a5"
+      },
+      "problem_id": "hadwiger",
+      "production_metadata": {},
+      "result_id": "r2_1f1e950375f0d425e9db2c4da8a6bab2be942d027910fc4a54d3b5da4851ea2e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4edc1cfcfa9a88954745422c851c1d41d94cca36",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T00:43:40Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c138-4ec1-77e9-afb7-bab1651f986b"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {},
+      "result_id": "r2_d9a413e127674614fdb476ca23c8aba71c80a4dd83e5e44777d9f98f737b3610",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T08:12:26Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c2d8-1ff9-74d3-b045-7a84b6cddae8"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {},
+      "result_id": "r2_80497cf099aa1ea28c68c0ebc20832f454fad27d883bea85bf4fbbd8e8e6337f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2279aeba84569fe715306c0c3a77ef56cde4e6a3",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T11:34:59Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c38a-d211-76ef-a7ef-283cf6b583aa"
+      },
+      "problem_id": "hopf_rinow",
+      "production_metadata": {},
+      "result_id": "r2_81d86fd3e785f4a3ceb9ea7a3593f15331c8b1b3026864276c61de3bf79b34bb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "218b531d1d4f8b86b347dd7b1599d7ab378d37a4",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T13:42:44Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c405-ab49-74f2-8199-8b18c398460a"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {},
+      "result_id": "r2_d5abbb91b8ba500ada342ac12e8ccb578e08f0186bd1e169a536959f699cc82e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "36843f1aabd3d4fcf9dbb999dfdb96112ddc3039",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T17:39:47Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c4df-03e9-724d-8b6a-9f63d15df5ba"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {},
+      "result_id": "r2_44358056ddef23edd74766ba1610ece6ffcaf4f606cf2633f811c4281f8ecffd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b82c52110c9ac6ce87478819614f4544fc64e1d1",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-21T19:55:55Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c553-7c51-762c-9a8b-6b0c7c2c466a"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {},
+      "result_id": "r2_e6e03c0c1508511131fd19487e4af25502dadc3c06151816076db6fede16c02d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fab9e1323a65930493065d3d2244c75b225c18bc",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T05:12:28Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c756-5519-7fa5-9e0a-2df9a1a5a4cd"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {},
+      "result_id": "r2_6f2ab2960456e2ee8ded216b3b72cb87ee5524dcf30dd68adaea0f8385f8ef3e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4164d95d80d04570f2e0c85baa1e87db5b0edbef",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T09:06:42Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c823-4dc1-7a44-a2d3-06b5ef99de15"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {},
+      "result_id": "r2_57985f498a5b9e27dc187ad4cbbf01f3110f75f35f68c18011841d3ad74e92b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1a35d2b6804ccc40b507483e6fea6070171bfe64",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T10:51:52Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c88b-3b39-71ac-8124-816747fe3ae9"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_23c7182118646bfa3e75eef1895121b61b73ea51872339738986c98c1ea6c86f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f404be85973799c4208176d20f4b6aef19a5bdc9",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T12:08:54Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c8d2-a479-7bba-a9b6-cb6b5bfc47b9"
+      },
+      "problem_id": "annals_supremum_of_selector_processes",
+      "production_metadata": {},
+      "result_id": "r2_943e8d0dcd8c11c98b0e92d44e7d6c04b2658638a27854a79460378f86d932ae",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f8a86e86b2b8c22340291e92429712566d9f5355",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T15:50:58Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c99f-f6f9-76b5-aace-512eecaee127"
+      },
+      "problem_id": "annals_pseudorandom_grassmann",
+      "production_metadata": {},
+      "result_id": "r2_cfb3ecf639c641a31595905bd0d61206ddccb3a4e16509b4351a1e2eb22cd271",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "68f3f1a81f836de54abee36014bace71537efa1c",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T16:56:32Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c9db-8ce1-787c-9de6-42f16d63bc22"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {},
+      "result_id": "r2_c4b9e2754e9c88ababfaf21cd824d9169cd6593298acdecce0ff033f0140bede",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b2d9f1f6277db369ac137398c4f9436446b6dff",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T17:16:31Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0c9ec-9c11-7d31-838a-145d5a2936f0"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {},
+      "result_id": "r2_8c66c4bc323674c265356879dda7f15fd6f141bdb9f9ab44eb01c7287a1eec73",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b2d9f1f6277db369ac137398c4f9436446b6dff",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T19:12:56Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0ca63-4ec9-7822-8957-dba16ec75fc4"
+      },
+      "problem_id": "annals_rademacher_enflo_type",
+      "production_metadata": {},
+      "result_id": "r2_76d58112df64b56483ddc82aec5f1b2bd65cf13105eaa7ad948cdbb28e4fe3dd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4e2b989f679bfb00afa4019ab25611b4d0dd1882",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-22T20:33:42Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0caa4-3fc9-795e-8cba-5ddada881647"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {},
+      "result_id": "r2_039939217e1fa89d6f54d582a9cce8aec27dc49d58bb924711f09cf6dd3f0b97",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a633da4075d49b01f8e8bc245bc8ba1047621090",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-23T19:10:42Z",
+      "benchmark_commit": "e8eb893903723ec730c84e55b8eceb75916cf2f3",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0cf73-1589-7a8a-b6ac-281bd53dd4ac"
+      },
+      "problem_id": "annals_ulam",
+      "production_metadata": {},
+      "result_id": "r2_c1d21a5922c29ed60fa33c38b084a2a991cb6967c2db091ee90a8dfa27084ac9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4536bb8a8796d12635f390b95c01ae119f6f7096",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-24T08:25:33Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d24a-5169-79d7-a848-9713a2eac781"
+      },
+      "problem_id": "annals_hessian_estimates",
+      "production_metadata": {},
+      "result_id": "r2_f16826b01a78551e692229076716163a2c71bb682f0c43061078764dd95e118f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f91911f87cbeb242bd06416635f7bf14f3a51330",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-24T20:23:09Z",
+      "benchmark_commit": "f9c4984460bb48a68e6a0741ac8a15de9f471565",
+      "declared_model": "Midas",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0d4ca-4589-7bd3-9c4c-658a73278b12"
+      },
+      "problem_id": "annals_reverse_minkowski",
+      "production_metadata": {},
+      "result_id": "r2_9aa9afafac8ec22fed427959e143e022f3bec738c16292f4c88f4ed60acc0c08",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d302ddb6b34fce237129cb2a53cb8af0af9ca7dc",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d523aaae99269b927cb67c1ddec987ecd62440abad2306f8a30ebab1b04a49b1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_37247c5f40123385ad2d9de982deecfa84dcd4d2d3b2c2e1b8dc270d80064052",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0c1aadb7b701b79c2e1cf4643ab5bd665ed13ba06c397aed3836e1ddd6240f78",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_acb8f7b1febfe9cc8e0cc101cdc49036da05a529b2d2d34d6815cb3fa7c6e64d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "green_tao",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_25415c378c3a0877e63366d493bbe84c11829b86c536225809375cb3b73631d7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_normal_form",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4cd46ec9036688dadd0a5596add77c61ea760628c3c3b9e2b747496e454f331b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "morley_theorem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_fd62119177d148b4ffb9aa8e8d2b634e492b73ed4d7d8f28c324368b7aa9cee6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ad445330a25b5834d9457ff8ac870273ede23b3f31ac89d0579432c323d51c3f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "normal_spectral_theorem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_fd6266834b899b4cf46f9fc45b991773fe28da91c91817b714f2e6c6b45e5ee3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ea8b22c293acbb486f6d50d71ac4862e140fdea79775997c75fdbec0fdf51e31",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "rising_sun_lemma",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_06f0f571f12fe38fcca4d28dff00bb3490d4595466da1bfd956de36b5df2e168",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T20:24:03Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1829,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8ccfdcd29d382a085eaf520cccf0864ed136ab2770397d0c92e1d6826c9e66aa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87b09d3be013f0aad646f54721df147ee40ade33",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-27T22:08:53Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1830,
+        "kind": "issue"
+      },
+      "problem_id": "szemeredi",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c1916a4d481f9d605453575f4eb943367b9e6aad272c778558fc580500d429b0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d4b3b2141ff8acfdb7e3f414101ca31d9f1fb69b",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "sarjinius"
+}

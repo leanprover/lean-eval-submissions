@@ -50,7 +50,6 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         self.assertEqual(
             report["observations"]["production"]["capabilities"],
             {
-                "historical_public_replay_enabled": False,
                 "intake_enabled": True,
                 "legacy_result_owner_api_enabled": True,
                 "model_identity_consolidation_api_enabled": False,
@@ -108,7 +107,7 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         responses = self.responses()
         endpoints = monitor.tracked_endpoints(self.intake, self.replay)
         responses[endpoints["production"]["replay"]][
-            "historical_public_replay_enabled"
+            "replay_enabled"
         ] = True
         with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
             monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])

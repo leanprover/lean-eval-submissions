@@ -309,7 +309,8 @@ def _share_packages(
     share could not be set up.
 
     Assumes the benchmark and its generated workspaces stay in lock-step on
-    every dependency rev; no rev assertion is performed.
+    every dependency rev; no rev assertion is performed. A shared workspace
+    is pinned by `_install_root_manifest`, not by `lake update`.
     """
     resolved_source = packages_source.resolve()
     if not resolved_source.is_dir():
@@ -325,6 +326,157 @@ def _share_packages(
             shutil.rmtree(target_packages)
     target_packages.symlink_to(resolved_source)
     return None
+
+
+def _normalize_git_url(url: str) -> str:
+    url = url.rstrip("/")
+    return url[: -len(".git")] if url.endswith(".git") else url
+
+
+def _manifest_package_name(name: str) -> str:
+    return name.removeprefix("\u00ab").removesuffix("\u00bb")
+
+
+def _check_toolchain_matches_root(
+    target: pathlib.Path,
+    benchmark_root: pathlib.Path,
+) -> None:
+    """Require the workspace to use the benchmark root's Lean toolchain.
+
+    Every trace in the shared package tree was produced with the root's
+    toolchain; a workspace on another toolchain would recompile all of its
+    dependencies (Mathlib, TauCeti, ...) inside comparator's sandbox.
+    """
+    toolchains = {}
+    for label, path in (
+        ("workspace", target / "lean-toolchain"),
+        ("benchmark root", benchmark_root / "lean-toolchain"),
+    ):
+        if path.is_symlink() or not path.is_file():
+            raise EvaluateError(f"The {label} lean-toolchain is unavailable: {path}")
+        toolchains[label] = path.read_text(encoding="utf-8").strip()
+    if toolchains["workspace"] != toolchains["benchmark root"]:
+        raise EvaluateError(
+            f"{target / 'lean-toolchain'} pins {toolchains['workspace']!r} but the "
+            f"benchmark root pins {toolchains['benchmark root']!r}, so the shared "
+            "packages were built with a different toolchain. Regenerate the "
+            "benchmark's generated workspaces so they match the root pins."
+        )
+
+
+def _check_requires_match_manifest(
+    lakefile: pathlib.Path,
+    root_manifest: pathlib.Path,
+) -> None:
+    """Require every `[[require]]` of a workspace to be pinned identically
+    (package name, git URL up to a trailing `.git`, rev and subDir) by the
+    benchmark root manifest, so installing that manifest changes nothing
+    the workspace asked for."""
+    try:
+        config = tomllib.loads(lakefile.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise EvaluateError(f"Cannot read workspace config {lakefile}: {exc}") from exc
+    try:
+        manifest = json.loads(root_manifest.read_text(encoding="utf-8"))
+        packages = manifest["packages"]
+        pinned = {
+            _manifest_package_name(package["name"]): package for package in packages
+        }
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise EvaluateError(
+            f"Cannot read benchmark root manifest {root_manifest}: {exc}"
+        ) from exc
+    requires = config.get("require", [])
+    if not isinstance(requires, list):
+        raise EvaluateError(f"{lakefile}: `require` must be an array of tables")
+    for require in requires:
+        if not isinstance(require, dict) or not set(require) <= {
+            "name", "git", "rev", "subDir"
+        }:
+            raise EvaluateError(
+                f"{lakefile}: unsupported require {require!r}; only git requires "
+                "with a name, git URL and rev can be pinned by the root manifest"
+            )
+        name, git, rev = require.get("name"), require.get("git"), require.get("rev")
+        if not all(isinstance(value, str) and value for value in (name, git, rev)):
+            raise EvaluateError(
+                f"{lakefile}: require {require!r} must set name, git and rev"
+            )
+        package = pinned.get(name)
+        if package is None:
+            raise EvaluateError(
+                f"{lakefile} requires {name} at {rev}, but the benchmark root "
+                f"manifest {root_manifest} does not pin {name}"
+            )
+        mismatches = []
+        if package.get("type") != "git":
+            mismatches.append(f"type {package.get('type')!r} (expected 'git')")
+        manifest_url = package.get("url")
+        if not isinstance(manifest_url, str) or (
+            _normalize_git_url(manifest_url) != _normalize_git_url(git)
+        ):
+            mismatches.append(f"git URL {manifest_url!r} (workspace: {git!r})")
+        if package.get("rev") != rev:
+            mismatches.append(f"rev {package.get('rev')!r} (workspace: {rev!r})")
+        if package.get("subDir") != require.get("subDir"):
+            mismatches.append(
+                f"subDir {package.get('subDir')!r} "
+                f"(workspace: {require.get('subDir')!r})"
+            )
+        if mismatches:
+            raise EvaluateError(
+                f"{lakefile} requires {name} differently from the benchmark "
+                f"root manifest {root_manifest}: manifest has "
+                + "; ".join(mismatches)
+                + ". Regenerate the benchmark's generated workspaces so they "
+                "match the root pins."
+            )
+
+
+def _install_root_manifest(
+    target: pathlib.Path,
+    root_manifest: pathlib.Path | None,
+) -> None:
+    """Pin a shared-packages workspace with the benchmark's root manifest.
+
+    A workspace whose `.lake/packages` is a symlink to the benchmark root's
+    package directory must not run `lake update`: resolution can pick
+    different revisions for transitive dependencies than the root pins and
+    check them out inside the shared directory, corrupting it for every
+    other workspace and for the root itself. The root `lake-manifest.json`
+    pins every package any generated workspace requires (Mathlib, its
+    transitive dependencies, and extra packages such as TauCeti), and Lake
+    ignores its entries for packages the workspace does not require.
+
+    `lake exe cache get` is not run either: the shared packages were
+    populated at the benchmark root before evaluation, including Mathlib's
+    decompressed build cache, which lives inside the shared directory.
+
+    Lake resolves a require whose rev differs from the manifest by warning
+    and using the manifest's rev, so the copy would silently override the
+    workspace's own pins. `_check_requires_match_manifest` refuses that
+    before anything is evaluated, as `_check_toolchain_matches_root` does
+    for a workspace on a different Lean toolchain than the shared packages.
+
+    SECURITY: the manifest is read only from the trusted benchmark
+    checkout. Submitter content is never consulted; `overlay_match` copies
+    only `Submission.lean` and `Submission/**/*.lean` from it, so any
+    `lake-manifest.json` a submission carries is ignored.
+    """
+    if root_manifest is None:
+        raise EvaluateError(
+            "Shared packages require the benchmark root lake-manifest.json"
+        )
+    if root_manifest.is_symlink() or not root_manifest.is_file():
+        raise EvaluateError(
+            f"Benchmark root manifest is unavailable: {root_manifest}"
+        )
+    _check_toolchain_matches_root(target, root_manifest.parent)
+    _check_requires_match_manifest(target / "lakefile.toml", root_manifest)
+    destination = target / "lake-manifest.json"
+    if destination.is_symlink() or destination.exists():
+        destination.unlink()
+    shutil.copyfile(root_manifest, destination)
 
 
 def _configure_measurement(
@@ -370,6 +522,10 @@ def _prime_workspace(target: pathlib.Path) -> None:
     `lake-manifest.json` writes lake update performs. Neither command
     elaborates project source files, so neither violates comparator's
     trust model.
+
+    This is only for workspaces with their own package directory. A
+    workspace sharing the benchmark root's packages is primed by
+    `_install_root_manifest` instead.
 
     SECURITY: do NOT add `lake build <target>` here for any target
     whose transitive imports include `Submission` (the user-controlled
@@ -451,12 +607,17 @@ def overlay_match(
     generated_root: pathlib.Path,
     workspaces_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
+    root_manifest: pathlib.Path | None = None,
     measurement_command: list[str] | None = None,
     authoritative_checker: str | None = None,
     prime: bool = True,
     require_preprimed: bool = False,
 ) -> dict:
     """Copy generated/<id>/ to workspaces/<id>/, overlay submitter content.
+
+    When `prime` is set and `shared_packages` was symlinked successfully,
+    the workspace gets a copy of the trusted `root_manifest` instead of
+    running `lake update` + `lake exe cache get`.
 
     Returns a record with fields:
       - problem_id
@@ -540,11 +701,16 @@ def overlay_match(
             "shared_packages": shared_state,
         }
 
-    # 4. Prime the workspace with `lake update` + `lake exe cache get`
-    #    so comparator's sandboxed lake build does not try to clone
-    #    packages into paths landrun will deny.
+    # 4. Prime the workspace so comparator's sandboxed lake build does not
+    #    try to clone packages into paths landrun will deny: with shared
+    #    packages, copy the trusted root manifest (never `lake update`,
+    #    which could rewrite the shared tree); otherwise run `lake update`
+    #    + `lake exe cache get` into the workspace's own package directory.
     if prime:
-        _prime_workspace(target)
+        if shared_state is True:
+            _install_root_manifest(target, root_manifest)
+        else:
+            _prime_workspace(target)
     elif require_preprimed:
         _require_preprimed_workspace(target)
 
@@ -736,7 +902,8 @@ def evaluate_submission(
     `shared_packages` optionally points at a directory containing an
     already-populated `.lake/packages/...` layout (e.g. the benchmark
     repo's `.lake/packages`) that per-workspace builds can reuse instead of
-    re-unpacking Mathlib for each.
+    re-unpacking Mathlib for each. Such workspaces are pinned with a copy of
+    `repo_root/lake-manifest.json` rather than by running `lake update`.
 
     `workspace_parent` optionally selects an existing directory inside
     `repo_root` for the temporary per-submission workspace. This supports a
@@ -798,11 +965,12 @@ def evaluate_submission(
                 generated_root=generated_root,
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
+                root_manifest=repo_root / "lake-manifest.json",
                 measurement_command=measurement_command,
                 authoritative_checker=authoritative_checker,
                 # If a fake run-eval runner is injected (tests), the
                 # synthetic pristine workspaces don't carry a real lakefile
-                # so skip the real `lake update` + `lake exe cache get`.
+                # so skip priming them.
                 prime=run_eval_runner is None and not preprimed_workspaces,
                 require_preprimed=preprimed_workspaces,
             )
@@ -907,8 +1075,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Directory containing an already-populated .lake/packages tree "
             "that per-workspace builds should reuse via symlink. Typically "
-            "<repo-root>/.lake/packages. Assumes every generated workspace "
-            "stays in lock-step with the benchmark on dep revs."
+            "<repo-root>/.lake/packages, already primed with "
+            "`lake exe cache get`. Each shared workspace gets a copy of "
+            "<repo-root>/lake-manifest.json instead of running `lake update`."
         ),
     )
     parser.add_argument(
