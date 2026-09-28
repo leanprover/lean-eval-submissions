@@ -1180,6 +1180,28 @@
         "ref": "5a81fcbb0a85f54dff8f1cc3a6dc36686ef2fe4d",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-28T04:28:14Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "issue_number": 1837,
+        "kind": "issue"
+      },
+      "problem_id": "einsiedler_katok_lindenstrauss",
+      "production_metadata": {
+        "solution_publication_date": "2026-11-12",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_05912709909a0ea9dafa66c2465e4a87985d9ff9e15321f095ba271b5df50e20",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0f32c883e0a0cd53a3cc5720dd89e0b73cf3d77d",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
