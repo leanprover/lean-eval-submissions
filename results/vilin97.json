@@ -7062,6 +7062,27 @@
         "ref": "02b4e39e0389ae94aba1ba2cab2d801692c7d2d2",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-28T06:25:19Z",
+      "benchmark_commit": "8b9508962271720ec9645794c3caa05bbebbb36e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1838,
+        "kind": "issue"
+      },
+      "problem_id": "shafarevich_relation_rank_bound",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_6b7ca961a4835fa8a5d96b99feafacf096e4895dbaf0510cd33591e1ff114460",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7bfeeeb1bb41b39782e5acb6fa438afed43f2c54",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
