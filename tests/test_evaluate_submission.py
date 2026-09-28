@@ -303,9 +303,12 @@ class OverlayMatchTests(unittest.TestCase):
             (workspace / "lake-manifest.json").write_text("{}")
             self.assertIsNone(ev._share_packages(workspace, shared))
             ev._require_preprimed_workspace(workspace)
-            packages = json.loads(overrides.read_text())["packages"]
-            self.assertEqual(packages[0]["dir"], str(workspace / ".lake/packages/lean-pool"))
-            self.assertEqual(packages[1]["dir"], str(shared / "mathlib"))
+            packages = {
+                ev._manifest_package_name(package["name"]): package
+                for package in json.loads(overrides.read_text())["packages"]
+            }
+            self.assertEqual(packages["lean-pool"]["dir"], str(workspace / ".lake/packages/lean-pool"))
+            self.assertEqual(packages["mathlib"]["dir"], str(shared / "mathlib"))
 
     def test_preprimed_workspace_requires_manifest_overrides_and_packages(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

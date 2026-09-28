@@ -337,23 +337,33 @@ def _share_packages(
                 continue
             destination.mkdir()
             for entry in package.iterdir():
-                if entry.name == ".lake":
+                if entry.name in {".lake", ".git"}:
                     continue
                 (destination / entry.name).symlink_to(entry)
             # Do not share build outputs writable by another submission.
             (destination / ".lake").mkdir()
         overrides = target_lake / "package-overrides.json"
-        if overrides.is_file():
-            # Replay images use path overrides after stripping Git metadata.
-            # Keep Lean Pool on the private package path there as well.
-            try:
+        # A trusted local override avoids Git treating the source symlinks as
+        # modified checkout files, or trying to clone into the private cache.
+        # Replay images already have overrides for the other dependencies.
+        try:
+            if overrides.is_file():
                 config = json.loads(overrides.read_text(encoding="utf-8"))
-                for package in config["packages"]:
-                    if _manifest_package_name(package["name"]) == "lean-pool":
-                        package["dir"] = str(target_packages / "lean-pool")
-                overrides.write_text(json.dumps(config) + "\n", encoding="utf-8")
-            except (OSError, ValueError, KeyError, TypeError) as exc:
-                raise EvaluateError(f"Cannot configure private Lean Pool override: {exc}") from exc
+            else:
+                config = {"version": "1.2.0", "packages": []}
+            config["packages"] = [
+                package for package in config["packages"]
+                if _manifest_package_name(package["name"]) != "lean-pool"
+            ]
+            config["packages"].append({
+                "type": "path", "name": "«lean-pool»",
+                "dir": str(target_packages / "lean-pool"),
+                "manifestFile": "lake-manifest.json", "configFile": "lakefile.toml",
+                "inherited": False,
+            })
+            overrides.write_text(json.dumps(config) + "\n", encoding="utf-8")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise EvaluateError(f"Cannot configure private Lean Pool override: {exc}") from exc
     else:
         target_packages.symlink_to(resolved_source)
     return None
