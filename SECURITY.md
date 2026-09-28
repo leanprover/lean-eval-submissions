@@ -170,6 +170,16 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 8. Runs `evaluate_submission.py`, which overlays the submission onto a
    pristine `generated/<id>/` workspace and invokes comparator.
 
+When Lean Pool is present, workspace setup shares its pinned source through
+read-only symlinks and creates a private `.lake` directory under the
+workspace's `.lake/packages/lean-pool/`. Comparator builds only imported
+modules there, inside landrun. Other dependency packages stay shared and
+read-only. Lean Pool's build outputs are neither reused between submissions
+nor written back to the benchmark checkout. Replay path overrides also
+point Lean Pool at this private package directory.
+Compilation of the imported Lean Pool modules counts toward that submission's
+evaluation time and replay build measurements.
+
 The `record` job then writes the result. It uses **two checkouts of this
 repo**: a read-only `code/` checkout (pinned to the workflow SHA, supplies
 `update_leaderboard.py`) and a writable `results-store/` checkout. The

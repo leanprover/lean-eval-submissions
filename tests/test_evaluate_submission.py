@@ -262,6 +262,54 @@ class DetectMatchesTests(unittest.TestCase):
 
 
 class OverlayMatchTests(unittest.TestCase):
+    def test_shared_lean_pool_sources_have_private_build_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw).resolve()
+            shared = root / "shared"
+            (shared / "mathlib").mkdir(parents=True)
+            pool = shared / "lean-pool"
+            (pool / "LeanPool").mkdir(parents=True)
+            (pool / "LeanPool" / "Basic.lean").write_text('def hello := "world"\n')
+            (pool / ".lake").mkdir()
+            (pool / ".lake" / "old-cache").write_text("shared")
+            for name in ("one", "two"):
+                workspace = root / name
+                (workspace / ".lake").mkdir(parents=True)
+                (workspace / ".lake" / "packages").symlink_to(shared)
+                self.assertIsNone(ev._share_packages(workspace, shared))
+                packages = workspace / ".lake" / "packages"
+                self.assertFalse(packages.is_symlink())
+                self.assertEqual((packages / "mathlib").resolve(), shared / "mathlib")
+                self.assertEqual((packages / "lean-pool" / "LeanPool").resolve(), pool / "LeanPool")
+                self.assertFalse((packages / "lean-pool" / ".lake").is_symlink())
+                self.assertFalse((packages / "lean-pool" / ".lake" / "old-cache").exists())
+            private_cache = root / "one/.lake/packages/lean-pool/.lake/proof.olean"
+            private_cache.write_text("private")
+            self.assertFalse((root / "two/.lake/packages/lean-pool/.lake/proof.olean").exists())
+            self.assertEqual((pool / ".lake" / "old-cache").read_text(), "shared")
+
+    def test_preprimed_lean_pool_override_uses_private_package(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw).resolve()
+            shared = root / "shared"
+            (shared / "lean-pool").mkdir(parents=True)
+            workspace = root / "workspace"
+            (workspace / ".lake").mkdir(parents=True)
+            overrides = workspace / ".lake" / "package-overrides.json"
+            overrides.write_text(json.dumps({"packages": [
+                {"name": "«lean-pool»", "type": "path", "dir": str(shared / "lean-pool")},
+                {"name": "mathlib", "type": "path", "dir": str(shared / "mathlib")},
+            ]}))
+            (workspace / "lake-manifest.json").write_text("{}")
+            self.assertIsNone(ev._share_packages(workspace, shared))
+            ev._require_preprimed_workspace(workspace)
+            packages = {
+                ev._manifest_package_name(package["name"]): package
+                for package in json.loads(overrides.read_text())["packages"]
+            }
+            self.assertEqual(packages["lean-pool"]["dir"], str(workspace / ".lake/packages/lean-pool"))
+            self.assertEqual(packages["mathlib"]["dir"], str(shared / "mathlib"))
+
     def test_preprimed_workspace_requires_manifest_overrides_and_packages(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = pathlib.Path(raw)

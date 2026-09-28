@@ -1,6 +1,5 @@
-# CI for the submission pipeline. There is no Lean build here. The benchmark
-# and comparator/sandbox integration live in leanprover/lean-eval and are
-# exercised by that repo's CI. See SECURITY.md.
+# CI for the submission pipeline, including private dependency build outputs
+# against a small Lean fixture inside the comparator-style sandbox.
 name: CI
 
 on:
@@ -66,6 +65,47 @@ jobs:
         # Discovery keeps every ordinary tests/test_*.py module in CI without
         # a second hand-maintained inventory that can silently become stale.
         run: python -m unittest discover -v -s tests -p 'test_*.py'
+
+  solution-dependency-sandbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Create toolchain setup package
+        run: |
+          mkdir -p .ci/solution-dependencies
+          printf '%s\n' 'leanprover/lean4:v4.34.0' > .ci/solution-dependencies/lean-toolchain
+          printf '%s\n' 'name = "solution-dependency-test"' > .ci/solution-dependencies/lakefile.toml
+          printf '%s\n' '{"version":"1.2.0","packagesDir":".lake/packages","packages":[],"name":"solution-dependency-test","lakeDir":".lake"}' > .ci/solution-dependencies/lake-manifest.json
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: .ci/solution-dependencies
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-mathlib-cache: false
+          use-github-cache: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.12'
+          cache: false
+
+      - name: Install pinned sandbox
+        run: |
+          go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Test sandboxed imports with cold shared dependencies
+        env:
+          ELAN_TOOLCHAIN: leanprover/lean4:v4.34.0
+          LEAN_EVAL_SANDBOX_TEST: '1'
+        run: python3 -m unittest discover -v -s tests -p test_solution_dependency_sandbox.py
 
   artifact-upload:
     runs-on: ubuntu-24.04
