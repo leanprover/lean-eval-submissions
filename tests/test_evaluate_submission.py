@@ -264,7 +264,7 @@ class DetectMatchesTests(unittest.TestCase):
 class OverlayMatchTests(unittest.TestCase):
     def test_shared_lean_pool_sources_have_private_build_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
-            root = pathlib.Path(raw)
+            root = pathlib.Path(raw).resolve()
             shared = root / "shared"
             (shared / "mathlib").mkdir(parents=True)
             pool = shared / "lean-pool"
@@ -290,7 +290,7 @@ class OverlayMatchTests(unittest.TestCase):
 
     def test_preprimed_lean_pool_override_uses_private_package(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
-            root = pathlib.Path(raw)
+            root = pathlib.Path(raw).resolve()
             shared = root / "shared"
             (shared / "lean-pool").mkdir(parents=True)
             workspace = root / "workspace"

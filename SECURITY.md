@@ -177,6 +177,8 @@ modules there, inside landrun. Other dependency packages stay shared and
 read-only. Lean Pool's build outputs are neither reused between submissions
 nor written back to the benchmark checkout. Replay path overrides also
 point Lean Pool at this private package directory.
+Compilation of the imported Lean Pool modules counts toward that submission's
+evaluation time and replay build measurements.
 
 The `record` job then writes the result. It uses **two checkouts of this
 repo**: a read-only `code/` checkout (pinned to the workflow SHA, supplies

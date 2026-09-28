@@ -98,7 +98,8 @@ class SolutionDependencySandboxTest(unittest.TestCase):
             private_pool = workspace / ".lake/packages/lean-pool"
             shared_pool = benchmark / ".lake/packages/lean-pool"
             self.assertFalse((private_pool / ".lake").is_symlink())
-            self._run(sandbox, workspace)
+            built = self._run(sandbox, workspace)
+            self.assertNotIn("warning:", built.stdout + built.stderr)
             self.assertTrue((private_pool / ".lake/build/lib/lean/LeanPool/Extra.olean").is_file())
             self.assertFalse((shared_pool / ".lake/build/lib/lean/LeanPool/Extra.olean").exists())
             self.assertFalse((private_pool / ".lake/build/lib/lean/LeanPool/Basic.olean").exists())
