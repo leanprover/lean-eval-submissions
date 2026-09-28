@@ -304,9 +304,13 @@ def _share_packages(
     target: pathlib.Path,
     packages_source: pathlib.Path,
 ) -> str | None:
-    """Symlink target/.lake/packages → packages_source to avoid duplicating
-    unpacked Mathlib. Returns None on success, or a reason string if the
-    share could not be set up.
+    """Share cached dependencies, with private build outputs for Lean Pool.
+
+    Lean Pool is solution-only and may have no cached build outputs. Its
+    pinned source is shared through read-only symlinks, but its `.lake`
+    directory stays inside the submission workspace so comparator can build
+    the imported modules inside its sandbox. Other packages remain shared
+    and read-only. Returns None on success, or a reason string on failure.
 
     Assumes the benchmark and its generated workspaces stay in lock-step on
     every dependency rev; no rev assertion is performed. A shared workspace
@@ -324,7 +328,34 @@ def _share_packages(
             target_packages.unlink()
         else:
             shutil.rmtree(target_packages)
-    target_packages.symlink_to(resolved_source)
+    if (resolved_source / "lean-pool").is_dir():
+        target_packages.mkdir()
+        for package in resolved_source.iterdir():
+            destination = target_packages / package.name
+            if package.name != "lean-pool":
+                destination.symlink_to(package)
+                continue
+            destination.mkdir()
+            for entry in package.iterdir():
+                if entry.name == ".lake":
+                    continue
+                (destination / entry.name).symlink_to(entry)
+            # Do not share build outputs writable by another submission.
+            (destination / ".lake").mkdir()
+        overrides = target_lake / "package-overrides.json"
+        if overrides.is_file():
+            # Replay images use path overrides after stripping Git metadata.
+            # Keep Lean Pool on the private package path there as well.
+            try:
+                config = json.loads(overrides.read_text(encoding="utf-8"))
+                for package in config["packages"]:
+                    if _manifest_package_name(package["name"]) == "lean-pool":
+                        package["dir"] = str(target_packages / "lean-pool")
+                overrides.write_text(json.dumps(config) + "\n", encoding="utf-8")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise EvaluateError(f"Cannot configure private Lean Pool override: {exc}") from exc
+    else:
+        target_packages.symlink_to(resolved_source)
     return None
 
 
@@ -439,8 +470,8 @@ def _install_root_manifest(
 ) -> None:
     """Pin a shared-packages workspace with the benchmark's root manifest.
 
-    A workspace whose `.lake/packages` is a symlink to the benchmark root's
-    package directory must not run `lake update`: resolution can pick
+    A workspace reusing the benchmark root's package directory must not
+    run `lake update`: resolution can pick
     different revisions for transitive dependencies than the root pins and
     check them out inside the shared directory, corrupting it for every
     other workspace and for the root itself. The root `lake-manifest.json`
@@ -597,7 +628,7 @@ def _require_preprimed_workspace(target: pathlib.Path) -> None:
         raise EvaluateError(
             f"Preprimed workspace package overrides are unavailable: {overrides}"
         )
-    if not packages.is_symlink() or not packages.resolve().is_dir():
+    if not packages.is_dir():
         raise EvaluateError(f"Preprimed workspace packages are unavailable: {packages}")
 
 

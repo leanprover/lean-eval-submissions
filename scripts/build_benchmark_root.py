@@ -5,13 +5,10 @@ downloading TauCeti's build outputs instead of compiling them.
 
 Usage: python scripts/build_benchmark_root.py <benchmark-root>
 
-A benchmark whose `lake-manifest.json` pins Lean Pool first builds its
-`LeanPool` library, even though the benchmark statements do not import it.
-This prepares every solution import before the shared packages become
-read-only inside comparator's sandbox. Only pinned dependency source is
-built here; submitted source has not yet been unpacked.
+A benchmark whose `lake-manifest.json` pins no TauCeti package (every
+lean-eval commit before TauCeti was added) gets a plain `lake build`.
 
-A benchmark that pins TauCeti must ship `scripts/fetch_dependency_caches.sh`,
+Otherwise the benchmark must ship `scripts/fetch_dependency_caches.sh`,
 which checks that the pinned TauCeti was built with the benchmark's Lean
 toolchain and Mathlib, fetches TauCeti's Lake cache mappings and prints the
 Lake settings that make builds download TauCeti's outputs. Those settings
@@ -58,7 +55,7 @@ class BuildRootError(Exception):
     """The benchmark root could not be built without compiling TauCeti."""
 
 
-def pinned_packages(root: pathlib.Path) -> set[str]:
+def pins_tauceti(root: pathlib.Path) -> bool:
     manifest = root / "lake-manifest.json"
     try:
         packages = json.loads(manifest.read_text(encoding="utf-8"))["packages"]
@@ -68,7 +65,7 @@ def pinned_packages(root: pathlib.Path) -> set[str]:
         }
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise BuildRootError(f"cannot read {manifest}: {exc}") from exc
-    return names
+    return TAUCETI in names
 
 
 def parse_exports(stdout: str) -> dict[str, str]:
@@ -157,22 +154,15 @@ def lake_build(
 
 
 def build_benchmark_root(root: pathlib.Path) -> None:
-    packages = pinned_packages(root)
-    has_tauceti = TAUCETI in packages
+    if not pins_tauceti(root):
+        lake_build(root, [], dict(os.environ), forbid_tauceti_compile=False)
+        return
     env = dict(os.environ)
-    if has_tauceti:
-        env.pop("GITHUB_ENV", None)
-        env.update(fetch_cache_settings(root))
-        env["LAKE_RESTORE_ARTIFACTS"] = "true"
-        lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True)
-    if "lean-pool" in packages:
-        # Package qualification avoids the benchmark's Challenge/Solution
-        # libraries. Build the proof library, not Lean Pool's open challenges.
-        lake_build(
-            root, ["@lean-pool/LeanPool"], env,
-            forbid_tauceti_compile=has_tauceti,
-        )
-    lake_build(root, [], env, forbid_tauceti_compile=has_tauceti)
+    env.pop("GITHUB_ENV", None)
+    env.update(fetch_cache_settings(root))
+    env["LAKE_RESTORE_ARTIFACTS"] = "true"
+    lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True)
+    lake_build(root, [], env, forbid_tauceti_compile=True)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,4 +1,4 @@
-# CI for the submission pipeline, including production dependency preparation
+# CI for the submission pipeline, including private dependency build outputs
 # against a small Lean fixture inside the comparator-style sandbox.
 name: CI
 
@@ -79,6 +79,7 @@ jobs:
           mkdir -p .ci/solution-dependencies
           printf '%s\n' 'leanprover/lean4:v4.34.0' > .ci/solution-dependencies/lean-toolchain
           printf '%s\n' 'name = "solution-dependency-test"' > .ci/solution-dependencies/lakefile.toml
+          printf '%s\n' '{"version":"1.2.0","packagesDir":".lake/packages","packages":[],"name":"solution-dependency-test","lakeDir":".lake"}' > .ci/solution-dependencies/lake-manifest.json
 
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
         with:
@@ -100,7 +101,7 @@ jobs:
           go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Test production preparation with cold shared dependencies
+      - name: Test sandboxed imports with cold shared dependencies
         env:
           ELAN_TOOLCHAIN: leanprover/lean4:v4.34.0
           LEAN_EVAL_SANDBOX_TEST: '1'

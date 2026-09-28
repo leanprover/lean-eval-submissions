@@ -385,10 +385,8 @@ jobs:
         # so a submission may import any TauCeti module) and fails on a
         # cache miss. The Lake cache settings stay inside this step, and
         # later workspace builds, including comparator's sandboxed one,
-        # find TauCeti up to date on disk without the network. When Lean
-        # Pool is pinned, the script also builds its LeanPool library here:
-        # statements never import it, but solutions need its outputs in
-        # the shared read-only package tree. See the script.
+        # find TauCeti up to date on disk without the network. Benchmarks
+        # that pin no TauCeti get a plain `lake build`. See the script.
         run: python scripts/build_benchmark_root.py lean-eval
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
