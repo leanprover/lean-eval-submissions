@@ -1343,6 +1343,8 @@ jobs:
               --submission-ref "$SUBMISSION_REF" \
               $PUBLIC_FLAG \
               --model "$MODEL" \
+              --verification-run-id "$GITHUB_RUN_ID" \
+              --verification-run-attempt "$GITHUB_RUN_ATTEMPT" \
               "${INTAKE_ARGS[@]}" \
               "${DESCRIPTION_ARGS[@]}" \
               "${PUBLICATION_ARGS[@]}")
@@ -1354,7 +1356,7 @@ jobs:
             fi
 
             COMMIT_MSG=$(python -c "import json,sys; print(json.loads(sys.argv[1])['commit_message'])" "$OUTPUT")
-            git -C results-store add results/
+            git -C results-store add results/ verification/
             git -C results-store commit -m "$COMMIT_MSG"
             if git -C results-store push origin "HEAD:$RESULTS_BRANCH"; then
               echo "results push succeeded on attempt $attempt"
