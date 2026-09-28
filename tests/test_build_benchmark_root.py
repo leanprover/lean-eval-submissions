@@ -118,6 +118,44 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertIn("fetch_dependency_caches.sh", stderr)
         self.assertEqual(self._calls(), [])
 
+    def test_lean_pool_builds_before_root_without_tauceti(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "«lean-pool»"]), encoding="utf-8"
+        )
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(
+            [call["argv"] for call in self._calls()],
+            [["build", "@lean-pool/LeanPool"], ["build"]],
+        )
+
+    def test_lean_pool_builds_after_tauceti_cache_and_before_root(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti", "«lean-pool»"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'echo "{TAUCETI_EXPORT}"\n')
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        calls = self._calls()
+        self.assertEqual(
+            [call["argv"] for call in calls],
+            [["build", "TauCeti"], ["build", "@lean-pool/LeanPool"], ["build"]],
+        )
+        self.assertEqual(calls[1]["env"], calls[0]["env"])
+        self.assertEqual(self.github_env.read_text(), "")
+
+    def test_lean_pool_build_failure_prevents_evaluation_setup(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["«lean-pool»"]), encoding="utf-8"
+        )
+        os.environ["FAKE_LAKE_RC"] = "1"
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 1)
+        self.assertIn("`lake build @lean-pool/LeanPool` failed", stderr)
+        self.assertEqual(
+            [call["argv"] for call in self._calls()], [["build", "@lean-pool/LeanPool"]]
+        )
+
     def test_tauceti_restores_whole_library_then_root_with_step_scoped_cache(self) -> None:
         (self.root / "lake-manifest.json").write_text(
             _manifest(["«lean-eval-generator»", "mathlib", "TauCeti"]),
