@@ -153,6 +153,28 @@
         "ref": "96fa91e778c9e33a6a1701bfae85e1cd6add07b4",
         "repo": "hongzhoulin89/lean-eval-ten-martini-problem"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T22:06:22Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1861,
+        "kind": "issue"
+      },
+      "problem_id": "annals_inscribed_rectangles",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using Kimi K3 and GPT-6 Astra for proof development and\nLean migration, followed by GPT 5.6 sol review. The exact source commit was\nverified against Lean-Eval commit 0e093293afbe96be91504ae6e44947876d3fc84e\nwith Lean 4.35.0-rc3 and Mathlib\n5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. The full build, comparator,\nNanoda, and the default Lean kernel passed. This is an unchanged-source\ninfrastructure retry of #1854.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_be52a98162b73c60935fb26874a1be0df6f3e1b19d73694036f76930aa25f50b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0abd4e1db11b0050323554399824f8c5b079c8f8",
+        "repo": "hongzhoulin89/lean-eval-annals-inscribed-rectangles"
+      }
     }
   ],
   "schema_version": 2,
