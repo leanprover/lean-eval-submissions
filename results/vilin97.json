@@ -7083,6 +7083,27 @@
         "ref": "7bfeeeb1bb41b39782e5acb6fa438afed43f2c54",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T06:48:45Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1847,
+        "kind": "issue"
+      },
+      "problem_id": "g2_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_417eb5e582e1a1521c76a56639b9f39e8b2e0f72b9a7696fcd98463f02ac0e72",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "962318bd6a6a1a5c3ce11de93fd8c4730e66796d",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
