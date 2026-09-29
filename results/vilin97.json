@@ -7125,6 +7125,27 @@
         "ref": "dbb4a3a18aed5066e91027102a1fd7a277e82858",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T07:11:43Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1846,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_property_t",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d7375b1bf950b9604090bf8f8285c54a3a8b30021f86d91d69f890bd6cde4a72",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a3c9163ee2284fa6a31c8bf6ec8fc39c3f008a76",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
