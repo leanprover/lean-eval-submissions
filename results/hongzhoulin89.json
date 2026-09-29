@@ -131,6 +131,28 @@
         "ref": "ff7c14445f5138dfdd5ed4a5a1f9e1793e7b1831",
         "repo": "hongzhoulin89/lean-eval-friedlander-iwaniec"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T20:56:47Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1859,
+        "kind": "issue"
+      },
+      "problem_id": "ten_martini_problem",
+      "production_metadata": {
+        "production_description": "Humanifa mini-humanize workflow for proof development and Lean migration,\nfollowed by GPT 5.6 sol review. The exact source commit was verified against\nLean-Eval commit 0e093293afbe96be91504ae6e44947876d3fc84e with Lean\n4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nThe full build, comparator, Nanoda, and the default Lean kernel passed.\nThis is an unchanged-source infrastructure retry of #1855.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_38f50d0b32d7c5e151bcfd9079ea3535caf9da7d4f65fb68ca5bb2e2a764dc0b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "96fa91e778c9e33a6a1701bfae85e1cd6add07b4",
+        "repo": "hongzhoulin89/lean-eval-ten-martini-problem"
+      }
     }
   ],
   "schema_version": 2,
