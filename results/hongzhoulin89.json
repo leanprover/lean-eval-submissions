@@ -175,6 +175,28 @@
         "ref": "0abd4e1db11b0050323554399824f8c5b079c8f8",
         "repo": "hongzhoulin89/lean-eval-annals-inscribed-rectangles"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T22:21:03Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1862,
+        "kind": "issue"
+      },
+      "problem_id": "annals_hasse_principle_random_fano",
+      "production_metadata": {
+        "production_description": "Humanifa mini-humanize workflow for proof development and Lean migration,\nfollowed by GPT 5.6 sol review. The exact source commit was verified against\nLean-Eval commit 0e093293afbe96be91504ae6e44947876d3fc84e with Lean\n4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nThe full build, comparator, Nanoda, and the default Lean kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_b47bfc061a8a1f53c917f6c5efa99f22cb892a6e8b55932e6a6f4694da7cd04c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d44d85b2d3b9e07c5761cea45d39ea50f7c1d052",
+        "repo": "hongzhoulin89/lean-eval-annals-hasse-principle-random-fano"
+      }
     }
   ],
   "schema_version": 2,
