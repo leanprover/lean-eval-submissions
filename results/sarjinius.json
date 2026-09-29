@@ -652,6 +652,90 @@
         "ref": "d4b3b2141ff8acfdb7e3f414101ca31d9f1fb69b",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-09-29T14:10:12Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1852,
+        "kind": "issue"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4bc021db772f9df871323d4ab0ac2f2b5ef096ce2593b6d66364c9d29f19b00c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bcf461ef37958b5b7e7ee762098a58cfbdae20a2",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-29T14:10:12Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1852,
+        "kind": "issue"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_dadfab0726804e84a1a14ac94f31361e710248b6a5fb7c8b7e4d5d11429d854c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bcf461ef37958b5b7e7ee762098a58cfbdae20a2",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-29T14:10:12Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1852,
+        "kind": "issue"
+      },
+      "problem_id": "duffin_schaeffer",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ced4bb3b436969f8d86df0c04139ffc9c36b31a6fc3a2cc7afe0fd8ad8eea6ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bcf461ef37958b5b7e7ee762098a58cfbdae20a2",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-09-29T14:10:12Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1852,
+        "kind": "issue"
+      },
+      "problem_id": "schmidt_subspace",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_7b458fd55e49712c39d82e3e2715a9366f4a48c574a0bb04467c3fd0c9f09c1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bcf461ef37958b5b7e7ee762098a58cfbdae20a2",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
