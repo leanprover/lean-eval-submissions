@@ -1378,6 +1378,28 @@
         "ref": "04ecbe9448540d28242222916363312eaa79e209",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-09-30T14:19:21Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "issue_number": 1880,
+        "kind": "issue"
+      },
+      "problem_id": "annals_bounded_multiplicative_functions",
+      "production_metadata": {
+        "solution_publication_date": "2026-11-12",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_416a99a6cee39e5ec515848f43e637a1b3868b5ab52db7e7bf1b11fb023d50fa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "21628363b045eaa93f74185351abe3511d5355b1",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
