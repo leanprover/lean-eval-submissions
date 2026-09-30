@@ -7209,6 +7209,27 @@
         "ref": "c0f2320b18ffcccc657cf2dd4e762a9291038680",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-30T10:10:45Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1877,
+        "kind": "issue"
+      },
+      "problem_id": "annals_integer_multiplication",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_72f69d436679f257af4936191236b8ac02b651d0fc9e114878682508ca6df73b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5f350fe51e28924752afaf0a1836187a8ef6fd12",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
