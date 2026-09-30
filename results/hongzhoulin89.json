@@ -219,6 +219,28 @@
         "ref": "d7cb155b47e915969d49e5fa1a79d2215fc2e8f0",
         "repo": "hongzhoulin89/lean-eval-bender-suzuki"
       }
+    },
+    {
+      "accepted_at": "2026-09-30T06:47:50Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1868,
+        "kind": "issue"
+      },
+      "problem_id": "annals_bounded_multiplicative_functions",
+      "production_metadata": {
+        "production_description": "Humanifa workflow with iterative AI proof development, Lean 4.35 migration,\nGPT 5.6 sol review, and independent verification against Lean 4.35.0-rc3 /\nMathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. The complete 4,299-job\nbuild passed, and comparator, Nanoda, the default Lean kernel, and the axiom\naudit accepted the solution.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_48225aca99c6029ac0deeef68724742073e676546a37c04493b13e298f7e2b94",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f0304911ed3da59ab0852d00d5f7fd94477ba2d5",
+        "repo": "hongzhoulin89/lean-eval-annals-bounded-multiplicative-functions"
+      }
     }
   ],
   "schema_version": 2,
