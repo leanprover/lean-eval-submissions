@@ -7167,6 +7167,27 @@
         "ref": "1c63255deaae9d74d82eab4aaa7868593f152c81",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-09-30T07:46:08Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1870,
+        "kind": "issue"
+      },
+      "problem_id": "pesin_formula",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_31a0b2a8a0213d49ee2680b974e649007e455d60193cd4727975ed2253d44dfa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cccd720b6caced3ff55837e7f8a4b17372324339",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
