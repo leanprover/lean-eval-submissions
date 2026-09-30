@@ -197,6 +197,28 @@
         "ref": "d44d85b2d3b9e07c5761cea45d39ea50f7c1d052",
         "repo": "hongzhoulin89/lean-eval-annals-hasse-principle-random-fano"
       }
+    },
+    {
+      "accepted_at": "2026-09-30T01:30:55Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1864,
+        "kind": "issue"
+      },
+      "problem_id": "bender_suzuki",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT 5.6 sol review. The exact Lean source was verified against Lean-Eval commit `0e093293afbe96be91504ae6e44947876d3fc84e` with Lean 4.35.0-rc3 and Mathlib `5e0c4e5239cb0a2d86d68a884bf52cfd963fce22`. The full build, comparator, Nanoda, and the default Lean kernel passed. The submitted packaging commit contains the same 942 Lean files as the verified migration commit.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4e2872eaf2082e173a605916d519c818f081e904e592599c4655bfffd752671f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d7cb155b47e915969d49e5fa1a79d2215fc2e8f0",
+        "repo": "hongzhoulin89/lean-eval-bender-suzuki"
+      }
     }
   ],
   "schema_version": 2,
