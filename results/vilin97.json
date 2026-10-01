@@ -7314,6 +7314,29 @@
         "ref": "641556268e430cbbe0fd6b5edca762226daa60aa",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T05:41:06Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Codex (Lean Pool integration test)",
+      "intake": {
+        "issue_number": 1899,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "User-requested infrastructure smoke test for the newly merged lean-pool solution dependency. Codex wrote a two_plus_two submission importing LeanPool.Basic and referencing its exposed hello definition, following the benchmark's existing scoring smoke test. This is a pipeline integration check, not a substantive mathematical result. Only the submission source and workspace identifier are supplied; Lean Pool must come from the benchmark's trusted dependencies.",
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_4569424de0df4c58f2f231d5e862a804049746fa200e38f76cd9d83c8765bc93",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "2dda6fb06cd470aa465777ac2e6bfc7e75017104",
+        "repo": "Vilin97/c4e012228a888d071de413657110a1cb"
+      }
     }
   ],
   "schema_version": 2,
