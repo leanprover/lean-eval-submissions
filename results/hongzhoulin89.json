@@ -307,6 +307,28 @@
         "ref": "66b8fe35f16f574f0de67b951ebcaa318245f065",
         "repo": "hongzhoulin89/lean-eval-annals-on-coherence-of-one-relator-groups"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T21:22:23Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1906,
+        "kind": "issue"
+      },
+      "problem_id": "riemann_hypothesis_iff_lagarias_elementary_criterion",
+      "production_metadata": {
+        "production_description": "Humanifa iterative proof development using Mini-Humanize, with GPT Astra proof-term optimization and GPT-5.6-sol review. This revision replaces all 381 `with_unfolding_all` certificates with structurally shallower proofs and passes comparator, four-worker default-stack Nanoda, and Lean default-kernel checks on the official Lean 4.35.0-rc3 benchmark.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_2f9137b492e737e7dbf8389cd9aa134001c5f678f08fc6cfe8e73fc188da856f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "09bf4d69a8861ff0f2fa86aaf0d840e7e10e21cd",
+        "repo": "hongzhoulin89/lean-eval-riemann-hypothesis-iff-lagarias-elementary-criterion"
+      }
     }
   ],
   "schema_version": 2,
