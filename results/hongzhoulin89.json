@@ -285,6 +285,28 @@
         "ref": "a1d35615a8fa1d44d1b9b5eecc13a45b358140d2",
         "repo": "hongzhoulin89/lean-eval-pi-sphere-infinite-iff"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T18:39:26Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1905,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_coherence_of_one_relator_groups",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using AI-assisted proof development, Mini-Humanize + GPT-6 Astra migration to Lean 4.35, followed by GPT 5.6 sol review. The exact source was verified against Lean-Eval commit `0e093293afbe96be91504ae6e44947876d3fc84e` with Lean 4.35.0-rc3 and Mathlib `5e0c4e5239cb0a2d86d68a884bf52cfd963fce22`. The complete 4,254-job workspace build passed, and comparator, four-thread Nanoda, the default Lean kernel, and the axiom audit accepted the solution.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_f5d00c1079d9bc6937ece99f88c8df7c4f0469ffc2c0ca89a3107c31dc80b901",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "66b8fe35f16f574f0de67b951ebcaa318245f065",
+        "repo": "hongzhoulin89/lean-eval-annals-on-coherence-of-one-relator-groups"
+      }
     }
   ],
   "schema_version": 2,
