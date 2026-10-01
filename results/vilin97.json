@@ -7293,6 +7293,27 @@
         "ref": "e5b148786461f73ae1dff94c2f336e519f84a658",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T05:22:54Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1897,
+        "kind": "issue"
+      },
+      "problem_id": "einsiedler_katok_lindenstrauss",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_98d62cdaf52f2063cc4b03ab4657093a77be03c3b9c1383b2ba6f7ad18122c32",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "641556268e430cbbe0fd6b5edca762226daa60aa",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
