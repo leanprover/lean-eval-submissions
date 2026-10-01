@@ -7251,6 +7251,27 @@
         "ref": "650982287107388585f744bf1cefabbb4543da31",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T04:28:39Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1895,
+        "kind": "issue"
+      },
+      "problem_id": "mostow_rigidity",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d79460898ae25951c8bbb37b3a9f414e3fe3b4da6fc814949d73b8faba703318",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ecef79bbee4625801328b73ce0f9ec568e8c2816",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
