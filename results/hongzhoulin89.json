@@ -329,6 +329,28 @@
         "ref": "09bf4d69a8861ff0f2fa86aaf0d840e7e10e21cd",
         "repo": "hongzhoulin89/lean-eval-riemann-hypothesis-iff-lagarias-elementary-criterion"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T22:12:25Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1907,
+        "kind": "issue"
+      },
+      "problem_id": "linnik",
+      "production_metadata": {
+        "production_description": "Humanifa iterative proof development using Mini-Humanize, with GPT Astra Lean 4.35 migration and GPT-5.6-sol review. The complete Heath-Brown-based proof passed comparator, four-worker Nanoda, and Lean default-kernel checks on the official Lean 4.35.0-rc3 benchmark.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c6bef7e26e77d2636f072330ced2ac33d6f37d7acef5307917a2591b26ab900f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "14211234b755a1fc86496fe26cb9f9ad1ef5ee99",
+        "repo": "hongzhoulin89/lean-eval-linnik"
+      }
     }
   ],
   "schema_version": 2,
