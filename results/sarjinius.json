@@ -757,6 +757,27 @@
         "ref": "b2020cac52eb9d6f0e0b349184c0a11729b870cb",
         "repo": "midas-intelligence/midas-leaneval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T10:55:17Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Midas",
+      "intake": {
+        "issue_number": 1903,
+        "kind": "issue"
+      },
+      "problem_id": "annals_large_value_estimates",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_7e79c48cfdfde27d35b3ddfe162356379d1e553d9e85ee46d7500cb259aab3bb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2723cb1c36ba5102dc8952a8ab4aeef6eb923a1d",
+        "repo": "midas-intelligence/midas-leaneval-submission"
+      }
     }
   ],
   "schema_version": 2,
