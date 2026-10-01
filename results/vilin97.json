@@ -7337,6 +7337,27 @@
         "ref": "2dda6fb06cd470aa465777ac2e6bfc7e75017104",
         "repo": "Vilin97/c4e012228a888d071de413657110a1cb"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T05:44:22Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1898,
+        "kind": "issue"
+      },
+      "problem_id": "hSpace_sphere_iff",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0a82a314d093bf6a9fae4bb9833a8c19c1da9570b7fc6dfa19a22ef063f54a35",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "47c9290e002538e7898ef6e07dac6dcfeebf1109",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
