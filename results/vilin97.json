@@ -7272,6 +7272,27 @@
         "ref": "ecef79bbee4625801328b73ce0f9ec568e8c2816",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-01T05:00:51Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1896,
+        "kind": "issue"
+      },
+      "problem_id": "newlander_nirenberg",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4740c544aaf086dfb7b20d4b5c3283fdb1f78d531d69a434901de3f81dc79c35",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e5b148786461f73ae1dff94c2f336e519f84a658",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
