@@ -417,6 +417,28 @@
         "ref": "4fc104031f41900e28a7a19b684d153258c623b9",
         "repo": "hongzhoulin89/lean-eval-baker-wustholz-linear-forms-logs"
       }
+    },
+    {
+      "accepted_at": "2026-10-02T17:54:35Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1916,
+        "kind": "issue"
+      },
+      "problem_id": "annals_pointwise_ergodic_theorems",
+      "production_metadata": {
+        "production_description": "Humanifa iterative proof development with GPT-6 Astra Lean 4.35 migration and\nGPT-5.6 Sol review, followed by complete official verification. The full\n4,883-job workspace build, comparator, four-thread Nanoda, default Lean kernel,\nand 7,596-report axiom audit all passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ca506d82867e4888e2069e3ab60adc09a46c6d91e1dc851ecadf339d6039c119",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "35ac524d607223789aee7ac04e76b6c6acb6bba9",
+        "repo": "hongzhoulin89/lean-eval-annals-pointwise-ergodic-theorems"
+      }
     }
   ],
   "schema_version": 2,
