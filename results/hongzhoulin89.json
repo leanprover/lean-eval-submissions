@@ -483,6 +483,28 @@
         "ref": "5744ce644ea8843b7378a37899f439b72142fa98",
         "repo": "hongzhoulin89/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
       }
+    },
+    {
+      "accepted_at": "2026-10-02T20:30:32Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1921,
+        "kind": "issue"
+      },
+      "problem_id": "jacobian_challenge_diffgeo",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using GPT 5.6 sol to develop the proof, followed by Mini-Humanize-assisted migration and independent verification on Lean 4.35.0-rc3 / Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. The complete workspace build, comparator, four-thread Nanoda, and Lean's default kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_70669bc77c93fbf6d1edc72b58ee3bbb5e5329322227a0a34d3bc50965e2fa60",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ae413c39b914d174e90e27f6fff08479d2df7d9c",
+        "repo": "hongzhoulin89/lean-eval-jacobian-challenge-diffgeo"
+      }
     }
   ],
   "schema_version": 2,
