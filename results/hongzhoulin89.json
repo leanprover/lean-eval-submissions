@@ -351,6 +351,28 @@
         "ref": "14211234b755a1fc86496fe26cb9f9ad1ef5ee99",
         "repo": "hongzhoulin89/lean-eval-linnik"
       }
+    },
+    {
+      "accepted_at": "2026-10-02T01:09:13Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1909,
+        "kind": "issue"
+      },
+      "problem_id": "annals_finite_time_singularity",
+      "production_metadata": {
+        "production_description": "Humanifa iterative proof development using Mini-Humanize, with GPT Astra Lean 4.35 migration and GPT-5.6-sol review. The completed proof passed comparator, four-worker Nanoda, and Lean default-kernel checks on the official Lean 4.35.0-rc3 benchmark.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c94dd263e33eb653e1e0e91465997017be63ebda274b4aba5045164fdf8cfe23",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "846bff1cc3008696bba02c1f8654789d5b2c67c2",
+        "repo": "hongzhoulin89/lean-eval-annals-finite-time-singularity"
+      }
     }
   ],
   "schema_version": 2,
