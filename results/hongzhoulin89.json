@@ -439,6 +439,28 @@
         "ref": "35ac524d607223789aee7ac04e76b6c6acb6bba9",
         "repo": "hongzhoulin89/lean-eval-annals-pointwise-ergodic-theorems"
       }
+    },
+    {
+      "accepted_at": "2026-10-02T18:41:08Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1919,
+        "kind": "issue"
+      },
+      "problem_id": "einsiedler_katok_lindenstrauss",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using GPT 5.6 sol to develop the proof, followed by Mini-Humanize-assisted migration and independent verification on Lean 4.35.0-rc3 / Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. The complete workspace build, comparator, four-thread Nanoda, and Lean's default kernel passed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4a6782a712ab3ec269e335975082faae032fc82aa731c43d85423ba0fa6a085c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "67e90e0f75f756e6f5872a1d81d67ad37acdf88e",
+        "repo": "hongzhoulin89/lean-eval-einsiedler-katok-lindenstrauss"
+      }
     }
   ],
   "schema_version": 2,
