@@ -395,6 +395,28 @@
         "ref": "681d6add6e19ff11d4ef10c45921cb48a5a6b08a",
         "repo": "hongzhoulin89/lean-eval-aspherical-integer-homology-four-sphere"
       }
+    },
+    {
+      "accepted_at": "2026-10-02T16:03:33Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1915,
+        "kind": "issue"
+      },
+      "problem_id": "bakerWustholz_linearForms_logs",
+      "production_metadata": {
+        "production_description": "Humanifa workflow using Kimi K3 and GPT-6 Astra for proof development and Lean\n4.35 migration, followed by Mini-Humanize review and full official verification.\nThe complete 4,621-job workspace build passed, and both four-thread Nanoda and\nthe default Lean kernel accepted the solution.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_206f2ae26e4f37d54bc928bd5f6610771ac786bc8e582c03a99ec80a95f35b23",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4fc104031f41900e28a7a19b684d153258c623b9",
+        "repo": "hongzhoulin89/lean-eval-baker-wustholz-linear-forms-logs"
+      }
     }
   ],
   "schema_version": 2,
