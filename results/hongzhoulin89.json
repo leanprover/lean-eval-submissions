@@ -505,6 +505,28 @@
         "ref": "ae413c39b914d174e90e27f6fff08479d2df7d9c",
         "repo": "hongzhoulin89/lean-eval-jacobian-challenge-diffgeo"
       }
+    },
+    {
+      "accepted_at": "2026-10-03T05:19:07Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1924,
+        "kind": "issue"
+      },
+      "problem_id": "milnor_exotic_sphere_seven",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0e713bc72fc5becad9d4c886c9858b60691493a4562f5a093e1e931ff3712277",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "aa2bd085141fec9e7e6515737d079518ae49cb88",
+        "repo": "hongzhoulin89/lean-eval-milnor-exotic-sphere-seven"
+      }
     }
   ],
   "schema_version": 2,
