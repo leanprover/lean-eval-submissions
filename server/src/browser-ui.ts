@@ -265,7 +265,9 @@ form.addEventListener("submit", async (event) => {
         problem_not_open_for_submission: "problem_id",
         public_source_cannot_be_withheld: "publication_choice",
       };
-      const field = document.querySelector("#" + (fieldByError[body.error] ?? ""));
+      const field = Object.hasOwn(fieldByError, body.error)
+        ? document.querySelector("#" + fieldByError[body.error])
+        : null;
       if (field) {
         field.setCustomValidity(body.error.replaceAll("_", " "));
         field.reportValidity();

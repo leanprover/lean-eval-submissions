@@ -196,6 +196,58 @@ describe("browser intake page", () => {
     expect(elements.get("#submit-label")?.textContent).toBe("Submission queued");
     expect(elements.get("#result")?.textContent).toContain('"status": "queued"');
   });
+
+  it("shows an unmapped provider error without querying an invalid selector", async () => {
+    const script = await browserScript().text();
+    const elements = new Map([
+      ["#submission-form", fakeElement()],
+      ["#result", fakeElement()],
+      ["#auth-status", fakeElement()],
+      ["#oauth-sign-in", fakeElement()],
+      ["#submit-button", fakeElement()],
+      ["#submit-label", fakeElement("Submit exact commit")],
+      ["#problem_id", fakeElement("annals_linear_subspaces")],
+      ["#declared_model", fakeElement("Browser smoke")],
+      ["#source_repository", fakeElement("example/private")],
+      ["#source_commit", fakeElement("a".repeat(40))],
+      ["#publication_choice", fakeElement("scheduled")],
+      ["#production_metadata", fakeElement("{}")],
+      ["#terms_accepted", { ...fakeElement(), checked: true }],
+    ]);
+    const { storage, stored } = fakeSessionStorage();
+    const selectors: string[] = [];
+    const document = {
+      querySelector: (selector: string) => {
+        selectors.push(selector);
+        if (selector === "#") throw new SyntaxError("Invalid selector #");
+        return elements.get(selector) ?? null;
+      },
+    };
+    const fetchMock = vi.fn((input: string) => Promise.resolve(
+      input.endsWith("/submission-grants")
+        ? Response.json({ grant: "signed-grant" }, { status: 201 })
+        : Response.json({
+          error: "provider_unavailable",
+          request_id: "019debcf-cb48-7000-8000-000000000001",
+          stage: "source_repository_verification",
+          provider_status: 503,
+        }, { status: 503 }),
+    ));
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const run = new Function("document", "sessionStorage", "location", "history", "fetch", script);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    run(document, storage, { href: "https://submit.test/", search: "" }, { replaceState: vi.fn() }, fetchMock);
+
+    await elements.get("#submission-form")?.listeners.get("submit")?.({ preventDefault: vi.fn() });
+    expect(selectors).not.toContain("#");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(elements.get("#result")?.textContent).toContain('"error": "provider_unavailable"');
+    expect(elements.get("#result")?.textContent).toContain('"stage": "source_repository_verification"');
+    expect(elements.get("#result")?.textContent).toContain("Submission was rejected with HTTP 503");
+    expect(elements.get("#submit-button")?.disabled).toBe(false);
+    expect(elements.get("#submit-label")?.textContent).toBe("Submit exact commit");
+    expect(stored.has("lean-eval-pending-submission")).toBe(true);
+  });
 });
 
 describe("browser release page", () => {
