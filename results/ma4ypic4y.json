@@ -22,6 +22,28 @@
         "ref": "9731f503b18a7aa0e1304c11fe19c14dc90261fd",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-03T09:22:59Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1927,
+        "kind": "issue"
+      },
+      "problem_id": "pi6_sphere_three_mulEquiv_zmod_twelve",
+      "production_metadata": {
+        "production_description": "Submitter: ma4ypic4y. Existing public proof from plby/lean-proofs at 8822f7ddef30fadbd92e1c6ab4ed897af356af5e, starting at src/latest/Wikipedia/HomotopyGroupsOfSpheres/SphereThreeSix.lean. Upstream attribution and individual source notices are preserved. Contribution: import relocation, Lean 4.35 / Mathlib compatibility migration and proof-term normalization, with the exact benchmark statement unchanged. Fresh source-only official verification of all 1793 files passed both unchanged kernels against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e; source/trusted post-run audits passed. Publication choice: withheld. Specific reason: no blanket license grant covering the complete upstream proof closure has been established; no Apache-2.0 relicensing or public source release is claimed or authorized by this submission. Local verification is not a claim of server acceptance. Packaging repair: add the benchmark lakefile.toml discovery marker and toolchain metadata; all previously verified Submission sources are byte-identical. Supersedes submission 01a10090-0181-744a-ac57-d0507eac8690. Harness: Codex multi-agent source-porting workflow with the unmodified pinned LeanEval comparator (Lean and Nanoda). Human selected the benchmark, research direction and submission identity, and authorized submission. This reuses an existing public proof; original full-proof authorship is not claimed. This uses the documented temporary issue intake because the service evaluation-completion builder rejects the benchmark RC3 toolchain; the same corrected commit is in service run https://github.com/leanprover/lean-eval-submissions/actions/runs/37107509785. No change to verifier, benchmark pins, proof sources or attribution is requested.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_acd8f5c64c8b75c6f2c1edbed09bb2b2887eed5c052360e939513e4be95a853b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a6424cad3b6049d1b4f9e3701cc125bcd6208fb3",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
