@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-10-03T08:50:20Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1926,
+        "kind": "issue"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "production_description": "Submitter: ma4ypic4y. Existing proof reused under Apache-2.0 from https://github.com/mlgraham/lean-eval-dimitrov-submission at 661e66a9fb0830eea5084f2b6ca88a10813749df. Original attribution: Claude Fable 5 / various models, as reported upstream. Contribution: five source files adapted for Lean 4.35 / Mathlib API changes; original full-proof authorship is not claimed. Fresh local source-only verification of all 87 files passed both unchanged official kernels against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e. Exact hashes and provenance are committed in the submitted repository. This local PASS is not a claim of server acceptance. Packaging repair: add the benchmark lakefile.toml discovery marker and toolchain metadata; all previously verified Submission sources are byte-identical. Supersedes submission 01a10085-0cd1-74f5-8baf-187c0e8f3619. Harness: Codex multi-agent proof-porting workflow with the unmodified pinned LeanEval comparator (Lean and Nanoda). Human selected the benchmark, research direction and submission identity, and authorized submission. Existing public proof reused; no claim that the campaign produced the original full proof. This uses the documented temporary issue intake because the service evaluation-completion builder rejects the benchmark RC3 toolchain; the same corrected commit is in service run https://github.com/leanprover/lean-eval-submissions/actions/runs/37107427923. No change to verifier, benchmark pins, proof sources or attribution is requested. The intended publication date is a best estimate consistent with the existing scheduled service submission; it is not a claim that this adapted source is already public.",
+        "solution_publication_date": "2026-12-03",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_4c54434e5fdbf4e6df9683dbaf76a6c8af4c14f9cf674f044327fca8a1a7685e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9731f503b18a7aa0e1304c11fe19c14dc90261fd",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "ma4ypic4y"
+}
