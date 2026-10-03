@@ -549,6 +549,28 @@
         "ref": "c75ea24a9497185b06c86dbd54cbb0e353ff9879",
         "repo": "hongzhoulin89/lean-eval-annals-on-property-t"
       }
+    },
+    {
+      "accepted_at": "2026-10-03T17:17:51Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1930,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_high_dim_topological",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using GPT-6 Astra for proof development and Lean 4.35 migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_277adfa8ece6ad0d662205918a844058d4a6e1834a0abd00b389ff26551990b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e26b198c2da430a31730748a45d7c0d76a4ccc3e",
+        "repo": "hongzhoulin89/lean-eval-poincare-high-dim-topological"
+      }
     }
   ],
   "schema_version": 2,
