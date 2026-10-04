@@ -746,6 +746,28 @@
         "ref": "ffe5561cad5c293b2973d5259e6f594b067e88f3",
         "repo": "hongzhoulin89/lean-eval-annals-wilkies-conjecture"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T18:32:43Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1957,
+        "kind": "issue"
+      },
+      "problem_id": "whitney_embedding",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_845416ecc8d6efd8ceea4d0909296830934bc9ca3ce03061891ba3a8d2d753e5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "07cdcb5c2c75e1f8a07ee8b40e084f9ebd189de4",
+        "repo": "hongzhoulin89/lean-eval-whitney-embedding"
+      }
     }
   ],
   "schema_version": 2,
