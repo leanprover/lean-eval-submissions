@@ -703,6 +703,28 @@
         "ref": "f37fd7414a4b4c810b87f70443e212efa26b73df",
         "repo": "hongzhoulin89/lean-eval-jacobian-challenge-alggeo"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T16:15:10Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1940,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rectangular_peg_problem",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_db96d7d48900777aecced70e6685c70c416b0c3d2cc378c54fc1a9692bdaeb2a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ef1e78d969639e03b345b71f042a4293a301c105",
+        "repo": "hongzhoulin89/lean-eval-annals-rectangular-peg-problem"
+      }
     }
   ],
   "schema_version": 2,
