@@ -615,6 +615,28 @@
         "ref": "c1af3b112e1c79aef3d883ff52dfb70fd789f735",
         "repo": "hongzhoulin89/lean-eval-topological-classification-of-surfaces"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T08:45:51Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1938,
+        "kind": "issue"
+      },
+      "problem_id": "space_groups_230",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_9bed672c7e3f96613a5a9fb75496154f5281b539bc3d1920c35584097f21e195",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75126988a73f3e67a56c90b7335ed73d2fe43849",
+        "repo": "hongzhoulin89/lean-eval-space-groups-230"
+      }
     }
   ],
   "schema_version": 2,
