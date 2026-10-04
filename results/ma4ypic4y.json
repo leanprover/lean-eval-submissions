@@ -66,6 +66,28 @@
         "ref": "8714eadb5e326447c2fd51f861374f6db9947213",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T16:11:50Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1942,
+        "kind": "issue"
+      },
+      "problem_id": "shafarevich_solvable_galois",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: shafarevich_solvable_galois (Shafarevich's theorem on solvable Galois groups), statement revision 1. This is distinct from the relation-rank bound.\n\nReuses the public formalization Timeroot/InverseGaloisProblem at 973f72c1900fb72c460833448b472899fa659366. The mathematical argument and major formalization are upstream work; original full-proof authorship is not claimed. Original attribution and individual source notices are retained with per-file provenance in the private source snapshot.\n\nContribution: reachable source extraction, import relocation, Lean 4.35 / pinned Mathlib compatibility migration, proved canonical-instance and API repairs, and an exact universe/equivalence adapter to the unchanged benchmark statement. The declared model/system name max gp (GPT-6) is our existing GPT-6-family system label; the final server-native migration used GPT-6.1 Sol (gpt-6.1-sol), xhigh reasoning. Earlier compatibility work used GPT-6 and DeepSeek-v4.1-flash. Harness: GenProof server-native Codex/MCP proof workflow on mike-gpu, followed by the unchanged official pinned verifier. Human selected targets and research direction, required private sources and both contributor tags, and authorized this submission.\n\nFresh source-only full local official verification passed both the Lean kernel and Nanoda against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. All 937 submitted Lean files match the accepted local receipt byte-for-byte. Exact Git archive discovery and overlay passed with protected workspace files unchanged. Local PASS is not a claim of server acceptance.\n\nPublication status: private, with no current publication plan and no publication date. No public source release or blanket relicensing of the combined closure is authorized by this submission. The snapshot retains upstream notices; 856 upstream files explicitly state Apache-2.0, while 79 have no explicit license header and the pinned upstream tree has no root LICENSE. No license is invented for those files.\n\nThis uses the currently documented temporary GitHub issue intake. Only this Shafarevich solvable-Galois proof is submitted.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ce032ca8cff3b6ad194f63c2e3afd97f540932b63a7b16426dacb79042aefd7e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0a3b21c601dd75b126d0f630250a5e71954c4649",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
