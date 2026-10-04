@@ -176,6 +176,28 @@
         "ref": "41c884ae1f90e0d04dae48571276cabe6701c095",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T16:43:38Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1945,
+        "kind": "issue"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: annals_improved_bounds_sunflower_lemma, statement revision 1.\n\nThe declared model/system name max gp (GPT-6) is our existing GPT-6-family system label. This proof comes from the formalization-evaluation campaign via Codex CLI; the supplied provenance records backend: gpt-6.1-sol / medium. Campaign contributor: @haskiindahouse. Human direction included selecting the campaign targets and authorizing this private submission.\n\nOriginal campaign proof: the Lean proof code was generated in this campaign (machine-assisted, Codex CLI) and assembled over the pinned Apache-2.0 Lean Pool library (Vilin97/lean-pool @ e9d53e9cbcff8dfd0cc816ba94db7a26b082929f (Apache-2.0)); KahnKalai.park_pham_bound (Dan Clemens Posch, Lean Pool) is reused; incidence counting and the sunflower assembly are campaign code. Statement headers and mathematics remain attributed to their original authors.\n\nThe bundled VERIFICATION.json records fresh source-only official local verification with the unchanged LeanEval comparator, both Nanoda and the Lean kernel accepted, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and pinned dependencies. Receipt: 5fe82b0cb45d47d1ae8041c3c440e9dc. All 9 submitted Lean source hashes were independently checked against that bundled receipt after downloading this exact GitHub commit archive. Server workspace discovery and overlay were checked using the unmodified evaluator at 6164cacbef4207b5c8d895e89ac58e4bb9bb23e3; the protected benchmark files remain unchanged. These archive/packaging checks do not repeat the Lean proof run, and the bundled local PASS is not a claim of organizer acceptance or leaderboard credit.\n\nThe bundled semantic review covers the parameter-free positive universal constant supplied for the benchmark definition hole; it records no change to the target hypotheses or conclusion.\n\nPublication status: private, with no current publication plan and no publication date. No public release of the submitted source is authorized by this submission. Original source notices and provenance are retained. Only this exact problem snapshot is submitted through the currently documented GitHub issue intake.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_1f65afc3043c9a02768e7edd241026925f350cae53bd7b0d566b75cf7588a47b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d4e4760bf7f73ea1f7789d621311024096462457",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
