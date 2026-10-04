@@ -308,6 +308,28 @@
         "ref": "c946107580b2172ace524159de57e558e10a540a",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T18:23:21Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1955,
+        "kind": "issue"
+      },
+      "problem_id": "shafarevich_relation_rank_bound",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: shafarevich_relation_rank_bound, statement revision 1.\n\nThe declared model/system name max gp (GPT-6) is our existing GPT-6-family system label. This proof comes from the formalization-evaluation campaign via Codex CLI; the supplied provenance records backend: gpt-6.1-sol / medium. Campaign contributor: @haskiindahouse. Human direction included selecting the campaign targets and authorizing this private submission.\n\nDeclared reuse: adapts the existing public Apache-2.0 formalization https://github.com/n-yamaguchi-0729/SawinTotallyRealTowers at `6db7120fa2e15346e3b0a9995666a37849235de1`. The campaign performed the exact benchmark adapter over the public ShafarevichRelationRankBound (1286-module closure) and compatibility repairs. Original full-proof authorship is not claimed; original declarations, headers and notices are retained.\n\nThe bundled VERIFICATION.json records fresh source-only official local verification with the unchanged LeanEval comparator, both Nanoda and the Lean kernel accepted, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and pinned dependencies. Receipt: 3796160d0a1a4f599093dfc84508de0a. All 1289 submitted Lean source hashes were independently checked against that bundled receipt after downloading this exact GitHub commit archive. Server workspace discovery and overlay were checked using the unmodified evaluator at 6164cacbef4207b5c8d895e89ac58e4bb9bb23e3; the protected benchmark files remain unchanged. These archive/packaging checks do not repeat the Lean proof run, and the bundled local PASS is not a claim of organizer acceptance or leaderboard credit.\n\nPublication status: private, with no current publication plan and no publication date. No public release of the submitted source is authorized by this submission. Original source notices and provenance are retained. Only this exact problem snapshot is submitted through the currently documented GitHub issue intake.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_b94d22b6d0a6ebb7decb95db96d5cb79800e124f018cd06ba7cb63ef45fa50bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "714aba5ac9de5fecdd4ca853ed65bc32b7691267",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
