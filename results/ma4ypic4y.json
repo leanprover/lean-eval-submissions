@@ -352,6 +352,28 @@
         "ref": "7a1b826431716d59b28b4a746dcaf9d3cb978110",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T18:30:01Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1949,
+        "kind": "issue"
+      },
+      "problem_id": "bender_suzuki",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: bender_suzuki, statement revision 1.\n\nThe declared model/system name max gp (GPT-6) is our existing GPT-6-family system label. This proof comes from the formalization-evaluation campaign via Codex CLI; the supplied provenance records backend: gpt-6.1-sol / gpt-6-astra; final assembly job made no model calls. Campaign contributor: @haskiindahouse. Human direction included selecting the campaign targets and authorizing this private submission.\n\nDeclared reuse: adapts the existing public Apache-2.0 formalization https://github.com/Qiuzhen-CFSG/CFSG at `96b2a02085dc678f3e0a97b334c31ada599c55fd`. The campaign performed compatibility repairs for Lean 4.35.0-rc3 / pinned Mathlib and the exact benchmark adapter. Original full-proof authorship is not claimed; original declarations, headers and notices are retained.\n\nThe bundled VERIFICATION.json records fresh source-only official local verification with the unchanged LeanEval comparator, both Nanoda and the Lean kernel accepted, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and pinned dependencies. Receipt: d3a65ebc2c944e0494bebbe6f6f66c60. All 907 submitted Lean source hashes were independently checked against that bundled receipt after downloading this exact GitHub commit archive. Server workspace discovery and overlay were checked using the unmodified evaluator at 6164cacbef4207b5c8d895e89ac58e4bb9bb23e3; the protected benchmark files remain unchanged. These archive/packaging checks do not repeat the Lean proof run, and the bundled local PASS is not a claim of organizer acceptance or leaderboard credit.\n\nPublication status: private, with no current publication plan and no publication date. No public release of the submitted source is authorized by this submission. Original source notices and provenance are retained. Only this exact problem snapshot is submitted through the currently documented GitHub issue intake.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_1a75cfc097c5cf1697163ba6f5e8d63ff5ee57a34b0291b40d1a8a667925955a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "297748aa2d2b91ad2216f64734db7c4800088bd6",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
