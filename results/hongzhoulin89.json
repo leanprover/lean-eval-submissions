@@ -768,6 +768,28 @@
         "ref": "07cdcb5c2c75e1f8a07ee8b40e084f9ebd189de4",
         "repo": "hongzhoulin89/lean-eval-whitney-embedding"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T19:10:16Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1958,
+        "kind": "issue"
+      },
+      "problem_id": "pi6_sphere_three_mulEquiv_zmod_twelve",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow with iterative model proof development and independent review, followed by GPT-6 Astra Lean 4.35 migration and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e93eda1efa96e7eecc5e6ba56981e9f5a804288abba45cf8df3c444989a65228",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e71a6efc24d4512d04c8f65cf9c16479196f3fee",
+        "repo": "hongzhoulin89/lean-eval-pi6-sphere-three"
+      }
     }
   ],
   "schema_version": 2,
