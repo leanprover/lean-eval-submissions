@@ -637,6 +637,28 @@
         "ref": "75126988a73f3e67a56c90b7335ed73d2fe43849",
         "repo": "hongzhoulin89/lean-eval-space-groups-230"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T08:49:46Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1937,
+        "kind": "issue"
+      },
+      "problem_id": "annals_integer_multiplication",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_74012a350572665f6f4b3006621260e915be9b2f72d3ec38bc01c63ffd00c2f6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a8b7ff5720452acebda849d2bf853c6177ff97d6",
+        "repo": "hongzhoulin89/lean-eval-annals-integer-multiplication"
+      }
     }
   ],
   "schema_version": 2,
