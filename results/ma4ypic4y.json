@@ -242,6 +242,28 @@
         "ref": "6a4f513b9961125a3a1d3f5bdb118bc30d82a6a0",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T16:52:40Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1953,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_high_dim_topological",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: poincare_high_dim_topological, statement revision 1.\n\nThe declared model/system name max gp (GPT-6) is our existing GPT-6-family system label. This proof comes from the formalization-evaluation campaign via Codex CLI; the supplied provenance records backend: gpt-6.1-sol / medium. Campaign contributor: @haskiindahouse. Human direction included selecting the campaign targets and authorizing this private submission.\n\nDeclared reuse: adapts the existing public Apache-2.0 formalization https://github.com/qinz1yang/differential-geometry at `777299070a5529e96345e0033979706fd00c7e62`. The campaign performed import remapping under Submission.DG (236-file closure, full LICENSE/NOTICE in Submission/DG/License.lean), the exact root application and axiom reports. Original full-proof authorship is not claimed; original declarations, headers and notices are retained.\n\nThe bundled VERIFICATION.json records fresh source-only official local verification with the unchanged LeanEval comparator, both Nanoda and the Lean kernel accepted, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and pinned dependencies. Receipt: 18b27adb5b89483890cc342892168d01. All 239 submitted Lean source hashes were independently checked against that bundled receipt after downloading this exact GitHub commit archive. Server workspace discovery and overlay were checked using the unmodified evaluator at 6164cacbef4207b5c8d895e89ac58e4bb9bb23e3; the protected benchmark files remain unchanged. These archive/packaging checks do not repeat the Lean proof run, and the bundled local PASS is not a claim of organizer acceptance or leaderboard credit.\n\nPublication status: private, with no current publication plan and no publication date. No public release of the submitted source is authorized by this submission. Original source notices and provenance are retained. Only this exact problem snapshot is submitted through the currently documented GitHub issue intake.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8d577ac14a427f6ff33037c6ed131f424b049b351322be4716e038be3bcb4100",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b5e82a281c9214a4e0b99d5071b3a584c68ef161",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
