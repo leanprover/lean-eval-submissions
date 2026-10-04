@@ -44,6 +44,28 @@
         "ref": "a6424cad3b6049d1b4f9e3701cc125bcd6208fb3",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T04:47:16Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1935,
+        "kind": "issue"
+      },
+      "problem_id": "wang_zahl_kakeya_dimH",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: wang_zahl_kakeya_dimH (Wang–Zahl Kakeya dimension in R^3).\n\nReuses existing public formalizations: project-numina/kakeya-3d at a26427e3c2fcaf9f98694fbd0d4dd49e41dcf5e3, including its unconditional bridge, and M32026/3d-sticky-kakeya at 42f739b484fd055e0aa29601c35677ad996f2ef2. Mathematical argument and major formalization are upstream work; original full-proof authorship is not claimed. Original attribution and individual notices are preserved in the private source snapshot, with exact per-file provenance.\n\nContribution: GPT-6 import relocation, Lean 4.35 / Mathlib compatibility adaptation, an adapter to the exact benchmark hypothesis, and proof-term decomposition/auxiliary-lemma extraction for Nanoda. Harness: Codex multi-agent source-porting workflow with the unchanged pinned LeanEval comparator. Human selected the target/research direction, requested privacy and both contributor tags, and authorized this submission. This proof did not use the subsequent DeepSeek Flash campaign.\n\nFresh source-only full local official verification passed both the Lean kernel and Nanoda against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. All 5,566 submitted Lean files match the accepted receipt byte-for-byte. Exact Git archive discovery and overlay passed with protected workspace files unchanged. Local PASS is not a claim of server acceptance.\n\nPublication status: private, with no current publication plan. No public source release or Apache-2.0 relicensing of the combined closure is authorized by this submission. Numina is Apache-2.0; no repository-wide license grant covering the complete pinned sticky proof closure has been established. The private snapshot retains upstream licenses and notices with their proper scope.\n\nThis uses the currently documented temporary GitHub issue intake. Only this Kakeya proof is being submitted; stopped proof/model campaigns remain stopped.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_85d7c78eb79b0f80cdb4269e70ff26d58d219cef24ae16044104fec9731f904a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8714eadb5e326447c2fd51f861374f6db9947213",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
