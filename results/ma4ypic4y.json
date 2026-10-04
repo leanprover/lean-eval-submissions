@@ -88,6 +88,28 @@
         "ref": "0a3b21c601dd75b126d0f630250a5e71954c4649",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T16:35:33Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1943,
+        "kind": "issue"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: annals_equiangular_lines_fixed_angle, statement revision 1.\n\nThe declared model/system name max gp (GPT-6) is our existing GPT-6-family system label. This proof comes from the formalization-evaluation campaign via Codex CLI; the supplied provenance records backend: gpt-6.1-sol / medium. Campaign contributor: @haskiindahouse. Human direction included selecting the campaign targets and authorizing this private submission.\n\nOriginal campaign proof: the Lean proof code was generated in this campaign (machine-assisted, Codex CLI) and assembled over the pinned Apache-2.0 Lean Pool library (Vilin97/lean-pool @ e9d53e9cbcff8dfd0cc816ba94db7a26b082929f (Apache-2.0)); Lean Pool spectral (Perron/top-spectrum) results are credited to their authors. Statement headers and mathematics remain attributed to their original authors.\n\nThe bundled VERIFICATION.json records fresh source-only official local verification with the unchanged LeanEval comparator, both Nanoda and the Lean kernel accepted, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e, Lean v4.35.0-rc3 and pinned dependencies. Receipt: 95cbfde6fc204ea6bd3499108a6b5870. All 40 submitted Lean source hashes were independently checked against that bundled receipt after downloading this exact GitHub commit archive. Server workspace discovery and overlay were checked using the unmodified evaluator at 6164cacbef4207b5c8d895e89ac58e4bb9bb23e3; the protected benchmark files remain unchanged. These archive/packaging checks do not repeat the Lean proof run, and the bundled local PASS is not a claim of organizer acceptance or leaderboard credit.\n\nPublication status: private, with no current publication plan and no publication date. No public release of the submitted source is authorized by this submission. Original source notices and provenance are retained. Only this exact problem snapshot is submitted through the currently documented GitHub issue intake.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_b472c5fa7a43e66daf8ec2e93f06d98165865e485c961dff91d4f1907f52db02",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "49b7255bd49aa5b9e293a50c5af6fff6cd42b9fb",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
