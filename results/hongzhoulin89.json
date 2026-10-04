@@ -659,6 +659,28 @@
         "ref": "a8b7ff5720452acebda849d2bf853c6177ff97d6",
         "repo": "hongzhoulin89/lean-eval-annals-integer-multiplication"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T14:26:47Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1939,
+        "kind": "issue"
+      },
+      "problem_id": "shafarevich_relation_rank_bound",
+      "production_metadata": {
+        "production_description": "Mini-Humanize workflow using Kimi K3 and GPT-6 Astra for proof development and Lean migration, followed by GPT-5.6-sol review and full evaluator verification.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_f518a8f2a683731e8d4368c8aa089d28aeb854c05f51bf96f6894a98f2384be5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c41dc020c7300b14907f8cdf664fe7caa06d72cb",
+        "repo": "hongzhoulin89/lean-eval-shafarevich-relation-rank-bound"
+      }
     }
   ],
   "schema_version": 2,
