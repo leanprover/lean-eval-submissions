@@ -725,6 +725,27 @@
         "ref": "ef1e78d969639e03b345b71f042a4293a301c105",
         "repo": "hongzhoulin89/lean-eval-annals-rectangular-peg-problem"
       }
+    },
+    {
+      "accepted_at": "2026-10-04T17:32:38Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1956,
+        "kind": "issue"
+      },
+      "problem_id": "annals_wilkies_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_16f8d2e0133179510abf366bc5265cdfa8f47a2a0ac1eca268cb748405038a85",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ffe5561cad5c293b2973d5259e6f594b067e88f3",
+        "repo": "hongzhoulin89/lean-eval-annals-wilkies-conjecture"
+      }
     }
   ],
   "schema_version": 2,
