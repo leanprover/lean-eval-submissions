@@ -183,6 +183,29 @@
         "ref": "f6dd0289ab0ee545b968392ce6aa43c244fc9f8e",
         "repo": "the-omega-institute/trureturing-lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T17:06:51Z",
+      "benchmark_commit": "2e58dff1c3d3aa934614d46205e8f430f9a7ca7e",
+      "declared_model": "trureturing",
+      "intake": {
+        "issue_number": 1972,
+        "kind": "issue"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "production_description": "This is a compatibility port of the complete Klartag lattice-packing proof from mlgraham/lean-eval-klartag-submission at immutable commit 270b3358a135f64a6688636660c07772e8db0173 (Apache-2.0): https://github.com/mlgraham/lean-eval-klartag-submission/tree/270b3358a135f64a6688636660c07772e8db0173 . As described in the original submission #1720, the original proof was produced with Claude Code under human direction. The full mathematical construction and proof are reused and attributed to that source; this campaign does not claim original mathematics.\n\nThe trureturing campaign uses Codex coordination, Codex CLI compatibility implementation, and independent Codex CLI review. The port adapts Gaussian law/measurability interfaces, algebraic structure transparency and matrix equivalences, probability pushforward instances, and actual compiler/linter compatibility to the official fixed environment: Lean 4.35.0-rc3, Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22, and lean-pool e9d53e9cbcff8dfd0cc816ba94db7a26b082929f. The exact final benchmark statement is preserved, including one positive constant for all natural dimensions, exact ellipsoid volume c*n^2, and the integer-point conclusion. The source snapshot contains only this workspace and preserves the original license and attribution.\n\nLocal validation at the official fixed pins completed successfully: the full 9137-job Submission build exited 0 with no errors or warnings. Fresh Solution and protected Challenge checks exited 0; the Challenge remains the unchanged benchmark sorry template and is not imported by the proof audit. The external audit imports the fresh Solution and checks both `Submission.klartag_packing` and global `klartag_packing`, each depending only on `propext`, `Classical.choice`, and `Quot.sound`. The source candidate was frozen after those checks and independently reviewed at the exact submitted commit before official intake.\n\nOfficial comparator/nanoda acceptance is requested, not presumed. Historical acceptance of the donor proof does not establish acceptance of this port. No measured monetary-cost claim is made.",
+        "solution_publication_date": "2026-10-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_05611f5bfad603507d91de3970b8b52acccbf3d09eb2b12420452a1359f19e75",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "1c34f9af6723f3f92f398b2c10929b6b96219e03",
+        "repo": "the-omega-institute/trureturing-lean-eval"
+      }
     }
   ],
   "schema_version": 2,
