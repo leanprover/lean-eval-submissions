@@ -137,6 +137,29 @@
         "ref": "480ced602aba35009e312e6be3f0539a8946ae04",
         "repo": "the-omega-institute/trureturing-lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T11:36:15Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "trureturing",
+      "intake": {
+        "issue_number": 1970,
+        "kind": "issue"
+      },
+      "problem_id": "szemeredi",
+      "production_metadata": {
+        "production_description": "The trureturing formalization campaign (Claude orchestration; Codex CLI implementation; independent Codex CLI and Claude review). The core mathematics is reused, not original: Szemerédi's theorem in finite form (`Combinatorics.ArithmeticProgression.exists_of_density_nat_atTop`) comes from Gabriel Dahia's density Hales–Jewett formalization (https://github.com/gdahia/densityhalesjewett), as packaged in Lean Pool `LeanPool/DensityHalesJewett` at lean-pool `5e0b39aee56fe9e23bae9bed852a42fef9260b92` (Apache-2.0). Because that project is newer than the benchmark-pinned lean-pool, its 14 files are vendored under `Submission/DHJ/` (module renames, one provenance line per file, and explicit binders `θ κ` added to one `variable` line in `Subspace.lean` so the code builds under the workspace's `autoImplicit = false`; see NOTICE.md). This submission adds only the bridge from the finite statement to the benchmark's positive-upper-density formulation. Locally (Lean 4.35.0-rc3, Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22) all Submission files, the trusted Solution and Challenge compile with `-DautoImplicit=false`, and `szemeredi` prints only propext, Classical.choice and Quot.sound. This resubmission fixes the build failure of #1966. Official comparator and nanoda acceptance are requested, not presumed. No measured monetary-cost claim is made.",
+        "solution_publication_date": "2026-10-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ee97c0b8173e46ac712186a9ae46cd09235651b82b782ce7a5e741f886547976",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2fba3b09101d38490a7a184cecaab6f5d3069ec1",
+        "repo": "the-omega-institute/trureturing-lean-eval"
+      }
     }
   ],
   "schema_version": 2,
