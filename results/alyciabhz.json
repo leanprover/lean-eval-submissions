@@ -114,6 +114,29 @@
         "ref": "92adfe225bb26dfed06f5ba77d9abbb7f680733f",
         "repo": "the-omega-institute/trureturning-lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T11:16:50Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "trureturing",
+      "intake": {
+        "issue_number": 1968,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_high_dim_topological",
+      "production_metadata": {
+        "production_description": "Identity correction: this submission supersedes issue #1967 for scoring under the canonical project name `trureturing`. The exact source commit and proof are unchanged. The earlier issue accidentally declared `trureturning`; its already-running workflow freezes that old value, so editing the issue alone cannot correct the recorded identity. Please treat the two issues as the same proof with corrected metadata, not independent mathematical contributions.\n\nThe trureturing formalization campaign. Human direction selected the benchmark, submission identity and public-source reuse policy. Codex performed source-closure packaging, import remapping and local Lean verification. This submission reuses the complete public Apache-2.0 formalization of `DifferentialGeometry.Topology.poincare_high_dim_topological` from https://github.com/qinz1yang/differential-geometry at commit `788efe97894474c032de6dfb1289d515f613d15a`; original full-proof authorship and new mathematical discovery are not claimed. The 237-module reachable closure is placed under `Submission/DifferentialGeometry/`, preserving original namespaces, proof bodies and headers while prefixing local imports. The root proof applies the existing theorem to the exact official revision-1 telescope.\n\nThe source snapshot contains exactly one workspace, for `poincare_high_dim_topological`. The official Challenge, Solution, WorkspaceTest, configuration, toolchain and dependency declarations are unchanged. The candidate compiled with Lean v4.35.0-rc3 and Mathlib `5e0c4e5239cb0a2d86d68a884bf52cfd963fce22`; `lake build Submission` and `lake build Solution` passed. The theorem's printed transitive axiom closure contains only `propext`, `Classical.choice` and `Quot.sound`. All 240 overlaid Lean files were byte-compared against the locally verified workspace. Full upstream LICENSE, NOTICE and source provenance are additionally retained as comments in `Submission/Attribution/UpstreamLicense.lean` so the evaluated source-only overlay preserves them. No additional Lake dependency is requested.\n\nLocal compilation is not an organizer acceptance claim. Local `lake test` could not launch because comparator/Nanoda are not installed on this host; official comparator and mandatory Nanoda verification are requested. This is an additional total-only submission; earlier accepted results by other teams are acknowledged. No measured monetary-cost or independent GPT Pro review claim is made.",
+        "solution_publication_date": "2026-10-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_0b3b40472fa236d5ebf8de3fdf24e2639f7b7e4c0c3a9ccab0068a518c7b1eea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "480ced602aba35009e312e6be3f0539a8946ae04",
+        "repo": "the-omega-institute/trureturing-lean-eval"
+      }
     }
   ],
   "schema_version": 2,
