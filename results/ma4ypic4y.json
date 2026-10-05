@@ -396,6 +396,28 @@
         "ref": "7b4dac5f489fe550e6814fc6cef5a8caa1646b36",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T22:31:35Z",
+      "benchmark_commit": "2e58dff1c3d3aa934614d46205e8f430f9a7ca7e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1988,
+        "kind": "issue"
+      },
+      "problem_id": "annals_supremum_of_selector_processes",
+      "production_metadata": {
+        "production_description": "Contributor tags: @ma4ypic4y, @haskiindahouse.\n\nSubmitter: ma4ypic4y. Problem: annals_supremum_of_selector_processes, statement revision 1.\n\nLeaderboard system: max gp (GPT-6). Production model declared by the submitting owner: gpt 6.1 sol (gpt-6.1-sol). This is the owner's updated model attribution supplied on 2026-10-06; it supersedes the earlier model label in the snapshot documentation. The original snapshot documentation is retained for provenance. Human direction included selecting the targets and authorizing this private submission.\n\nNew private submission; no previous submission or accepted result was found for this exact snapshot.\n\nOriginal campaign proof: the Lean proof (8 modules) was generated in this campaign by campaign agents (machine-assisted) from the mathematics of J. Park and H. T. Pham, Ann. of Math. 199(3) 2024 (arXiv:2204.10309); it uses only the pinned Mathlib and vendors no external code. Statement headers and mathematics remain attributed to their original authors.\n\nThe bundled VERIFICATION.json reports fresh source-only local acceptance by the unchanged official LeanEval comparator, both Nanoda and the Lean kernel, against benchmark 0e093293afbe96be91504ae6e44947876d3fc84e (receipt 9ac95244ae2b46dc837a617d885b816d). All 8 submitted Lean source hashes were checked against that receipt. Packaging, single-target discovery and overlay were rechecked using the official evaluator at fc878f28cb84abae21200482d12c11b95255c92b and current benchmark 2e58dff1c3d3aa934614d46205e8f430f9a7ca7e, preserving all protected benchmark files. The current benchmark has a newer WorkspaceTest harness; the bundled receipt predates that change. This preflight does not repeat Lean/Nanoda verification and is not a claim of hosted acceptance.\n\nPublication status: Private, with no current publication plan; no publication dates. Original licenses and author notices are retained.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_f0b576f4221e0de0ad78ba86c744c7ab054649956712a6db177293df33d46f54",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c2e5d58903f1b90c4cdfb6a5e2bccfd06cc74177",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
