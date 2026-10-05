@@ -22,6 +22,29 @@
         "ref": "92adfe225bb26dfed06f5ba77d9abbb7f680733f",
         "repo": "the-omega-institute/trureturning-lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T09:40:46Z",
+      "benchmark_commit": "0e093293afbe96be91504ae6e44947876d3fc84e",
+      "declared_model": "trureturing",
+      "intake": {
+        "issue_number": 1964,
+        "kind": "issue"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {
+        "production_description": "The trureturing formalization campaign (Claude orchestration; Codex CLI implementation; independent Codex CLI and Claude review). The core mathematics is reused, not original: the stronger Park–Pham (Kahn–Kalai) bound is taken from the public, sorry-free Lean Pool theorem `KahnKalai.park_pham_bound` (`LeanPool/KahnKalai`, Apache-2.0, by Dan Clemens Posch, upstream https://github.com/dcposch/kahn-kalai-lean, following arXiv:2303.02144), imported from the benchmark-pinned lean-pool `e9d53e9cbcff8dfd0cc816ba94db7a26b082929f` as allowed for solutions. This submission adds the transport to the benchmark statement of Frankston–Kahn–Narayanan–Park (universe change to `Fin n`, minimal elements and the bound by `l`, `setBernoulli` = explicit product measure, monotonicity of the Bernoulli measure of an upper family, comparison of `p_c` with the pool threshold, integral covers as fractional covers, log₂→ln with `K = 100000 / log 2`). Locally (Lean 4.35.0-rc3, Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22) Submission, the trusted Solution and Challenge compile, and `theorem_1_1` and `K` print only propext, Classical.choice and Quot.sound. Official comparator and nanoda acceptance are requested, not presumed. No measured monetary-cost claim is made.",
+        "solution_publication_date": "2026-10-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_63c1d63f4e289f524ceca4d201e596abc35382435a59e569e5e7ca8b12cbb219",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "8251a147e17394ab042a0f9d002263c4e48f8419",
+        "repo": "the-omega-institute/trureturing-lean-eval"
+      }
     }
   ],
   "schema_version": 2,
