@@ -1,10 +1,10 @@
 """Unit tests for scripts/archive_submission.py.
 
-The script shells out to `age` for encryption and to the GitHub
-Contents API for upload. Both are mocked here so the tests run without
-network and without an age binary; an integration test that actually
-encrypts + decrypts a fixture lives outside CI (manual decrypt drill,
-see docs/audit-archive.md).
+The script shells out to `age` for encryption and to native Git for archive
+upload. Both are mocked where appropriate so the tests run without network
+and without an age binary; an integration test that actually encrypts +
+decrypts a fixture lives outside CI (manual decrypt drill, see
+docs/audit-archive.md).
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import pathlib
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -566,7 +567,7 @@ class PushTests(unittest.TestCase):
             url, 404, "Not Found", {}, io.BytesIO(b'{"message":"Not Found"}')
         )
 
-    def test_push_uploads_ciphertext_then_sidecar_from_summary(self) -> None:
+    def test_push_commits_ciphertext_and_sidecar_atomically_from_summary(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp)
@@ -585,21 +586,18 @@ class PushTests(unittest.TestCase):
                 "overlay_records": [],
             }))
 
-            puts: list[dict] = []
+            pushes: list[dict] = []
 
             def fake_urlopen(req, timeout=None):
-                # Nothing archived yet: every existence GET is a 404.
-                if req.get_method() == "GET":
-                    raise self._not_found(req.full_url)
-                puts.append({
-                    "url": req.full_url,
-                    "body": json.loads(req.data.decode("utf-8")) if req.data else None,
-                    "headers": dict(req.header_items()),
-                })
-                return io.BytesIO(b'{"content": {"sha": "deadbeef"}}')
+                raise self._not_found(req.full_url)
+
+            def fake_push(**kwargs):
+                pushes.append(kwargs)
+                return "f" * 40
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(arch, "_push_git_archive", side_effect=fake_push):
                 rc = arch.main([
                     "push",
                     "--ciphertext", str(ciphertext),
@@ -609,18 +607,18 @@ class PushTests(unittest.TestCase):
                     "--workflow-run-url", "https://example.invalid/run/1",
                 ])
             self.assertEqual(rc, 0)
-            # A brand-new submission creates exactly two files: ciphertext
-            # then sidecar. No `sha` is supplied, since neither exists.
-            self.assertEqual(len(puts), 2)
-            urls = [r["url"] for r in puts]
-            self.assertTrue(all("/repos/leanprover/lean-eval-audit/contents/audit/" in u for u in urls))
-            self.assertTrue(urls[0].endswith("alice-99-01234567.tar.age"))
-            self.assertTrue(urls[1].endswith("alice-99-01234567.json"))
-            self.assertNotIn("sha", puts[0]["body"])
-            self.assertNotIn("sha", puts[1]["body"])
-            uploaded_sidecar = json.loads(
-                base64.b64decode(puts[1]["body"]["content"]).decode("utf-8")
+            self.assertEqual(len(pushes), 1)
+            pushed = pushes[0]
+            self.assertEqual(pushed["ciphertext"], ciphertext)
+            self.assertTrue(
+                pushed["ciphertext_remote"].endswith(
+                    "alice-99-01234567.tar.age"
+                )
             )
+            self.assertTrue(
+                pushed["sidecar_remote"].endswith("alice-99-01234567.json")
+            )
+            uploaded_sidecar = json.loads(pushed["sidecar_bytes"])
             self.assertEqual(uploaded_sidecar["evaluator_verdict"], {
                 "two_plus_two": "pass",
                 "halting_problem": "fail",
@@ -631,37 +629,22 @@ class PushTests(unittest.TestCase):
             self.assertEqual(len(uploaded_sidecar["sha256_ciphertext"]), 64)
             self.assertEqual(uploaded_sidecar["benchmark_commit"], "f" * 40)
             self.assertIn("archived_at", uploaded_sidecar)
-            self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
+            self.assertEqual(pushed["token"], "xxx")
 
     def test_push_server_submission_emits_state_locator(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
             completion = tmp / "archive-completion.json"
-            puts: list[dict] = []
             committed = b"age-encryption.org/v1\nfake"
-            contents_response, blob_response = self._committed_blob_responses(
-                committed
-            )
 
             def fake_urlopen(req, timeout=None):
-                if req.get_method() == "GET" and "/git/blobs/" in req.full_url:
-                    return io.BytesIO(blob_response)
-                if req.get_method() == "GET" and "?ref=" in req.full_url:
-                    return io.BytesIO(contents_response)
-                if req.get_method() == "GET":
-                    raise self._not_found(req.full_url)
-                puts.append({
-                    "url": req.full_url,
-                    "body": json.loads(req.data.decode("utf-8")),
-                })
-                return io.BytesIO(json.dumps({
-                    "content": {"sha": "deadbeef"},
-                    "commit": {"sha": "f" * 40},
-                }).encode("utf-8"))
+                raise self._not_found(req.full_url)
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(arch, "_push_git_archive", return_value="f" * 40), \
+                 mock.patch.object(arch, "_verify_ciphertext_at_commit"):
                 rc = arch.main([
                     "push",
                     "--ciphertext", str(self._ciphertext(tmp)),
@@ -671,10 +654,7 @@ class PushTests(unittest.TestCase):
                 ])
 
             self.assertEqual(rc, 0)
-            self.assertEqual(len(puts), 2)
             expected_base = f"archives/01/{VALID_SUBMISSION_ID}"
-            self.assertTrue(puts[0]["url"].endswith(expected_base + ".tar.age"))
-            self.assertTrue(puts[1]["url"].endswith(expected_base + ".json"))
             value = json.loads(locator.read_text())
             self.assertEqual(value, {
                 "schema_version": 1,
@@ -727,23 +707,21 @@ class PushTests(unittest.TestCase):
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
             completion = tmp / "archive-completion.json"
-            contents_response, blob_response = self._committed_blob_responses(
-                b"different committed ciphertext"
-            )
 
             def fake_urlopen(req, timeout=None):
-                if req.get_method() == "GET" and "/git/blobs/" in req.full_url:
-                    return io.BytesIO(blob_response)
-                if req.get_method() == "GET" and "?ref=" in req.full_url:
-                    return io.BytesIO(contents_response)
-                if req.get_method() == "GET":
-                    raise self._not_found(req.full_url)
-                return io.BytesIO(json.dumps({
-                    "commit": {"sha": "f" * 40},
-                }).encode("utf-8"))
+                raise self._not_found(req.full_url)
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(arch, "_push_git_archive", return_value="f" * 40), \
+                 mock.patch.object(
+                     arch,
+                     "_verify_ciphertext_at_commit",
+                     side_effect=SystemExit(
+                         "archive commit does not contain the ciphertext recorded "
+                         "by its sidecar"
+                     ),
+                 ):
                 with self.assertRaises(SystemExit) as ctx:
                     arch.main([
                         "push",
@@ -762,25 +740,19 @@ class PushTests(unittest.TestCase):
             completion = tmp / "archive-completion.json"
             calls: list[tuple[str, str]] = []
             existing_ciphertext = b"age-encryption.org/v1\nexisting"
-            contents_response, blob_response = self._committed_blob_responses(
-                existing_ciphertext
-            )
 
             def fake_urlopen(req, timeout=None):
                 method, url = req.get_method(), req.full_url
                 calls.append((method, url))
                 if "/commits?" in url:
                     return io.BytesIO(json.dumps([{"sha": "e" * 40}]).encode("utf-8"))
-                if method == "GET" and "/git/blobs/" in url:
-                    return io.BytesIO(blob_response)
-                if method == "GET" and "?ref=" in url:
-                    return io.BytesIO(contents_response)
                 if method == "GET" and url.endswith(".json"):
                     return io.BytesIO(self._server_sidecar_meta())
                 raise AssertionError(f"unexpected {method} {url}")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(arch, "_verify_ciphertext_at_commit"):
                 rc = arch.main([
                     "push",
                     "--ciphertext", str(self._ciphertext(tmp)),
@@ -889,102 +861,85 @@ class PushTests(unittest.TestCase):
                     ])
             self.assertIn("colliding archive", str(ctx.exception).lower())
 
-    def test_push_fails_fast_on_non_sha_422(self) -> None:
-        # A 422 whose body is NOT the "sha wasn't supplied" conflict is a real
-        # validation failure (e.g. content too large). It must fail fast with
-        # the response body, not be retried as a sha race and reported as
-        # exhausted retries.
+    def test_push_uses_native_git_instead_of_contents_api(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp)
             sidecar = self._partial_sidecar(tmp)
-            validation_body = json.dumps(
-                {"message": "content is too large"}
-            ).encode("utf-8")
-            puts = 0
+            pushes: list[dict] = []
+            methods: list[str] = []
 
             def fake_urlopen(req, timeout=None):
-                nonlocal puts
-                if req.get_method() == "GET":
-                    raise self._not_found(req.full_url)
-                puts += 1
-                raise urllib.error.HTTPError(
-                    req.full_url, 422, "Unprocessable Entity", {},
-                    io.BytesIO(validation_body),
-                )
+                methods.append(req.get_method())
+                raise self._not_found(req.full_url)
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
-                with self.assertRaises(SystemExit) as ctx:
-                    arch.main([
-                        "push",
-                        "--ciphertext", str(ciphertext),
-                        "--sidecar", str(sidecar),
-                    ])
-            self.assertIn("content is too large", str(ctx.exception))
-            self.assertEqual(puts, 1)  # failed immediately, no retries
-
-    def test_push_updates_orphan_ciphertext_when_sidecar_absent(self) -> None:
-        # A prior run uploaded the ciphertext then crashed before the
-        # sidecar. The rerun finds no sidecar (not a no-op) and must update
-        # the orphan ciphertext in place by supplying its sha, rather than
-        # failing the unconditional create with `"sha" wasn't supplied`.
-        with tempfile.TemporaryDirectory() as td:
-            tmp = pathlib.Path(td)
-            ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nnewbytes")
-            sidecar = self._partial_sidecar(tmp)
-            orphan_meta = json.dumps({"sha": "orphansha"}).encode("utf-8")
-
-            calls: list[dict] = []
-
-            def fake_urlopen(req, timeout=None):
-                method, url = req.get_method(), req.full_url
-                calls.append({
-                    "method": method, "url": url,
-                    "body": json.loads(req.data.decode("utf-8")) if req.data else None,
-                })
-                if method == "GET" and url.endswith(".json"):
-                    raise self._not_found(url)          # no prior sidecar
-                if method == "GET" and url.endswith(".tar.age"):
-                    return io.BytesIO(orphan_meta)        # orphan ciphertext present
-                return io.BytesIO(b'{"content": {"sha": "x"}}')
-
-            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(
+                     arch,
+                     "_push_git_archive",
+                     side_effect=lambda **kwargs: pushes.append(kwargs) or "f" * 40,
+                 ):
                 rc = arch.main([
                     "push",
                     "--ciphertext", str(ciphertext),
                     "--sidecar", str(sidecar),
                 ])
             self.assertEqual(rc, 0)
-            ct_put = next(c for c in calls
-                          if c["method"] == "PUT" and c["url"].endswith(".tar.age"))
-            # The orphan's sha is supplied so the PUT updates it in place.
-            self.assertEqual(ct_put["body"].get("sha"), "orphansha")
+            self.assertEqual(methods, ["GET"])
+            self.assertEqual(len(pushes), 1)
+
+    def test_push_commits_ciphertext_and_sidecar_in_one_operation(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nnewbytes")
+            sidecar = self._partial_sidecar(tmp)
+            pushes: list[dict] = []
+
+            def fake_urlopen(req, timeout=None):
+                raise self._not_found(req.full_url)
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(
+                     arch,
+                     "_push_git_archive",
+                     side_effect=lambda **kwargs: pushes.append(kwargs) or "f" * 40,
+                 ):
+                rc = arch.main([
+                    "push",
+                    "--ciphertext", str(ciphertext),
+                    "--sidecar", str(sidecar),
+                ])
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(pushes), 1)
+            self.assertEqual(pushes[0]["ciphertext"], ciphertext)
+            self.assertTrue(pushes[0]["sidecar_bytes"].endswith(b"\n"))
 
     def test_push_omits_verdict_when_summary_missing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp)
             sidecar = self._partial_sidecar(tmp)
-            put_bodies: list[dict] = []
+            pushes: list[dict] = []
 
             def fake_urlopen(req, timeout=None):
-                if req.get_method() == "GET":
-                    raise self._not_found(req.full_url)
-                put_bodies.append(json.loads(req.data.decode("utf-8")) if req.data else {})
-                return io.BytesIO(b'{"content": {"sha": "x"}}')
+                raise self._not_found(req.full_url)
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
-                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                 mock.patch.object(
+                     arch,
+                     "_push_git_archive",
+                     side_effect=lambda **kwargs: pushes.append(kwargs) or "f" * 40,
+                 ):
                 rc = arch.main([
                     "push",
                     "--ciphertext", str(ciphertext),
                     "--sidecar", str(sidecar),
                 ])
             self.assertEqual(rc, 0)
-            # put_bodies[0] = ciphertext, [1] = sidecar.
-            uploaded = json.loads(base64.b64decode(put_bodies[1]["content"]).decode("utf-8"))
+            uploaded = json.loads(pushes[0]["sidecar_bytes"])
             self.assertNotIn("evaluator_verdict", uploaded)
             self.assertNotIn("problem_ids", uploaded)
 
@@ -1099,6 +1054,101 @@ class PushTests(unittest.TestCase):
                         "--benchmark-commit", "not-a-sha",
                     ])
             self.assertIn("benchmark-commit", str(ctx.exception))
+
+
+class NativeGitArchiveTests(unittest.TestCase):
+    @staticmethod
+    def _bare_audit_repo(root: pathlib.Path) -> pathlib.Path:
+        seed = root / "seed"
+        bare = root / "audit.git"
+        subprocess.run(["git", "init", "--quiet", str(seed)], check=True)
+        subprocess.run(
+            ["git", "-C", str(seed), "config", "user.name", "Test"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(seed), "config", "user.email", "test@example.invalid"],
+            check=True,
+        )
+        (seed / "README.md").write_text("audit\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(seed), "add", "README.md"], check=True)
+        subprocess.run(
+            ["git", "-C", str(seed), "commit", "--quiet", "-m", "initial"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(seed), "branch", "-M", "main"],
+            check=True,
+        )
+        subprocess.run(["git", "init", "--quiet", "--bare", str(bare)], check=True)
+        subprocess.run(
+            ["git", "-C", str(seed), "remote", "add", "origin", str(bare)],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(seed), "push", "--quiet", "origin", "main"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "--git-dir", str(bare), "symbolic-ref", "HEAD", "refs/heads/main"],
+            check=True,
+        )
+        return bare
+
+    def test_native_git_push_is_atomic_and_verifiable(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            bare = self._bare_audit_repo(root)
+            ciphertext = root / "source.tar.gz.age"
+            ciphertext_bytes = b"age-encryption.org/v1\nnative-git-fixture"
+            ciphertext.write_bytes(ciphertext_bytes)
+            sidecar_bytes = b'{"schema_version": 2}\n'
+            ciphertext_remote = "archives/01/submission.tar.age"
+            sidecar_remote = "archives/01/submission.json"
+
+            with mock.patch.object(arch, "_audit_git_url", return_value=str(bare)):
+                commit = arch._push_git_archive(
+                    audit_repo="leanprover/lean-eval-audit",
+                    token="test-token",
+                    ciphertext=ciphertext,
+                    sidecar_bytes=sidecar_bytes,
+                    ciphertext_remote=ciphertext_remote,
+                    sidecar_remote=sidecar_remote,
+                    sidecar={"submission_id": VALID_SUBMISSION_ID},
+                    message="archive: test",
+                )
+                arch._verify_ciphertext_at_commit(
+                    audit_repo="leanprover/lean-eval-audit",
+                    token="test-token",
+                    archive_commit=commit,
+                    archive_path=ciphertext_remote,
+                    expected_sha256=hashlib.sha256(ciphertext_bytes).hexdigest(),
+                )
+
+            archived_ciphertext = subprocess.run(
+                [
+                    "git",
+                    "--git-dir",
+                    str(bare),
+                    "show",
+                    f"{commit}:{ciphertext_remote}",
+                ],
+                check=True,
+                capture_output=True,
+            ).stdout
+            archived_sidecar = subprocess.run(
+                [
+                    "git",
+                    "--git-dir",
+                    str(bare),
+                    "show",
+                    f"{commit}:{sidecar_remote}",
+                ],
+                check=True,
+                capture_output=True,
+            ).stdout
+            self.assertEqual(archived_ciphertext, ciphertext_bytes)
+            self.assertEqual(archived_sidecar, sidecar_bytes)
 
 
 class GitBlobShaTests(unittest.TestCase):

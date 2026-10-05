@@ -13,9 +13,9 @@ Two subcommands, run from different workflow jobs:
   push     Runs in the `archive` job on a fresh runner. Takes the
            ciphertext and partial sidecar from `encrypt`, merges in
            per-problem evaluator verdict from summary.json, computes
-           the ciphertext digest, and uploads both objects to
-           leanprover/lean-eval-audit via the GitHub Contents API
-           using the `lean-eval-archiver` App's installation token.
+           the ciphertext digest, and commits both objects atomically
+           to leanprover/lean-eval-audit through Git using the
+           `lean-eval-archiver` App's installation token.
 
 The split is intentional: only the `evaluate` job has the plaintext;
 only the `archive` job has the archiver-App token. Neither job sees
@@ -35,6 +35,7 @@ import random
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -720,6 +721,267 @@ def _write_archive_completion(
     )
 
 
+def _git_auth_environment(token: str, root: pathlib.Path) -> dict[str, str]:
+    """Return a non-interactive Git environment without putting the token in argv."""
+    askpass = root / "git-askpass.sh"
+    askpass.write_text(
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  *Username*) printf '%s\\n' x-access-token ;;\n"
+        "  *Password*) printf '%s\\n' \"$LEAN_EVAL_GIT_TOKEN\" ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    askpass.chmod(0o700)
+    env = os.environ.copy()
+    env.update(
+        {
+            "GIT_ASKPASS": str(askpass),
+            "GIT_TERMINAL_PROMPT": "0",
+            "LEAN_EVAL_GIT_TOKEN": token,
+        }
+    )
+    return env
+
+
+def _audit_git_url(audit_repo: str) -> str:
+    return f"https://github.com/{audit_repo}.git"
+
+
+def _run_git(
+    args: list[str],
+    *,
+    env: dict[str, str],
+    input_text: str | None = None,
+    check: bool = True,
+    timeout: int = 120,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            env=env,
+            input=input_text,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError:
+        sys.exit("git executable is required to persist the audit archive")
+    except subprocess.TimeoutExpired:
+        sys.exit(f"git {' '.join(args[:3])} timed out after {timeout} seconds")
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        sys.exit(f"git {' '.join(args[:3])} failed: {detail}")
+    return result
+
+
+def _git_commit_archive(
+    *,
+    repo_dir: pathlib.Path,
+    env: dict[str, str],
+    parent: str,
+    index_path: pathlib.Path,
+    ciphertext_blob: str,
+    ciphertext_remote: str,
+    sidecar_blob: str,
+    sidecar_remote: str,
+    message: str,
+) -> str:
+    index_path.unlink(missing_ok=True)
+    index_env = env.copy()
+    index_env["GIT_INDEX_FILE"] = str(index_path)
+    _run_git(["-C", str(repo_dir), "read-tree", parent], env=index_env)
+    for blob, path in (
+        (ciphertext_blob, ciphertext_remote),
+        (sidecar_blob, sidecar_remote),
+    ):
+        _run_git(
+            [
+                "-C",
+                str(repo_dir),
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{blob},{path}",
+            ],
+            env=index_env,
+        )
+    tree = _run_git(
+        ["-C", str(repo_dir), "write-tree"],
+        env=index_env,
+    ).stdout.strip()
+    commit_env = index_env.copy()
+    commit_env.update(
+        {
+            "GIT_AUTHOR_NAME": "Lean Eval Archiver",
+            "GIT_AUTHOR_EMAIL": "lean-eval-archiver@users.noreply.github.com",
+            "GIT_COMMITTER_NAME": "Lean Eval Archiver",
+            "GIT_COMMITTER_EMAIL": "lean-eval-archiver@users.noreply.github.com",
+        }
+    )
+    commit = _run_git(
+        ["-C", str(repo_dir), "commit-tree", tree, "-p", parent],
+        env=commit_env,
+        input_text=message + "\n",
+    ).stdout.strip()
+    if not SHA40_RE.fullmatch(commit):
+        sys.exit(f"git commit-tree returned an invalid commit: {commit!r}")
+    return commit
+
+
+def _push_git_archive(
+    *,
+    audit_repo: str,
+    token: str,
+    ciphertext: pathlib.Path,
+    sidecar_bytes: bytes,
+    ciphertext_remote: str,
+    sidecar_remote: str,
+    sidecar: dict,
+    message: str,
+) -> str:
+    """Atomically append ciphertext and sidecar with a native Git push.
+
+    Native Git transfers the raw blob rather than embedding it in a base64 JSON
+    request. Each retry rebuilds the commit on the latest `main` tree. A
+    concurrent writer that archived this same source wins idempotently; an
+    identity collision remains a hard failure.
+    """
+    with tempfile.TemporaryDirectory(prefix="lean-eval-archive-push-") as td:
+        root = pathlib.Path(td)
+        repo_dir = root / "repo"
+        sidecar_file = root / "sidecar.json"
+        sidecar_file.write_bytes(sidecar_bytes)
+        env = _git_auth_environment(token, root)
+        _run_git(["init", "--quiet", str(repo_dir)], env=env)
+        _run_git(
+            [
+                "-C",
+                str(repo_dir),
+                "remote",
+                "add",
+                "origin",
+                _audit_git_url(audit_repo),
+            ],
+            env=env,
+        )
+        ciphertext_blob = _run_git(
+            ["-C", str(repo_dir), "hash-object", "-w", str(ciphertext)],
+            env=env,
+            timeout=300,
+        ).stdout.strip()
+        sidecar_blob = _run_git(
+            ["-C", str(repo_dir), "hash-object", "-w", str(sidecar_file)],
+            env=env,
+        ).stdout.strip()
+        for label, blob in (
+            ("ciphertext", ciphertext_blob),
+            ("sidecar", sidecar_blob),
+        ):
+            if not SHA40_RE.fullmatch(blob):
+                sys.exit(f"git hash-object returned an invalid {label} blob: {blob!r}")
+
+        last_error = ""
+        for attempt in range(1, PUSH_RETRY_ATTEMPTS + 1):
+            fetched = _run_git(
+                [
+                    "-C",
+                    str(repo_dir),
+                    "fetch",
+                    "--quiet",
+                    "--depth=1",
+                    "--filter=blob:none",
+                    "origin",
+                    "refs/heads/main",
+                ],
+                env=env,
+                check=False,
+                timeout=300,
+            )
+            if fetched.returncode != 0:
+                last_error = (fetched.stderr or fetched.stdout).strip()
+                if attempt < PUSH_RETRY_ATTEMPTS:
+                    time.sleep(
+                        min(30.0, 2.0 ** (attempt - 1))
+                        * random.uniform(0.5, 1.5)
+                    )
+                    continue
+                break
+            parent = _run_git(
+                ["-C", str(repo_dir), "rev-parse", "FETCH_HEAD"],
+                env=env,
+            ).stdout.strip()
+            if not SHA40_RE.fullmatch(parent):
+                sys.exit(f"git fetch returned an invalid audit head: {parent!r}")
+            commit = _git_commit_archive(
+                repo_dir=repo_dir,
+                env=env,
+                parent=parent,
+                index_path=root / "archive.index",
+                ciphertext_blob=ciphertext_blob,
+                ciphertext_remote=ciphertext_remote,
+                sidecar_blob=sidecar_blob,
+                sidecar_remote=sidecar_remote,
+                message=message,
+            )
+            pushed = _run_git(
+                [
+                    "-C",
+                    str(repo_dir),
+                    "push",
+                    "--porcelain",
+                    "origin",
+                    f"{commit}:refs/heads/main",
+                ],
+                env=env,
+                check=False,
+                timeout=300,
+            )
+            if pushed.returncode == 0:
+                return commit
+
+            last_error = (pushed.stderr or pushed.stdout).strip()
+            existing = _get_remote_sidecar(
+                audit_repo=audit_repo,
+                token=token,
+                path=sidecar_remote,
+            )
+            if existing is not None:
+                if _same_source(existing, sidecar):
+                    print(
+                        "archive: concurrent writer already committed this source; "
+                        "idempotent no-op",
+                        file=sys.stderr,
+                    )
+                    return _latest_path_commit(
+                        audit_repo=audit_repo,
+                        token=token,
+                        path=sidecar_remote,
+                    )
+                identity_fields = _identity_fields(sidecar)
+                existing_identity = {
+                    field: existing.get(field) for field in identity_fields
+                }
+                ours_identity = {
+                    field: sidecar.get(field) for field in identity_fields
+                }
+                sys.exit(
+                    f"audit path already exists in {audit_repo} for a different "
+                    f"source (existing {existing_identity} vs ours {ours_identity})"
+                )
+            if attempt < PUSH_RETRY_ATTEMPTS:
+                time.sleep(
+                    min(30.0, 2.0 ** (attempt - 1))
+                    * random.uniform(0.5, 1.5)
+                )
+        sys.exit(
+            "native Git push to lean-eval-audit failed after "
+            f"{PUSH_RETRY_ATTEMPTS} attempts: {last_error}"
+        )
+
+
 def _verify_ciphertext_at_commit(
     *,
     audit_repo: str,
@@ -728,112 +990,71 @@ def _verify_ciphertext_at_commit(
     archive_path: str,
     expected_sha256: str,
 ) -> None:
-    """Prove the immutable commit named in State contains the expected bytes."""
-    query = urllib.parse.urlencode({"ref": archive_commit})
-    contents_url = (
-        f"https://api.github.com/repos/{audit_repo}/contents/{archive_path}?{query}"
-    )
-    req = urllib.request.Request(
-        contents_url,
-        method="GET",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "lean-eval-archiver",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            contents = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        try:
-            body = exc.read().decode("utf-8", errors="replace")
-        finally:
-            exc.close()
-        sys.exit(
-            f"could not verify archived ciphertext at {archive_commit}:{archive_path} "
-            f"({exc.code}): {body}"
-        )
-    except urllib.error.URLError as exc:
-        sys.exit(
-            f"could not verify archived ciphertext at {archive_commit}:{archive_path}: {exc}"
-        )
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        sys.exit(
-            "could not decode archived ciphertext metadata at "
-            f"{archive_commit}:{archive_path}: {exc}"
-        )
+    """Prove the immutable commit named in State contains the expected bytes.
 
-    blob_sha = contents.get("sha") if isinstance(contents, dict) else None
-    if (
-        not isinstance(contents, dict)
-        or contents.get("type") != "file"
-        or not isinstance(blob_sha, str)
-        or not SHA40_RE.fullmatch(blob_sha)
-    ):
-        sys.exit(
-            "archived ciphertext metadata did not identify a regular Git blob at "
-            f"{archive_commit}:{archive_path}"
+    Fetch through Git rather than the JSON Git Blobs API. The latter base64
+    expands an 86 MB ciphertext beyond 100 MB even though the Git blob itself
+    is within GitHub's per-object limit.
+    """
+    if not SHA40_RE.fullmatch(archive_commit):
+        sys.exit(f"archive commit has unexpected shape: {archive_commit!r}")
+    with tempfile.TemporaryDirectory(prefix="lean-eval-archive-verify-") as td:
+        repo_dir = pathlib.Path(td) / "repo"
+        env = _git_auth_environment(token, pathlib.Path(td))
+        _run_git(["init", "--quiet", str(repo_dir)], env=env)
+        _run_git(
+            [
+                "-C",
+                str(repo_dir),
+                "remote",
+                "add",
+                "origin",
+                _audit_git_url(audit_repo),
+            ],
+            env=env,
         )
-
-    # Do not depend on Contents-API raw-media content negotiation here. GitHub
-    # can return the JSON metadata envelope even when the raw media type is
-    # requested; hashing that envelope produced a false mismatch in the first
-    # live server-intake archive. Resolve the immutable path to its blob SHA,
-    # then read and decode that exact Git blob explicitly.
-    blob_url = f"https://api.github.com/repos/{audit_repo}/git/blobs/{blob_sha}"
-    blob_req = urllib.request.Request(
-        blob_url,
-        method="GET",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "lean-eval-archiver",
-        },
-    )
-    try:
-        with urllib.request.urlopen(blob_req, timeout=60) as resp:
-            blob = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        try:
-            body = exc.read().decode("utf-8", errors="replace")
-        finally:
-            exc.close()
-        sys.exit(
-            f"could not read archived ciphertext blob {blob_sha} ({exc.code}): {body}"
+        _run_git(
+            [
+                "-C",
+                str(repo_dir),
+                "fetch",
+                "--quiet",
+                "--depth=1",
+                "--filter=blob:none",
+                "origin",
+                archive_commit,
+            ],
+            env=env,
+            timeout=300,
         )
-    except urllib.error.URLError as exc:
-        sys.exit(f"could not read archived ciphertext blob {blob_sha}: {exc}")
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        sys.exit(f"could not decode archived ciphertext blob {blob_sha}: {exc}")
-
-    encoded = blob.get("content") if isinstance(blob, dict) else None
-    if (
-        not isinstance(blob, dict)
-        or blob.get("sha") != blob_sha
-        or blob.get("encoding") != "base64"
-        or not isinstance(encoded, str)
-    ):
-        sys.exit(f"GitHub returned malformed archived ciphertext blob {blob_sha}")
-    try:
-        archived_bytes = base64.b64decode("".join(encoded.split()), validate=True)
-    except ValueError as exc:
-        sys.exit(
-            "GitHub returned invalid base64 for archived ciphertext blob "
-            f"{blob_sha}: {exc}"
+        proc = subprocess.Popen(
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "cat-file",
+                "blob",
+                f"FETCH_HEAD:{archive_path}",
+            ],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-    if _git_blob_sha(archived_bytes) != blob_sha:
-        sys.exit(f"GitHub returned bytes that do not match ciphertext blob {blob_sha}")
-    reported_size = blob.get("size")
-    if (
-        isinstance(reported_size, bool)
-        or not isinstance(reported_size, int)
-        or reported_size != len(archived_bytes)
-    ):
-        sys.exit(f"GitHub returned an invalid size for ciphertext blob {blob_sha}")
-    actual_sha256 = hashlib.sha256(archived_bytes).hexdigest()
+        digest = hashlib.sha256()
+        assert proc.stdout is not None
+        for chunk in iter(lambda: proc.stdout.read(1024 * 1024), b""):
+            digest.update(chunk)
+        proc.stdout.close()
+        stderr = proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr else ""
+        if proc.stderr:
+            proc.stderr.close()
+        returncode = proc.wait(timeout=300)
+        if returncode != 0:
+            sys.exit(
+                "could not stream archived ciphertext from "
+                f"{archive_commit}:{archive_path}: {stderr.strip()}"
+            )
+        actual_sha256 = digest.hexdigest()
     if actual_sha256 != expected_sha256:
         sys.exit(
             "archive commit does not contain the ciphertext recorded by its sidecar: "
@@ -924,7 +1145,6 @@ def _push(args: argparse.Namespace) -> int:
     sidecar_remote = f"{base_path}.json"
 
     sidecar_bytes = (json.dumps(sidecar, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    ciphertext_bytes = ciphertext.read_bytes()
 
     audit_repo = args.audit_repo
     if not REPO_IDENT_RE.fullmatch(audit_repo):
@@ -1005,34 +1225,21 @@ def _push(args: argparse.Namespace) -> int:
             f"investigate before retrying."
         )
 
-    # Upload ciphertext before sidecar. If the workflow is killed between
-    # the two, a rerun on the same submission encounters the existing
-    # ciphertext at the predicted path; _put_contents updates it in place.
-    # The sidecar-first ordering would risk publishing an archive entry
-    # whose ciphertext was never uploaded — much worse. (A present sidecar
-    # implies a present ciphertext, so the re-eval no-op above is safe.)
-    _put_contents(
+    # Commit ciphertext and sidecar atomically. Native Git keeps the raw
+    # ciphertext below GitHub's per-object limit; the Contents API would
+    # base64-expand it beyond the request-size limit.
+    archive_commit = _push_git_archive(
         audit_repo=audit_repo,
         token=token,
-        path=ciphertext_remote,
-        content=ciphertext_bytes,
+        ciphertext=ciphertext,
+        sidecar_bytes=sidecar_bytes,
+        ciphertext_remote=ciphertext_remote,
+        sidecar_remote=sidecar_remote,
+        sidecar=sidecar,
         message=commit_message,
-    )
-    archive_commit = _put_contents(
-        audit_repo=audit_repo,
-        token=token,
-        path=sidecar_remote,
-        content=sidecar_bytes,
-        message=commit_message + " (sidecar)",
     )
 
     if is_server_submission:
-        if archive_commit is None:
-            archive_commit = _latest_path_commit(
-                audit_repo=audit_repo,
-                token=token,
-                path=sidecar_remote,
-            )
         _verify_ciphertext_at_commit(
             audit_repo=audit_repo,
             token=token,
@@ -1142,139 +1349,6 @@ def _get_remote_sidecar(*, audit_repo: str, token: str, path: str) -> dict | Non
         return json.loads(base64.b64decode(content).decode("utf-8"))
     except (ValueError, json.JSONDecodeError) as exc:
         sys.exit(f"could not decode existing sidecar {path} in {audit_repo}: {exc}")
-
-
-def _is_sha_conflict(body: str) -> bool:
-    """True if a 422 PUT response means the path is already populated.
-
-    A create (PUT without `sha`) over an existing file returns 422 with
-    `"sha" wasn't supplied`; some responses phrase it `already exists`. Any
-    *other* 422 — a malformed path, oversize content, branch-protection
-    rejection, generic validation error — is a real failure that must not be
-    retried as a sha race (doing so would mask it as a misleading
-    "exhausted retries" error).
-    """
-    low = body.lower()
-    return ("sha" in low and "supplied" in low) or "already exists" in low
-
-
-def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
-    """Parse a Retry-After response header in seconds. None if absent/unusable."""
-    ra = exc.headers.get("Retry-After") if exc.headers else None
-    if not ra:
-        return None
-    try:
-        return max(0.0, float(ra))
-    except ValueError:
-        return None
-
-
-def _put_contents(
-    *,
-    audit_repo: str,
-    token: str,
-    path: str,
-    content: bytes,
-    message: str,
-) -> str | None:
-    """Create or update a single file in the audit repo via the Contents API.
-
-    Upsert: a file that does not exist is created; one that already exists
-    whose Git blob SHA matches `_git_blob_sha(content)` is a no-op success;
-    otherwise the existing blob SHA is supplied so the PUT updates the file
-    in place. The Contents API rejects an update that omits `sha` with a
-    422 `"sha" wasn't supplied` — which is exactly what an unconditional
-    create hits when the path is already populated (e.g. a re-evaluation of
-    a previously archived submission), so we must fetch and pass the sha.
-
-    This primitive does not adjudicate whether overwriting is *semantically*
-    safe; callers that must distinguish a benign re-archive from a genuine
-    path collision do so beforehand (see `_push`, which compares the
-    plaintext digest recorded in the sidecar). Retries transient transport
-    / 5xx / rate-limit / sha-race failures with exponential backoff and
-    jitter, honoring `Retry-After` when present.
-    """
-    api_url = f"https://api.github.com/repos/{audit_repo}/contents/{path}"
-    expected_sha = _git_blob_sha(content)
-    existing = _api_get(audit_repo=audit_repo, token=token, path=path)
-    if existing is not None and existing.get("sha") == expected_sha:
-        print(
-            f"archive: {path} already present with matching content; idempotent no-op",
-            file=sys.stderr,
-        )
-        return None
-    existing_sha = existing.get("sha") if existing is not None else None
-    last_err: Exception | None = None
-    for attempt in range(1, PUSH_RETRY_ATTEMPTS + 1):
-        payload: dict[str, str] = {
-            "message": message,
-            "content": base64.b64encode(content).decode("ascii"),
-        }
-        if existing_sha is not None:
-            payload["sha"] = existing_sha
-        req = urllib.request.Request(
-            api_url,
-            method="PUT",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Type": "application/json",
-                "User-Agent": "lean-eval-archiver",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                response = json.loads(resp.read().decode("utf-8"))
-            commit = response.get("commit") if isinstance(response, dict) else None
-            commit_sha = commit.get("sha") if isinstance(commit, dict) else None
-            return commit_sha if isinstance(commit_sha, str) else None
-        except urllib.error.HTTPError as exc:
-            try:
-                err_body = exc.read().decode("utf-8", errors="replace")
-            finally:
-                exc.close()
-            if exc.code == 409 or (exc.code == 422 and _is_sha_conflict(err_body)):
-                # The path's state changed between our GET and this PUT: a
-                # 422 `"sha" wasn't supplied` means it now exists though we
-                # thought it absent; a 409 means our sha went stale under a
-                # sibling write. Other 422s are real validation failures
-                # (bad path, oversize content, ...) and fall through to the
-                # hard-fail branch below rather than being retried as a race.
-                # Re-fetch the current sha and retry; if it has converged to
-                # our content, we're done.
-                refreshed = _api_get(audit_repo=audit_repo, token=token, path=path)
-                if refreshed is None:
-                    existing_sha = None
-                elif refreshed.get("sha") == expected_sha:
-                    print(
-                        f"archive: {path} converged to matching content; idempotent no-op",
-                        file=sys.stderr,
-                    )
-                    return None
-                else:
-                    existing_sha = refreshed.get("sha")
-                last_err = exc
-            elif exc.code in (429, 500, 502, 503, 504) and attempt < PUSH_RETRY_ATTEMPTS:
-                last_err = exc
-            else:
-                sys.exit(f"Contents API PUT {path} failed ({exc.code}):\n{err_body}")
-            # Backoff: honor Retry-After if present, otherwise exponential
-            # (capped) with full jitter. The jitter spreads sibling-job
-            # races so they don't synchronize on the next retry slot.
-            sleep_s = _retry_after_seconds(exc)
-            if sleep_s is None:
-                sleep_s = min(30.0, (2.0 ** (attempt - 1))) * random.uniform(0.5, 1.5)
-            time.sleep(sleep_s)
-            continue
-        except urllib.error.URLError as exc:
-            if attempt < PUSH_RETRY_ATTEMPTS:
-                last_err = exc
-                time.sleep(min(30.0, 2.0 ** (attempt - 1)) * random.uniform(0.5, 1.5))
-                continue
-            sys.exit(f"Contents API PUT {path} transport error: {exc}")
-    sys.exit(f"Contents API PUT {path} failed after {PUSH_RETRY_ATTEMPTS} attempts: {last_err}")
 
 
 # ---------------------------------------------------------------------------

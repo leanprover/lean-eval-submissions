@@ -94,14 +94,14 @@ The push is **idempotent on the source**, which matters because a
    identity is an operator-investigatable collision and fails hard, not
    something to silently resolve.
 
-   The per-file Contents API call is a create-or-update: it fetches any
-   existing file's Git blob SHA and supplies it on the PUT, so a rerun
-   that finds an orphan ciphertext (uploaded by a prior run that crashed
-   before the sidecar) updates it in place rather than failing the
-   create with the API's `"sha" wasn't supplied` 422. That 422 is only
-   treated as a benign already-exists conflict when the body says so; any
-   other 422 (malformed path, oversize content, branch protection) is a
-   real validation failure and fails fast.
+   Ciphertext and sidecar are added to one Git tree and committed
+   atomically, then pushed without force. Native Git transfers the raw
+   ciphertext instead of embedding it in a base64 JSON request, so a
+   permitted archive does not exceed an API request limit merely because
+   of encoding expansion. Concurrent branch updates rebuild the commit on
+   the latest `main` tree and retry. If a concurrent writer has already
+   committed this same source, the retry is an idempotent no-op; a
+   different identity at the same path remains a hard collision.
 
    For server intake, `push` additionally requires `--locator-output`. It
    writes a durable handoff governed by
@@ -219,7 +219,7 @@ public-repo-shaped (one file per submission, committed forever).
 
 The cap is the ceiling of this archive design, not a number chosen
 for headroom. The ciphertext is written to `lean-eval-audit` as a
-single Git blob through the Contents API (`archive_submission.py
+single Git blob through a native Git push (`archive_submission.py
 push`), and GitHub refuses individual files over 100 MiB
 (104,857,600 bytes). The blob is the age ciphertext, not the tar, and
 age adds a header plus 16 bytes per 64 KiB chunk (about 26 KiB at

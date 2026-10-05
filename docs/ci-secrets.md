@@ -222,8 +222,8 @@ on purpose:
 in the `Mint lean-eval-archiver installation token` step of the
 `archive` job. The minted token authenticates the
 `scripts/archive_submission.py push` invocation, which writes one
-ciphertext file and one sidecar JSON to `lean-eval-audit` via the
-GitHub Contents API.
+ciphertext file and one sidecar JSON atomically to `lean-eval-audit`
+through native Git.
 
 The `archive` job runs on a separate runner from the one that elaborates
 untrusted Lean (the `evaluate` job), so the write-capable installation
