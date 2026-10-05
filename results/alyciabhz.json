@@ -160,6 +160,29 @@
         "ref": "2fba3b09101d38490a7a184cecaab6f5d3069ec1",
         "repo": "the-omega-institute/trureturing-lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-10-05T15:27:28Z",
+      "benchmark_commit": "2e58dff1c3d3aa934614d46205e8f430f9a7ca7e",
+      "declared_model": "trureturing",
+      "intake": {
+        "issue_number": 1971,
+        "kind": "issue"
+      },
+      "problem_id": "zhang_bounded_prime_gaps",
+      "production_metadata": {
+        "production_description": "The trureturing formalization campaign (Claude orchestration; Codex CLI implementation; independent Codex CLI and Claude review). The mathematics is reused, not original: the bound 246 is `bombieriVinogradov_implies_prime_gap_le_246` from AxiomMath/PrimeGapsLib (1faa7b14), made unconditional by the Bombieri–Vinogradov theorem of kimihiro64/bombieri-vinogradov (7a174830), with dependencies kimihiro64/PrimeNumberTheoremAnd (0f15a38c) and kimihiro64/Robin1984 (bfa72aec), all Apache-2.0. These are vendored under `Submission/` with renamed modules, Lean 4.35 / Mathlib API ports, per-file provenance and modification notices (see NOTICE.md); the PrimeGapsLib numerical certificate is embedded byte-for-byte as a Lean string and is still checked by the kernel. This submission adds only the vendoring, the ports and the final bridge. Locally, in a clean copy of the generated workspace containing only the submitted .lean files, all 1,282 Submission modules, Submission, the trusted Solution and Challenge compile with `-DautoImplicit=false` (Lean 4.35.0-rc3, Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22), and the hole prints only propext, Classical.choice and Quot.sound. Serial local compile time of the closure is about 70 minutes. Official comparator and nanoda acceptance are requested, not presumed. No measured monetary-cost claim is made.",
+        "solution_publication_date": "2026-10-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_20b92b4753f6873e82f539f90b7bcd09ec7b06b93c0104c7fc9be2bbdf521c77",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f6dd0289ab0ee545b968392ce6aa43c244fc9f8e",
+        "repo": "the-omega-institute/trureturing-lean-eval"
+      }
     }
   ],
   "schema_version": 2,
