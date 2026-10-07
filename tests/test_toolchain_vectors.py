@@ -1,8 +1,9 @@
 """Every toolchain contract in this repository agrees with the shared vectors.
 
-`schemas/toolchain-vectors-v1.json` mirrors `schema/toolchain-vectors-v1.json`
-in leanprover/lean-eval-state; CI diffs the two. The Worker checks the same
-file in `server/test/toolchain-vectors.test.ts`.
+`schemas/toolchain-vectors-v1.json` is the canonical copy: this repository is
+public, so leanprover/lean-eval-state (private) mirrors it with a drift check
+in its CI, and leanprover/lean-eval checks its pinned toolchain against it. The
+Worker binds to the same file in `server/test/toolchain-vectors.test.ts`.
 """
 from __future__ import annotations
 
