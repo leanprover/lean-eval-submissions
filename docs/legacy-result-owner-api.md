@@ -6,7 +6,7 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`ac79d8959e994d2504ed83a7be3f51ec27db0c07` and staging contract commit
+`5aa983fbc33be91a39d1ab38cfbdf5315fb14b00` and staging contract commit
 `0999e6bcaee386b1fa9aa55da096b5f7a9161615`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
@@ -26,7 +26,7 @@ The lifecycle launch candidate tracks these non-secret variables:
 | Environment | Owner API | State contract |
 | --- | --- | --- |
 | Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `0999e6bcaee386b1fa9aa55da096b5f7a9161615` |
-| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `ac79d8959e994d2504ed83a7be3f51ec27db0c07` |
+| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `5aa983fbc33be91a39d1ab38cfbdf5315fb14b00` |
 
 The route exists only when the enable flag is exactly `true` and the contract
 commit is exact. This candidate enables the production owner API while keeping

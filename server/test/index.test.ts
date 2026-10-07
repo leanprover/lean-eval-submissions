@@ -293,13 +293,13 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "ac79d8959e994d2504ed83a7be3f51ec27db0c07";
+    const contract = "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00";
     const tree = "2".repeat(40);
     const rootEntries = [
       { path: "README.md", mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
       { path: "docs", mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
-      { path: "schema", mode: "040000", type: "tree", sha: "d3717a799676fccb7c2d5534a9c269ba4bc4dcea" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "a142cf08f8bfcb8c6b52f34a76f448770c0c76de" },
+      { path: "schema", mode: "040000", type: "tree", sha: "a39d9b597abbecc41122b592c61dd0f23c7b74ad" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "13d9caf6663eb4fc6187890da8d0cfd0eddf5a91" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),
@@ -343,7 +343,7 @@ describe("Worker routing", () => {
       state_contract_commit: contract,
       state_contract_verified: true,
       state_event_schema_sha256:
-        "625e55784727c56eb9aa558fd004a60201a42050af72163df582e4cc0a051745",
+        "501d5521f831e412471d296535f7ce390fe4afa19b814b74699156430a2adac8",
     });
     expect(upstream).toHaveBeenCalledTimes(7);
     upstream.mockRestore();

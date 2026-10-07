@@ -21,7 +21,7 @@
       "replay_task_id": "rt1_1a47104fb3031967bc3f23cb5501f72c4a322b4cc3e2ff9b4c6aabb299596965",
       "result_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "result_id": "r2_80f02f892fb0b90474675aa0b572252a8758faf74b95400521e9da724583931f",
-      "result_tree_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "result_tree_digest": "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00ffffffffffffffffffffffff",
       "source_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "source_repository": "example/public-submission",
       "source_visibility": "public",
