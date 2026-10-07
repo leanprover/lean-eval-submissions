@@ -506,6 +506,28 @@
         "ref": "9254c956e8b12c9c54b1b776489d5f80a5214be9",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-07T01:35:05Z",
+      "benchmark_commit": "2e58dff1c3d3aa934614d46205e8f430f9a7ca7e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1996,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_s6_complex_structure",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nReplication using an allowed dependency. The full atlas theorem comes from the benchmark-pinned Lean Pool (Vilin97/lean-pool @ e9d53e9cbcff8dfd0cc816ba94db7a26b082929f): Mathoverflow1973.SixSphereComplexAtlas.exists_complex_analytic_atlas. Credit for that proof belongs to Boris Alexeev, Yury G. Kudryashov, Sebastian Kumar and The Formal Conjectures Authors, with upstream plby/HopfProblem @ 9ac8a456, describing a formalization of Levent Alpöge's construction. This package contributes model-space transport and the two benchmark instances; it does not claim a new mathematical proof by us. Original provenance and Apache-2.0 licenses/notices are preserved.\n\nIndependent source-only verification against unchanged official benchmark 2e58dff1c3d3aa934614d46205e8f430f9a7ca7e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance, both official holes checked. All three submitted Lean sources, protected files, pins and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: 65b00ea5053ef84c30cbdef04f461226929d998efcb8e0f8b18358433b6609ea. The official evaluator's private dependency build-cache layout was used. This independent run uses the official generated target without the problem_spec supplementation described by the older bundled report. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d1955865029f516f8cf40f338e2f743b32b3ee75dcf072746461dd8a776fe5fc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "789b79ad253a548e9024d18cf8ff1b1743079d65",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
