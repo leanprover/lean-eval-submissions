@@ -29,6 +29,17 @@ jobs:
         with:
           python-version: '3.11.10'
 
+      # The toolchain acceptance vectors are owned by State; this copy is
+      # what the offline tests and the Worker tests bind to. Drift here means
+      # one contract will accept a benchmark pin another rejects.
+      - name: Check the toolchain vectors match protected State main
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 30 --output "$RUNNER_TEMP/toolchain-vectors-v1.json" \
+            https://raw.githubusercontent.com/leanprover/lean-eval-state/main/schema/toolchain-vectors-v1.json
+          cmp schemas/toolchain-vectors-v1.json "$RUNNER_TEMP/toolchain-vectors-v1.json"
+
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
