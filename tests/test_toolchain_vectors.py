@@ -7,22 +7,56 @@ Worker binds to the same file in `server/test/toolchain-vectors.test.ts`.
 """
 from __future__ import annotations
 
+import importlib
 import json
 import pathlib
 import re
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# The historical replay scripts import their siblings by bare name, as they
+# run from scripts/ on the command line.
+sys.path.insert(0, str(ROOT / "scripts"))
 VECTORS = json.loads((ROOT / "schemas" / "toolchain-vectors-v1.json").read_text(encoding="utf-8"))
-# Schemas that describe live evaluation and replay records. Historical replay
-# schemas and the public replay smoke evidence are bound to specific past
-# toolchains and are not part of this contract.
-LIVE_SCHEMAS = (
+# Schemas whose toolchain patterns state the general grammar. The public replay
+# smoke evidence (`public-replay-smoke-evidence-v1`) is deliberately bound to a
+# fixed release toolchain and is not part of this contract.
+BOUND_SCHEMAS = (
     "evaluation-completion-v1.schema.json",
     "replay-queue-v1.schema.json",
     "replay-execution-request-v1.schema.json",
     "replay-execution-profile-v1.schema.json",
+    "historical-public-replay-toolchains-v1.schema.json",
+    "historical-public-replay-profile-matrix-v1.schema.json",
+    "historical-public-replay-plan-v1.schema.json",
+    "historical-public-runner-handoff-v1.schema.json",
+    "historical-private-profile-qualification-v1.schema.json",
+    "historical-private-replay-plan-v1.schema.json",
 )
+# Scripts with their own toolchain pattern. `public_replay_smoke.py` is bound
+# to the fixed smoke toolchain like its evidence schema.
+BOUND_SCRIPTS = (
+    ("scripts.build_evaluation_completion", "TOOLCHAIN"),
+    ("scripts.replay_orchestrator", "TOOLCHAIN"),
+    ("scripts.replay_orchestrator", "HISTORICAL_TOOLCHAIN"),
+    ("build_public_replay_toolchain_registry", "TOOLCHAIN"),
+    ("prepare_public_replay_plan", "TOOLCHAIN"),
+    ("historical_replay_controller", "TOOLCHAIN"),
+    ("historical_public_runner", "TOOLCHAIN"),
+)
+
+
+def schema_matches(pattern: str, value: str) -> bool:
+    """Evaluate a JSON Schema pattern the way the Worker and the schemas mean it.
+
+    JSON Schema patterns are ECMA-262 regular expressions where `$` is the end
+    of input. Python's `re.search` lets `$` match before a trailing newline, so
+    it is replaced by `\Z` here; the vectors include a trailing-newline string
+    precisely to pin that down.
+    """
+    assert pattern.startswith("^") and pattern.endswith("$"), pattern
+    return re.search(pattern[:-1] + r"\Z", value) is not None
 
 
 def _patterns(document: object, path: str = "") -> list[tuple[str, str]]:
@@ -51,31 +85,20 @@ class ToolchainVectorTests(unittest.TestCase):
         for toolchain in VECTORS["rejected"]:
             self.assertFalse(accepts(toolchain), f"{label} accepts {toolchain!r}")
 
-    def test_completion_builder_pattern(self) -> None:
-        from scripts.build_evaluation_completion import TOOLCHAIN
+    def test_script_patterns(self) -> None:
+        for module_name, attribute in BOUND_SCRIPTS:
+            pattern = getattr(importlib.import_module(module_name), attribute)
+            with self.subTest(script=f"{module_name}.{attribute}"):
+                self._check(f"{module_name}.{attribute}", lambda t, p=pattern: p.fullmatch(t) is not None)
 
-        self._check("build_evaluation_completion.TOOLCHAIN", lambda t: TOOLCHAIN.fullmatch(t) is not None)
-
-    def test_replay_orchestrator_patterns(self) -> None:
-        from scripts.replay_orchestrator import HISTORICAL_TOOLCHAIN, TOOLCHAIN
-
-        self._check("replay_orchestrator.TOOLCHAIN", lambda t: TOOLCHAIN.fullmatch(t) is not None)
-        self._check(
-            "replay_orchestrator.HISTORICAL_TOOLCHAIN",
-            lambda t: HISTORICAL_TOOLCHAIN.fullmatch(t) is not None,
-        )
-
-    def test_live_schema_patterns(self) -> None:
-        checked = 0
-        for name in LIVE_SCHEMAS:
+    def test_schema_patterns(self) -> None:
+        for name in BOUND_SCHEMAS:
             document = json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
             patterns = _patterns(document, name)
             self.assertTrue(patterns, f"{name} carries no toolchain pattern")
             for path, pattern in patterns:
-                compiled = re.compile(pattern)
-                self._check(path, lambda t, c=compiled: c.fullmatch(t) is not None)
-                checked += 1
-        self.assertGreaterEqual(checked, len(LIVE_SCHEMAS))
+                with self.subTest(schema=path):
+                    self._check(path, lambda t, p=pattern: schema_matches(p, t))
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import vectors from "../../schemas/toolchain-vectors-v1.json";
 import { decodeEvaluationCompletion } from "../src/api-contract";
+import { validateStateEvent } from "../src/state-event";
 import { decodeSubmissionView } from "../src/submission-view";
 
 const SUBMISSION_ID = "019debcf-cb48-7000-8000-000000000001";
@@ -16,6 +17,24 @@ function completion(toolchain: string): unknown {
     benchmark_commit: "c".repeat(40),
     toolchain,
     outcome: { status: "accepted", evaluator_version: "d".repeat(40) },
+  };
+}
+
+function startedEvent(toolchain: string): unknown {
+  return {
+    schema_version: 1,
+    event_id: "019debcf-cb48-7000-8000-000000000006",
+    event_type: "evaluation.started",
+    occurred_at: "2026-10-07T10:00:00.000Z",
+    subject_id: SUBMISSION_ID,
+    causation_event_id: "019debcf-cb48-7000-8000-000000000005",
+    actor: { kind: "system" },
+    payload: {
+      attempt: 1,
+      benchmark_repository: "leanprover/lean-eval",
+      benchmark_commit: "c".repeat(40),
+      toolchain,
+    },
   };
 }
 
@@ -73,22 +92,16 @@ describe("shared toolchain vectors", () => {
     expect(vectors.rejected.length).toBeGreaterThan(0);
   });
 
-  it("bind the evaluation completion decoder", () => {
-    for (const toolchain of vectors.accepted) {
-      expect(decodeEvaluationCompletion(completion(toolchain)).toolchain).toBe(toolchain);
-    }
-    for (const toolchain of vectors.rejected) {
-      expect(() => decodeEvaluationCompletion(completion(toolchain))).toThrow();
-    }
+  it.each(vectors.accepted)("every decoder accepts %s", (toolchain) => {
+    expect(decodeEvaluationCompletion(completion(toolchain)).toolchain).toBe(toolchain);
+    expect(() => validateStateEvent(startedEvent(toolchain))).not.toThrow();
+    const decoded = decodeSubmissionView(view(toolchain));
+    expect(decoded.evaluation.status === "pending" ? null : decoded.evaluation.toolchain).toBe(toolchain);
   });
 
-  it("bind the submission view decoder", () => {
-    for (const toolchain of vectors.accepted) {
-      const decoded = decodeSubmissionView(view(toolchain));
-      expect(decoded.evaluation.status === "pending" ? null : decoded.evaluation.toolchain).toBe(toolchain);
-    }
-    for (const toolchain of vectors.rejected) {
-      expect(() => decodeSubmissionView(view(toolchain))).toThrow();
-    }
+  it.each(vectors.rejected)("every decoder rejects %j", (toolchain) => {
+    expect(() => decodeEvaluationCompletion(completion(toolchain))).toThrow();
+    expect(() => validateStateEvent(startedEvent(toolchain))).toThrow();
+    expect(() => decodeSubmissionView(view(toolchain))).toThrow();
   });
 });
