@@ -1,0 +1,50 @@
+name: Alert on dispatch-lane evaluation failures
+
+# The Worker's lane dispatches the Submission workflow with workflow_dispatch;
+# the issue lane never posts a completion, so only this lane's failures mean
+# that server submissions are not being evaluated. Open or close the incident
+# issue after every completed server-dispatched run.
+
+on:
+  workflow_run:
+    workflows: [Submission]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: dispatch-lane-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    if: github.event.workflow_run.event == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+      - name: Open, update, or close the dispatch-lane incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          python scripts/alert_dispatch_lane.py \
+            --repository "$REPOSITORY" \
+            --run-id "$RUN_ID" \
+            --run-url "$RUN_URL" \
+            --conclusion "$CONCLUSION" \
+            --owner @kim-em
