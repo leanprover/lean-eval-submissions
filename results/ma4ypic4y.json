@@ -484,6 +484,28 @@
         "ref": "252a148233c0adc7610c05315397306b4b7ea0c4",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-07T00:42:52Z",
+      "benchmark_commit": "2e58dff1c3d3aa934614d46205e8f430f9a7ca7e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 1995,
+        "kind": "issue"
+      },
+      "problem_id": "annals_motivic_invariants",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original attribution retained in the source documentation. Human direction: target selection and private submission.\n\nAll six required declarations passed fresh source-only official Lean and Nanoda verification locally. Builds on Lin–Shinder's Motivic invariants of birational maps and 167 vendored Tau Ceti modules (revisions 522706e83ca349c3d6bde045e56778d17354ae8d and 08199da22ef8b0ffe4204a3b0f3961ccdc3ed899, Apache-2.0). Original provenance, adaptations and notices are retained.\n\nVerified against benchmark 2e58dff1c3d3aa934614d46205e8f430f9a7ca7e, statement revision 1.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_fd2090e47d953e56b028388108381fa518971bf1dca3408fc146fe7a8685548a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9254c956e8b12c9c54b1b776489d5f80a5214be9",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
