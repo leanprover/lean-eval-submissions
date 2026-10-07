@@ -78,6 +78,18 @@ describe("submission result identity conflict view", () => {
     expect(latestLifecycleEventId(decoded)).toBe(CONFLICT_EVENT_ID);
   });
 
+  it("accepts release-candidate and beta benchmark toolchains", () => {
+    for (const toolchain of ["leanprover/lean4:v4.35.0-rc3", "leanprover/lean4:v4.36.0-beta1"]) {
+      const view = { ...CONFLICT_VIEW, evaluation: { ...CONFLICT_VIEW.evaluation, toolchain } };
+      const evaluation = decodeSubmissionView(view).evaluation;
+      expect(evaluation.status === "pending" ? null : evaluation.toolchain).toBe(toolchain);
+    }
+    for (const toolchain of ["leanprover/lean4:v4.35.0-rc", "leanprover/lean4:v4.35.0-nightly"]) {
+      const view = { ...CONFLICT_VIEW, evaluation: { ...CONFLICT_VIEW.evaluation, toolchain } };
+      expect(() => decodeSubmissionView(view)).toThrow();
+    }
+  });
+
   it("rejects result authority, owner semantics, and open-ended conflict fields", () => {
     expect(() => decodeSubmissionView({
       ...CONFLICT_VIEW,

@@ -15,7 +15,7 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
-const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
+const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$/;
 const DISPATCH_FAILURE_REASONS = new Set([
   "dispatch_credential_rejected",
   "dispatch_provider_unavailable",

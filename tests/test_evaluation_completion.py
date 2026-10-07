@@ -46,6 +46,31 @@ class EvaluationCompletionTests(unittest.TestCase):
             evaluator_version="d" * 40,
         )
 
+    def test_release_candidate_toolchains_are_canonical(self) -> None:
+        archive, results = self.fixture(["two_plus_two"])
+        for toolchain in ("leanprover/lean4:v4.35.0-rc3", "leanprover/lean4:v4.36.0-beta1"):
+            completion = build(
+                archive_completion=archive,
+                results=results,
+                evaluate_result="success",
+                problem_id="two_plus_two",
+                benchmark_commit="c" * 40,
+                toolchain=toolchain,
+                evaluator_version="d" * 40,
+            )
+            self.assertEqual(completion["toolchain"], toolchain)
+        for toolchain in ("leanprover/lean4:v4.35.0-rc", "leanprover/lean4:v4.35.0-nightly", "v4.35.0-rc3"):
+            with self.assertRaisesRegex(ValueError, "toolchain is not canonical"):
+                build(
+                    archive_completion=archive,
+                    results=results,
+                    evaluate_result="success",
+                    problem_id="two_plus_two",
+                    benchmark_commit="c" * 40,
+                    toolchain=toolchain,
+                    evaluator_version="d" * 40,
+                )
+
     def test_accepted_and_rejected_are_distinct(self) -> None:
         accepted = self.build("success", ["two_plus_two"])
         rejected = self.build("success", [])

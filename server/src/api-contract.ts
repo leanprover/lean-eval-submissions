@@ -6,7 +6,7 @@ const COMMIT = /^[0-9a-f]{40}$/;
 const PROBLEM = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const GIST_ID = /^[0-9a-f]{5,64}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
-const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
+const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 

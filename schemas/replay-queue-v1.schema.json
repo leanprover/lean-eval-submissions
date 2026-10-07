@@ -70,7 +70,7 @@
         "benchmark_commit": { "$ref": "#/$defs/commit" },
         "toolchain": {
           "type": "string",
-          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
         },
         "checker": { "type": "string", "minLength": 1 },
         "measurement_config_digest": { "$ref": "#/$defs/digest" },
