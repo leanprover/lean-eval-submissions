@@ -1,5 +1,6 @@
 import json
 import pathlib
+import subprocess
 import sys
 import unittest
 from unittest import mock
@@ -9,74 +10,111 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import alert_dispatch_lane as alert  # noqa: E402
 
-RUN_URL = "https://github.com/leanprover/lean-eval-submissions/actions/runs/36738416810"
-JOBS = {"jobs": [
-    {"name": "evaluate", "conclusion": "success", "steps": []},
-    {"name": "evaluation_state", "conclusion": "failure",
-     "steps": [{"name": "Build trusted evaluation completion", "conclusion": "failure"}]},
-]}
+REPO = "leanprover/lean-eval-submissions"
+BOT = {"login": alert.BOT_LOGIN}
+
+
+def run(run_id: int, conclusion: str, started: str, attempt: int = 1) -> dict:
+    return {"id": run_id, "run_attempt": attempt, "conclusion": conclusion, "run_started_at": started}
+
+
+def issue(number: int, body: str, login: str = alert.BOT_LOGIN, title: str = alert.ISSUE_TITLE) -> dict:
+    return {"number": number, "title": title, "body": body, "user": {"login": login}}
 
 
 class FakeGh:
-    def __init__(self, open_issues: list[dict]) -> None:
-        self.open_issues = open_issues
+    def __init__(self, runs: list[dict], issues: list[dict] | None = None, comments=None, jobs_fail=False) -> None:
+        self.runs, self.issues, self.comments, self.jobs_fail = runs, issues or [], comments or {}, jobs_fail
         self.calls: list[list[str]] = []
 
     def __call__(self, args: list[str]) -> str:
         self.calls.append(args)
-        if args[:2] == ["api", f"repos/r/actions/runs/36738416810/jobs?per_page=100"]:
-            return json.dumps(JOBS)
-        if args[:2] == ["issue", "list"]:
-            return json.dumps(self.open_issues)
+        target = args[-1]
+        if args[0] == "api" and "/actions/workflows/" in target:
+            return json.dumps({"workflow_runs": self.runs})
+        if args[0] == "api" and "/attempts/" in target:
+            if self.jobs_fail:
+                raise subprocess.CalledProcessError(1, args)
+            return json.dumps({"jobs": [
+                {"name": "evaluate", "conclusion": "success", "steps": []},
+                {"name": "evaluation_state", "conclusion": "failure",
+                 "steps": [{"name": "Build trusted evaluation completion", "conclusion": "failure"}]},
+            ]})
+        if args[0] == "api" and target.startswith(f"repos/{REPO}/issues?"):
+            return json.dumps([self.issues])
+        if args[0] == "api" and "/comments" in target:
+            number = int(target.split("/issues/")[1].split("/")[0])
+            return json.dumps([self.comments.get(number, [])])
         return ""
+
+    def created_body(self) -> str:
+        create = next(c for c in self.calls if c[:2] == ["issue", "create"])
+        return create[create.index("--body") + 1]
 
 
 class AlertDispatchLaneTests(unittest.TestCase):
-    def test_failure_opens_an_issue_naming_the_failed_step(self) -> None:
-        fake = FakeGh([])
+    def test_latest_failure_opens_a_marked_issue_listing_runs_since_last_success(self) -> None:
+        fake = FakeGh([run(3, "failure", "2026-10-07T03:00:00Z"), run(2, "failure", "2026-10-07T02:00:00Z"),
+                       run(1, "success", "2026-10-07T01:00:00Z"), run(0, "failure", "2026-10-07T00:00:00Z")])
         with mock.patch.object(alert, "gh", fake):
-            self.assertEqual(alert.report_failure("r", "36738416810", RUN_URL, "@kim-em"), "opened")
-        create = next(c for c in fake.calls if c[:2] == ["issue", "create"])
-        body = create[create.index("--body") + 1]
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "opened")
+        body = fake.created_body()
+        self.assertTrue(body.startswith(alert.ISSUE_MARKER))
         self.assertIn("@kim-em", body)
+        self.assertIn(alert.run_marker(3, 1), body)
+        self.assertIn(alert.run_marker(2, 1), body)
+        self.assertNotIn(alert.run_marker(0, 1), body)
         self.assertIn("`evaluation_state`: `Build trusted evaluation completion`", body)
-        self.assertIn(RUN_URL, body)
+        self.assertIn(f"https://github.com/{REPO}/actions/runs/3/attempts/1", body)
 
-    def test_repeated_failure_appends_once(self) -> None:
-        body = f"intro\n\nFailed runs:\n- {RUN_URL} (x)\n\nThis issue closes itself when a server-dispatched run succeeds.\n"
-        fake = FakeGh([{"number": 7, "title": alert.ISSUE_TITLE, "body": body}])
+    def test_missing_job_details_do_not_block_the_alert(self) -> None:
+        fake = FakeGh([run(3, "timed_out", "2026-10-07T03:00:00Z")], jobs_fail=True)
         with mock.patch.object(alert, "gh", fake):
-            self.assertEqual(alert.report_failure("r", "36738416810", RUN_URL, "@kim-em"), "already_recorded")
-            other = RUN_URL.replace("36738416810", "37104239065")
-            fake_jobs = dict(JOBS)
-            with mock.patch.object(alert, "failed_steps", return_value=["`evaluation_state`: `x`"]):
-                self.assertEqual(alert.report_failure("r", "37104239065", other, "@kim-em"), "updated")
-        edit = next(c for c in fake.calls if c[:2] == ["issue", "edit"])
-        new_body = edit[edit.index("--body") + 1]
-        self.assertEqual(new_body.count("- https://"), 2)
-        self.assertTrue(new_body.index(other) < new_body.index("This issue closes itself"))
-        del fake_jobs
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "opened")
+        self.assertIn("job details unavailable", fake.created_body())
 
-    def test_success_closes_the_open_issue_only(self) -> None:
-        fake = FakeGh([])
+    def test_reconcile_is_idempotent_and_records_new_failures_once(self) -> None:
+        existing = issue(7, f"{alert.ISSUE_MARKER}\nFailed runs:\n{alert.run_marker(2, 1)}\n- x")
+        runs = [run(3, "failure", "2026-10-07T03:00:00Z"), run(2, "failure", "2026-10-07T02:00:00Z")]
+        fake = FakeGh(runs, [existing])
         with mock.patch.object(alert, "gh", fake):
-            self.assertEqual(alert.report_success("r", RUN_URL), "nothing_open")
-        fake = FakeGh([{"number": 7, "title": alert.ISSUE_TITLE, "body": "b"}])
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "recorded_1")
+        comment = next(c for c in fake.calls if c[:2] == ["issue", "comment"])
+        self.assertIn(alert.run_marker(3, 1), comment[comment.index("--body") + 1])
+        fake = FakeGh(runs, [existing], comments={7: [{"user": BOT, "body": alert.run_marker(3, 1)}]})
         with mock.patch.object(alert, "gh", fake):
-            self.assertEqual(alert.report_success("r", RUN_URL), "closed")
-        close = next(c for c in fake.calls if c[:2] == ["issue", "close"])
-        self.assertEqual(close[2], "7")
-        self.assertIn(RUN_URL, close[close.index("--comment") + 1])
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "recorded_0")
+        self.assertFalse([c for c in fake.calls if c[:2] in (["issue", "comment"], ["issue", "create"])])
 
-    def test_other_titles_are_not_mistaken_for_the_alert(self) -> None:
-        fake = FakeGh([{"number": 9, "title": "[monitor] LeanEval lifecycle readiness failure", "body": "b"}])
+    def test_success_closes_only_owned_incidents_and_duplicates_collapse(self) -> None:
+        human = issue(5, "I typed this title myself", login="alice")
+        unmarked_bot = issue(6, "no marker")
+        owned = [issue(8, alert.ISSUE_MARKER), issue(7, alert.ISSUE_MARKER)]
+        fake = FakeGh([run(4, "success", "2026-10-07T04:00:00Z")], [human, unmarked_bot, *owned])
         with mock.patch.object(alert, "gh", fake):
-            self.assertEqual(alert.report_success("r", RUN_URL), "nothing_open")
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "closed")
+        closed = sorted(c[2] for c in fake.calls if c[:2] == ["issue", "close"])
+        self.assertEqual(closed, ["7", "8"])
+        fake = FakeGh([run(4, "failure", "2026-10-07T04:00:00Z")], [human, *owned])
+        with mock.patch.object(alert, "gh", fake):
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "recorded_1")
+        closed = [c for c in fake.calls if c[:2] == ["issue", "close"]]
+        self.assertEqual([c[2] for c in closed], ["8"])
+        self.assertIn("Duplicate of #7", closed[0][closed[0].index("--comment") + 1])
 
-    def test_main_rejects_non_canonical_run_identity_and_ignores_cancellations(self) -> None:
-        self.assertEqual(alert.main(["--repository", "r", "--run-id", "x", "--run-url", RUN_URL, "--conclusion", "failure"]), 2)
+    def test_healthy_lane_and_cancellations_change_nothing(self) -> None:
+        fake = FakeGh([run(4, "success", "2026-10-07T04:00:00Z")])
+        with mock.patch.object(alert, "gh", fake):
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "healthy")
+        fake = FakeGh([run(5, "cancelled", "2026-10-07T05:00:00Z"), run(4, "success", "2026-10-07T04:00:00Z")])
+        with mock.patch.object(alert, "gh", fake):
+            self.assertEqual(alert.reconcile(REPO, "@kim-em"), "latest_cancelled")
+        self.assertFalse([c for c in fake.calls if c[0] == "issue"])
+
+    def test_main_validates_the_repository(self) -> None:
+        self.assertEqual(alert.main(["--repository", "not a repo"]), 2)
         with mock.patch.object(alert, "gh", FakeGh([])):
-            self.assertEqual(alert.main(["--repository", "r", "--run-id", "1", "--run-url", RUN_URL, "--conclusion", "cancelled"]), 0)
+            self.assertEqual(alert.main(["--repository", REPO]), 0)
 
 
 if __name__ == "__main__":

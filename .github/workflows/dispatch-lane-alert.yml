@@ -2,8 +2,9 @@ name: Alert on dispatch-lane evaluation failures
 
 # The Worker's lane dispatches the Submission workflow with workflow_dispatch;
 # the issue lane never posts a completion, so only this lane's failures mean
-# that server submissions are not being evaluated. Open or close the incident
-# issue after every completed server-dispatched run.
+# that server submissions are not being evaluated. After every completed
+# server-dispatched run, reconcile the incident issue against the lane's
+# recent history (GitHub's concurrency queue can drop individual events).
 
 on:
   workflow_run:
@@ -12,17 +13,17 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: dispatch-lane-alert
-  cancel-in-progress: false
-
 jobs:
   alert:
     if: github.event.workflow_run.event == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    concurrency:
+      group: dispatch-lane-alert
+      cancel-in-progress: false
     permissions:
       actions: read
+      contents: read
       issues: write
     steps:
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
@@ -33,18 +34,10 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
-      - name: Open, update, or close the dispatch-lane incident issue
+      - name: Reconcile the dispatch-lane incident issue
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
-          python scripts/alert_dispatch_lane.py \
-            --repository "$REPOSITORY" \
-            --run-id "$RUN_ID" \
-            --run-url "$RUN_URL" \
-            --conclusion "$CONCLUSION" \
-            --owner @kim-em
+          python scripts/alert_dispatch_lane.py --repository "$REPOSITORY" --owner @kim-em
