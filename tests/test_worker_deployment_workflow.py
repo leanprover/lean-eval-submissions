@@ -885,8 +885,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
         )
 
-        # The deployed owner APIs remain rollback-qualified against their
-        # unchanged runtime projection, now read from the current State commit.
+        # The deployed owner APIs are rollback-qualified against the runtime
+        # projection at the current State commit (its schema bytes changed in
+        # State #50, so the digest moved with the commit).
         self.assertEqual(QUALIFICATION["state_main_commit"], state_commit)
         self.assertEqual(WORKER_APP.count(f'"{runtime_schema}"'), 1)
         self.assertEqual(DEPLOY.count(runtime_schema), 2)
