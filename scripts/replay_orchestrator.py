@@ -19,7 +19,9 @@ REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 PROBLEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
-TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+")
+TOOLCHAIN = re.compile(
+    r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?"
+)
 HISTORICAL_TOOLCHAIN = re.compile(
     r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?"
 )

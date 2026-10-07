@@ -11,7 +11,7 @@ const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const MODEL_ID = /^mi1_[0-9a-f]{64}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
-const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
+const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$/;
 const MAX_REPLAY_ATTEMPTS = 4;
 const COUNTER_REASONS = new Set([
   "counter_not_reported",
