@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import vectors from "../../schemas/toolchain-vectors-v1.json";
+import vectors from "../../contracts/toolchain-vectors-v1.json";
 import { decodeEvaluationCompletion } from "../src/api-contract";
 import { validateStateEvent } from "../src/state-event";
 import { decodeSubmissionView } from "../src/submission-view";

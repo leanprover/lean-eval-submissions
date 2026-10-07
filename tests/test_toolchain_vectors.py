@@ -1,6 +1,6 @@
 """Every toolchain contract in this repository agrees with the shared vectors.
 
-`schemas/toolchain-vectors-v1.json` is the canonical copy: this repository is
+`contracts/toolchain-vectors-v1.json` is the canonical copy: this repository is
 public, so leanprover/lean-eval-state (private) mirrors it with a drift check
 in its CI, and leanprover/lean-eval checks its pinned toolchain against it. The
 Worker binds to the same file in `server/test/toolchain-vectors.test.ts`.
@@ -16,9 +16,11 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # The historical replay scripts import their siblings by bare name, as they
-# run from scripts/ on the command line.
+# run from scripts/ on the command line; the modules themselves are imported
+# through the `scripts` package like every other test does, so each script
+# stays a single module instance across the suite.
 sys.path.insert(0, str(ROOT / "scripts"))
-VECTORS = json.loads((ROOT / "schemas" / "toolchain-vectors-v1.json").read_text(encoding="utf-8"))
+VECTORS = json.loads((ROOT / "contracts" / "toolchain-vectors-v1.json").read_text(encoding="utf-8"))
 # Schemas whose toolchain patterns state the general grammar. The public replay
 # smoke evidence (`public-replay-smoke-evidence-v1`) is deliberately bound to a
 # fixed release toolchain and is not part of this contract.
@@ -40,10 +42,10 @@ BOUND_SCRIPTS = (
     ("scripts.build_evaluation_completion", "TOOLCHAIN"),
     ("scripts.replay_orchestrator", "TOOLCHAIN"),
     ("scripts.replay_orchestrator", "HISTORICAL_TOOLCHAIN"),
-    ("build_public_replay_toolchain_registry", "TOOLCHAIN"),
-    ("prepare_public_replay_plan", "TOOLCHAIN"),
-    ("historical_replay_controller", "TOOLCHAIN"),
-    ("historical_public_runner", "TOOLCHAIN"),
+    ("scripts.build_public_replay_toolchain_registry", "TOOLCHAIN"),
+    ("scripts.prepare_public_replay_plan", "TOOLCHAIN"),
+    ("scripts.historical_replay_controller", "TOOLCHAIN"),
+    ("scripts.historical_public_runner", "TOOLCHAIN"),
 )
 
 
