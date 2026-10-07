@@ -1,0 +1,43 @@
+name: Alert on dispatch-lane evaluation failures
+
+# The Worker's lane dispatches the Submission workflow with workflow_dispatch;
+# the issue lane never posts a completion, so only this lane's failures mean
+# that server submissions are not being evaluated. After every completed
+# server-dispatched run, reconcile the incident issue against the lane's
+# recent history (GitHub's concurrency queue can drop individual events).
+
+on:
+  workflow_run:
+    workflows: [Submission]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  alert:
+    if: github.event.workflow_run.event == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: dispatch-lane-alert
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+      - name: Reconcile the dispatch-lane incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python scripts/alert_dispatch_lane.py --repository "$REPOSITORY" --owner @kim-em
