@@ -23,7 +23,7 @@ Last reconciled: **2026-09-13**
 
 | Contract | Current value |
 | --- | --- |
-| Production State contract pin | `ac79d8959e994d2504ed83a7be3f51ec27db0c07` |
+| Production State contract pin | `5aa983fbc33be91a39d1ab38cfbdf5315fb14b00` |
 | Staging State contract pin | `0999e6bcaee386b1fa9aa55da096b5f7a9161615` |
 | Replay image tag | `lean-eval-authoritative:4026b18d5e679b07be1961d538a51ad689a9d8d4` |
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
