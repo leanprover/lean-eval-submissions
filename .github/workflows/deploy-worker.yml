@@ -24,6 +24,7 @@ on:
       - '!scripts/reconcile_historical_replay_inventory_delta.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
       - 'server/**'
+      - 'contracts/toolchain-vectors-v1.json'
   push:
     branches: [main]
     paths:
@@ -47,6 +48,7 @@ on:
       - '!scripts/reconcile_historical_replay_inventory_delta.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
       - 'server/**'
+      - 'contracts/toolchain-vectors-v1.json'
       - '!server/*.md'
       - '!server/**/*.md'
   workflow_dispatch:
