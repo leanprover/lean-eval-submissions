@@ -528,6 +528,28 @@
         "ref": "789b79ad253a548e9024d18cf8ff1b1743079d65",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-08T06:34:15Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2002,
+        "kind": "issue"
+      },
+      "problem_id": "gorenstein_walter",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nDeclared reuse: this package vendors 1690 modules from Qiuzhen-CFSG/CFSG @ 96b2a02085dc678f3e0a97b334c31ada599c55fd (Apache-2.0), with module renames, provenance blocks and pinned Lean/Mathlib compatibility repairs, plus a bridge to the LeanEval statement in Submission/GWBridge.lean. Credit for the CFSG formalization remains with its original authors. Original full-proof authorship is not claimed. Source headers, LICENSE, Submission/CFSGSourceLicense.lean, provenance/LEAN-EVAL-LICENSE and original provenance are preserved.\n\nThis is a corrected source snapshot following issue #1989 (baf6cf29fa5e4dfa2a9642a7f17fc60c2e3db8c9), whose hosted evaluation ended with a runner shutdown signal and exit 143. That log does not establish an OOM cause. Two expensive brute-force certificate proofs have been replaced with structured permutation proofs without changing their theorem statements; 71 other source files contain deprecated alias replacements. No comparator, ChallengeDeps, oracle or benchmark statement was weakened.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 1,695 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: fb0c744ac4d3e9d8a27d6521a2724f3c6d4eccfa8dcb235506ab523ad0a33c66. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e87389e04ac84bd87446c031c76f0734b8657af51131460688f9ed1c403b538b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f937485dc330710943812a782bdddc4ca7bdfaf9",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
