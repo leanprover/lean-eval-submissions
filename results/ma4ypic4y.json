@@ -550,6 +550,28 @@
         "ref": "f937485dc330710943812a782bdddc4ca7bdfaf9",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-08T17:01:36Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2003,
+        "kind": "issue"
+      },
+      "problem_id": "whitney_embedding",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. The original provenance also records earlier GLM campaign files. Human direction included target selection and authorization of this private submission.\n\nDeclared reuse: the package retains 508 vendored modules from qinz1yang/differential-geometry @ 777299070a5529e96345e0033979706fd00c7e62 (Apache-2.0), supplying manifold, Morse-theory and differential-topology infrastructure. The 95 campaign modules and root bridge build on that library. Credit for the dependency remains with its original authors; its formalization is not claimed as new work by this submission. Original source headers, LICENSE, Submission/DG/License.lean, provenance/LEAN-EVAL-LICENSE and historical provenance are preserved.\n\nThis corrected package follows issue #1997 (2c56892ed40cc23764f86693fa3c6e005bb07cfb), which failed before evaluation when GitHub's Contents API rejected the 42,290,921-byte archive as too large. The new compressed archive is 3,425,994 bytes. It retains the exact import closure of Submission.lean: all 604 retained Lean sources are byte-identical to the previous package, with 17,395 unused vendored files removed. No retained proof, comparator, ChallengeDeps, oracle or benchmark statement was weakened.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 604 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: b95afd1c4b2753dd4c6c7875188ebf839edbd9679f6708f44fb9028c115a6e48. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_2702d5fa6ca06599873e2af4a40d8b30775b80472c60218c097b27deb7dfa762",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "602a119db32ed1a6c041ab821b025ce56c435a7d",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
