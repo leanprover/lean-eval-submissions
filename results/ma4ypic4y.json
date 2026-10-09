@@ -836,6 +836,28 @@
         "ref": "999308b7f79ab11dcf3a026a7071987465f2637b",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T20:25:34Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2019,
+        "kind": "issue"
+      },
+      "problem_id": "cdt_linearIndependent",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nOriginal provenance is retained in PROVENANCE.json, including the original Claude campaign integration-tree reference cc242a1 (a short reference, not an independently verified full historical commit). This is a replication/adaptation using permitted library proofs: 7 PrimeNumberTheoremAnd modules and 8 QSeries modules via Vilin97/lean-pool at e9d53e9cbcff8dfd0cc816ba94db7a26b082929f, and Lindemann analytic material from astrainfinita/mathlib4 at 2ec8b0e44647603dc096134c99901892b8105825. Original authors and modifications are recorded in the retained module notices. The three embedded License.lean modules retain the full upstream Apache 2.0 licenses. Official benchmark notices, dependency authorship and provenance/LEAN-EVAL-LICENSE are preserved.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 252 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: be257c8ccbfa005ff851ea3698ad713acc9eec3e40f3ddf7494f6fc11b9cc8cd. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_fa2d8f2311f808ff7d648cdcf558d602cb43c2f5522bf911c070a61305f59c4c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "678316bb5c3ad0659e2dabf8a567c0e77d4141b9",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
