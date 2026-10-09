@@ -660,6 +660,28 @@
         "ref": "09ded947e1df6fe2a6cb0a42dae501265262134b",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T06:52:16Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2011,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nOriginal provenance is retained in PROVENANCE.json, including campaign source commit cc0de8cf9713e05822935650ea27e79d49e3591b. Submission/Poels/MinkowskiConvex.lean adapts LeanPool/SumsThreeSquares/MinkowskiConvex.lean from Vilin97/lean-pool at e9d53e9cbcff8dfd0cc816ba94db7a26b082929f under Apache-2.0, copyright Bhavik Mehta, Pietro Monticone and Abel Doñate Muñoz. Original authorship and licensing are preserved in the source and Submission/Poels/License.lean; adaptation removes module keywords and renames the namespace. This dependency reuse is disclosed. Official benchmark template, licensing and dependency authorship are retained.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 19 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: a49b8ef66ab961bdafbee6087a104e4246ae817bc823f4dff51b4c73f88037cd. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4f714f8c757474a935373393c6139a7e05a1850469b0060acc11c6bf2d537467",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2b94e41fd94dcfe5b8a3184c920ee885587714c9",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
