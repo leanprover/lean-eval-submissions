@@ -616,6 +616,28 @@
         "ref": "caca60d164d60eca43e31829b7d3415bcc55f7b7",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T06:41:53Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2008,
+        "kind": "issue"
+      },
+      "problem_id": "annals_pseudorandom_grassmann",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nOriginal provenance is retained in PROVENANCE.json, including campaign source commit b1f97d84aa55258dd40e8cb5a4eee12e2a66a5c8. This package adapts work from openai/math at adc7f1241b42e322a6451854ab7e4b4c146bf78a under Apache-2.0; the full license in Submission/OAI/License.lean, original source authorship, per-file attribution and adaptation notices are preserved. This reuse is disclosed as adaptation of existing library proofs, rather than an independently originated proof. Official benchmark template and dependency authorship are retained.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 68 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: b08cdd4ef060440f2d54d6152773aee7655cb479ea36c002329d6e1e87878112. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_278de5e387474c28642d6bdff90ae82c59b6bc4ad849fe1a53b78995c38c5e25",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ed0955c453ef13c0da9bc792eb8bcea6380aa718",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
