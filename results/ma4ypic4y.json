@@ -814,6 +814,28 @@
         "ref": "aec69a0523582b57c7b3c82299fa86ae3c475ffa",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T17:46:56Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2018,
+        "kind": "issue"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nOriginal provenance is retained in PROVENANCE.json, including campaign source commit 5545be59d27069920da4e719b6fc1f1c2f94ad27. The package declares no third-party proof source reuse. The official benchmark license, root statement/template notices, dependency authorship and provenance/LEAN-EVAL-LICENSE are preserved.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 24 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: fec11307ec850c3037972b564ea34eb9f5a6c8d73afa79f91036cc300691a36c. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_2407d71fb13b60f5491c74d18d132d27a9a351a70500787229894b02754643e8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "999308b7f79ab11dcf3a026a7071987465f2637b",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
