@@ -726,6 +726,28 @@
         "ref": "a11fb0fbb33ae3b31f4d9dae846e34b36cf2b010",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T12:33:49Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2014,
+        "kind": "issue"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nOriginal provenance is retained in PROVENANCE.json, including campaign source commit 734b5f9be0478177fc39c1dff50befad1d2cc56e. The package adapts Gabriel Dahia’s Komlos proof modules from Vilin97/lean-pool@e9d53e9cbcff8dfd0cc816ba94db7a26b082929f (LeanPool/Komlos), originally https://github.com/gdahia/Komlos. This is disclosed library reuse; original authorship, Apache-2.0 license, per-file notices and Submission/Komlos/License.lean provenance are preserved. Adaptations include local import paths and module syntax. The official benchmark license, root statement/template notices, dependency authorship and provenance/LEAN-EVAL-LICENSE are preserved.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 40 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: 045039754a730a95263fe5d8cc839750f7582aa7150c8b0ac84220f40fc0d452. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c37f7547281ac1b350b476077cdecb0bafce33a8f5e2432cd84d2eebb11ec860",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9726bfaebe6c673238f14ccae8cd85f60fa1325a",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
