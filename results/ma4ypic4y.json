@@ -572,6 +572,28 @@
         "ref": "602a119db32ed1a6c041ab821b025ce56c435a7d",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-09T04:39:34Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2006,
+        "kind": "issue"
+      },
+      "problem_id": "sphere_theorem_differentiable",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nDeclared reuse: this package builds on qinz1yang/differential-geometry @ 777299070a5529e96345e0033979706fd00c7e62 (Apache-2.0), retaining 3,027 DG modules with original notices and documented adaptations. Its geometry, Ricci-flow and constant-curvature classification infrastructure remains credited to the original authors. The package also contains 133 BS modules, 30 Progress modules and the root/bridge helpers. Adaptations of DG proofs, including Hamilton's positive-Ricci classification, are documented in source headers; dependency proofs are not claimed as new work by this submission. Original source headers, LICENSE, Submission/DG/License.lean, provenance/LEAN-EVAL-LICENSE and historical provenance are preserved.\n\nThis corrected package follows issue #1994 (16df01863bff77979e78d94c1dfb68d8ef3bdeb0), whose hosted evaluation exceeded the six-hour limit; the earlier large package #1993 failed during archive before evaluation. The new package has 3,192 Lean sources instead of 11,577, and its compressed source archive is approximately 10 MB. The dimension-three route now uses Hamilton's positive-Ricci theorem instead of the smooth Poincare/surgery route, maximal flow uses Zorn's lemma, unused declarations/modules were pruned, and a curvature lemma was rewritten to reduce kernel-checking cost. The current official benchmark statement, ChallengeDeps, oracle, comparator and tool pins were preserved. Local elapsed time does not guarantee the hosted runtime budget.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 3,192 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: b68392452cfbe9f4d802a2fe8970d4cdd5043664662d77e53f32b60dfc490333. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_536fb09dab394f4a5dd60c352acb7ffaef2dae75e45daf64ee847b1afaf09339",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "beecaf5c89175dfccfbd96cc29e6aa4ec38bc338",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
