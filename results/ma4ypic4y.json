@@ -902,6 +902,28 @@
         "ref": "4da6c93b749d38bcf928b5780e5638a575adb3ff",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-10T10:41:44Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2024,
+        "kind": "issue"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 32 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: afe7f254e886a6f55f0d2e0cd9b61dcc3e138c1c41286b2a3c44ffa84dcb9ccc. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_f3379e50fb336f760f32f4957481b8a2550082d08d00ff70172071dd39e13f9e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0607d0bf7ef5d1bef68fcc3aa8bb89c0deedd88f",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
