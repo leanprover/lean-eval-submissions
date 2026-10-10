@@ -7673,6 +7673,27 @@
         "ref": "8191053f3ed3749be30a85820a7d94e1514d6f78",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-10T21:42:12Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 2031,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_s6_complex_structure",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_97e1fae2220478f951615f6c92c0cd58bccd879c07c02f88f5bc960ae6c06919",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b5f52aba45a3b30358fb5ae08d90c46bf7468d18",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
