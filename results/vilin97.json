@@ -7379,6 +7379,27 @@
         "ref": "12d14c9e42ee6a0aa2dcef99c2146bb3cf64e14e",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-10T20:52:48Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 2033,
+        "kind": "issue"
+      },
+      "problem_id": "mandelbrot_boundary_dimh",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_dc846b0625984ae36eaa404dfac95c4ced6ea8edcccb7d6e1b492fb429ab72f9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8a06c6679c66ce5bb3e2167138c309c0ab5387e3",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
