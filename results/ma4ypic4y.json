@@ -1034,6 +1034,28 @@
         "ref": "ed56797cbe9584cd281b01ebcd3ad976a2d10824",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-11T22:06:35Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2053,
+        "kind": "issue"
+      },
+      "problem_id": "annals_large_value_estimates",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original Claude Opus 5.5 attribution retained in the source documentation; the historical runtime attribution has not been independently verified. Human direction included target selection and authorization of this private submission.\n\nIndependent fresh source-only verification against unchanged official benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: completed lake test, exit 0, Nanoda and Lean default kernel acceptance. All 101 submitted Lean sources, protected files, pinned tools and 8,116 tracked Lean Pool files remained unchanged. Receipt SHA256: ab00ac0615cfa6947434782e5a4fb9a6df49a14865e03bbc42e10000a09fc948. Exact Git archive discovery/overlay and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPrivate, with no current publication plan; no publication dates.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_74b9d158ed41f2635a695c94f82a73855e46265c0d7a1ea8726d7b94d6d76c9b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "558f4555c45ae3dbb838ebc999d6f3067c522110",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
