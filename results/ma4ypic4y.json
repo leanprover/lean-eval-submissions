@@ -1364,6 +1364,28 @@
         "ref": "39e08a05113a3a92a4431d32de51513c9bd1be33",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-12T20:00:08Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2077,
+        "kind": "issue"
+      },
+      "problem_id": "newlander_nirenberg",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 77 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: 877f73d73bb2f46656226fcca5c2516340d81667a456d6fda80844f83aaec3fa. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nExplicitly authorized retry of #2067 after a terminal infrastructure failure; the previous workflow is completed and no accepted result exists for this submission. Recent successful benchmark/tool setup supports retrying; hosted success is not guaranteed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_417b083fe582b415669019189f558b3ae18225b091ba3fdc2198dd9dbb4d9664",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5003b688dcf6aec2496c0085bd6906dc1e4a6829",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
