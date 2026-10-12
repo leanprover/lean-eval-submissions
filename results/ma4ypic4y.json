@@ -1342,6 +1342,28 @@
         "ref": "37378a80bb72e3f9c796c0c5070164112e0b74d9",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-12T19:56:21Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2075,
+        "kind": "issue"
+      },
+      "problem_id": "pardon_torus_knot_distortion",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 208 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: 959378fd93a51d06621b0d96d47879e43f4fa30027b1f93ccd16abd663b53e38. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nExplicitly authorized retry of #2057 after a terminal infrastructure failure; the previous workflow is completed and no accepted result exists for this submission. Recent successful benchmark/tool setup supports retrying; hosted success is not guaranteed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_1ea684232e1c12dc624178a824e19a10ab1f0fa1a4ef6277fc95841e40d71421",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "39e08a05113a3a92a4431d32de51513c9bd1be33",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
