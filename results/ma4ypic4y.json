@@ -1430,6 +1430,28 @@
         "ref": "b44522378907555ac5b605340a1765a820cec2c5",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-12T20:43:58Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2074,
+        "kind": "issue"
+      },
+      "problem_id": "sphere_theorem_topological",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 819 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: b5f13273638e288b4061f53f8d3197441f57b08728bad93ed8575ee33d9acdbc. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nExplicitly authorized retry of #1975 after a terminal infrastructure failure; the previous workflow is completed and no accepted result exists for this submission. Recent successful benchmark/tool setup supports retrying; hosted success is not guaranteed.\n\n752 vendored DifferentialGeometry modules from qinz1yang/differential-geometry at 777299070a5529e96345e0033979706fd00c7e62 supply geometry infrastructure; Apache-2.0, original headers and notices are retained. The 65 sphere proof modules under Submission/Progress are campaign code. Previous #1975 passed evaluation but its record step was cancelled.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0cd5b46b1d4c999044a5b80ec9a186096193a4d5ef88c79e60e944f9771f5663",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c326b8afdca2a40c269f4ae3c95037039d4d19f3",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
