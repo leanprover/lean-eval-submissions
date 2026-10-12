@@ -1232,6 +1232,28 @@
         "ref": "d6567a17f368ec5fcaa3108ffad1c35cddab5e8f",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-12T13:34:13Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2062,
+        "kind": "issue"
+      },
+      "problem_id": "e8_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 197 submitted Lean sources match the published commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: a3c82e55336a17fa760b2c927dfb908b889c9ed70f484b51e2bd0896be342efe. Exact Git archive preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d6a2cbdd346f3dea790496cee9f63a09df2941e58b0787ca1a105a56db7ae86b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5823052d388b33c2b965446dcc1c070ae7db0bc6",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
