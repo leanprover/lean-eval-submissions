@@ -1254,6 +1254,28 @@
         "ref": "5823052d388b33c2b965446dcc1c070ae7db0bc6",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-12T16:18:51Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2068,
+        "kind": "issue"
+      },
+      "problem_id": "jacobian_challenge_alggeo",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 129 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: 65e38d713c066b0056d08513a7c0e2f0964b0b8e6d24fe8c706f66fa3a2dc90d. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nDependency adaptations include module import renames and attribution comments, field/domain specialization of smooth/reduced arguments, and an adapted rigidity argument. Original dependency authors and Apache-2.0 notices are preserved.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_05e7cf2326f1e6a290417b5b433aa5e3123bbda61a6dce720ff2bbd85f843c26",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "42d7a750044ba200643b82cafb372c68069de4fc",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
