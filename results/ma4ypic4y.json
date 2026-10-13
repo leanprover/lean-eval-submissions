@@ -1606,6 +1606,28 @@
         "ref": "5f1b7c30b908090ec1acb667ec6f0167085c7f43",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T11:45:06Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2100,
+        "kind": "issue"
+      },
+      "problem_id": "direct_summand",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json identify Claude Opus 5.5 and @haskiindahouse as the original campaign provenance. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). The historical runtime attribution has not been independently verified; the original provenance remains in the private source package.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 179 submitted Lean sources match the exact Git commit and the full verification receipt; protected files, dependency sources, pins and binaries remained unchanged. Receipt SHA256: b8524278406fd9f6a10e371901b6edccf37ef92b606c475c7c6f69bb75cf9048. The immutable Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.\n\nThe proof imports pinned Mathlib and the official LeanEval dependencies; their authorship, licenses and notices remain with their original authors. No third-party source is vendored in the submitted package.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e5dd3cb5bb75d1baba2fdeccbadd82808b3e6cf8d93453e617417e1df1225d98",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9584edcf2e3c2075a248fb7879c5e725549f1036",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
