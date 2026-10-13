@@ -22,6 +22,29 @@
         "ref": "2fe00ceebdbdb3a42da6a1e97d807f79939bbe18",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T04:25:10Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 2081,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_s6_complex_structure",
+      "production_metadata": {
+        "production_description": "Models: Claude Opus 5.5 + GPT-6 Astra.\n\nProduced by Humanfia's LOT (Lean Option Tree) orchestrator: agent sessions recursively split the statement into frozen sub-obligations, prove them in parallel, and every step is checked with the official lean-eval checker (comparator, nanoda and Lean kernel replay). The proof is fully machine-written; humans built the orchestrator and the seed package and operated the infrastructure. Builds on Mathlib and lean-pool (HopfProblem).",
+        "solution_publication_date": "2026-11-20",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a473a3e61587a298bfea69c289931dcf732d5a204435d13d9629e9510b833e54",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "86e4565b94e2b60f7aa9cf6791b63ebcad8a511e",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
