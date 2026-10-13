@@ -1584,6 +1584,28 @@
         "ref": "40965e51dad16d7f7db81e2246c0a9e3da3f4546",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T09:45:00Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2097,
+        "kind": "issue"
+      },
+      "problem_id": "erdos_unit_distance_conjecture_false",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 1564 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: bec26fb84a5f6542f7bb63a6313bf5404209a7b3efc10cd11bc1f078efc91993. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nDependency attribution: Submission/Nyll contains 1550 modules from n-yamaguchi-0729/SawinTotallyRealTowers @4b423fefd42383c629a962e36a686d160fa7aeb4. Reviewed sources match after import-prefix changes except two small ramification-index compatibility rewrites. Submission/LIEUD adapts logical-intelligence/erdos-unit-distance @b6493074dd103ca32ea4f5e9b0bc9cb3a0379f2e for the pinned Lean/Mathlib version. Original Apache-2.0, authors and notices are retained.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_61a4a9844c1ab24ec0b35d5deff6bad276d040fab0f2322889f14159b1b32baf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5f1b7c30b908090ec1acb667ec6f0167085c7f43",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
