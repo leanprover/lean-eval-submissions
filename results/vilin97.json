@@ -7862,6 +7862,27 @@
         "ref": "2e69cc91abec426559ea6981ecf604f6d65326b7",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T22:28:41Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 2105,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_between_two_and_76_33",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_a2b72217f20d707308027515cef49069b39caa2588823cff806476d2dc831fa3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "64f68b9d4270dba4448dd1b024974971da5102d4",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
