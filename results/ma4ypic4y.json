@@ -1672,6 +1672,28 @@
         "ref": "a3a112f5ccaa05f669a91845b125bd59e22e2f2e",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T19:34:39Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2103,
+        "kind": "issue"
+      },
+      "problem_id": "bakerWustholz_linearForms_logs",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json retain the original Claude Opus 5.5 campaign provenance. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution.\n\nThe proof was produced in an unattended campaign. Its provenance reports using public metadata of other submissions as hints, without using rival source code; it declares no third-party proof reuse. The pinned Mathlib and Lean Pool dependencies retain their authorship and licenses, and the benchmark Apache 2.0 license is included in the private package.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 373 submitted Lean sources match the exact Git commit and full verification receipt; protected files, dependency sources, pins and binaries remained unchanged. Receipt SHA256: 36ae4b58ad091edaa93032376c3f9aea5c082f3e5564283d4044dbe008e23d59. The immutable Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_93871926ef093de1ba09f24cd47066fac4d7422b258eb25d4ebbdb42bf60bb1b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f490413c1c23ef3ef41343a739f450f1daf0f2d",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
