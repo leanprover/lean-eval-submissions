@@ -1628,6 +1628,28 @@
         "ref": "9584edcf2e3c2075a248fb7879c5e725549f1036",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T14:10:16Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2101,
+        "kind": "issue"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json identify Claude Opus 5.5 as the original campaign provenance. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). The historical runtime attribution has not been independently verified; the original provenance remains in the private source package.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 134 submitted Lean sources match the exact Git commit and the full verification receipt; protected files, dependency sources, pins and binaries remained unchanged. Receipt SHA256: eb230db7bde622801da7c143d34e0aa3e07db37ba9b2b7f38b603e10803c24a1. The immutable Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.\n\nEight adapted source files retain their Mathlib and Lean Pool authorship and Apache 2.0 notices. Other pinned Mathlib and Lean Pool dependencies retain their authorship and licenses.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_28c3abbdd63e3dc36f794d4cd7d1a8a7251174108175c795c5273a12b915d92e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3d3794a3c3c11d71f6fcd2fce546d61a8eb1eded",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
