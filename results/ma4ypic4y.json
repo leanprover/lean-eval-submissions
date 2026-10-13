@@ -1540,6 +1540,28 @@
         "ref": "fbfccc1a4a59931e3ba65f455edf04b170234b37",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-13T08:25:05Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2096,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_coherence_of_one_relator_groups",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y, @haskiindahouse. Owner-declared authorship: @ma4ypic4y.\n\nModel: gpt 6.1 sol (gpt-6.1-sol), an owner-declared correction to the original model attribution retained in source documentation; historical runtime attribution has not been independently verified.\n\nCompleted official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. All 364 submitted Lean sources match this exact commit; protected files, pins, binaries and dependency sources remained unchanged. Receipt SHA256: c0962d338aa6376b00fab12e928a028fa100498043b67fff1d99a025d7059634. Exact Git archive discovery/overlay preflight and remote byte readback passed. Hosted acceptance is not yet claimed.\n\nPermitted dependencies retain original licenses, authorship and notices.\n\nDependency attribution: NatAdd adapts the natural-ordinal addition definition and lemmas from vihdzp/combinatorial-games, CombinatorialGames/NatOrdinal/Basic.lean (reviewed immutable revision 21ece514a976880dd215f95bfee5e40ccc57b867). The adaptation uses Ordinal directly and its current iSup API; Apache-2.0 and Violeta Hernández Palacios attribution are retained. The reviewed donor revision does not independently establish the historical fetched revision.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ff42e5baf5ed406f07973024514bf44c3b06e5221cf43fd14c1d54dcc1cedb7d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0eed683151bf8ba7492e842c9bcf738f20a6002c",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
