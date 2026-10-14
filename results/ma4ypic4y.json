@@ -1716,6 +1716,28 @@
         "ref": "444981de165023f3c16042c892ce208441813b01",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T05:58:37Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2116,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rectangular_peg_problem",
+      "production_metadata": {
+        "production_description": "Retry of #2108: its hosted run 38486760915 stopped while building the benchmark root from the TauCeti dependency cache, before proof evaluation. The source URL and all source bytes are unchanged. Later issue workflows 38491732673, 38495365016, and 38496701593 passed that dependency-build step. Hosted acceptance of this proof is not claimed.\n\nCredits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json retain the original Claude Opus 5.5 campaign provenance. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution.\n\nThe provenance reports an unattended proof campaign using public metadata of other submissions as hints, without rival source code. Vendored Lean Pool and Tau Ceti files retain their Apache 2.0 licenses, notices, and authorship; the benchmark license is also retained in the private package.\n\nFull official source-only verification of the exact 166 submitted Lean files completed against current benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. Source-bound receipt SHA256: dabeb27c8aa30bd8203eb24ae9ab8b8eb02107caec493c114e3da8a8d58e77a7. All source hashes match this immutable Git commit and current receipt; protected files, dependency sources, pins, and binaries remained unchanged. The Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e8eda87a26015b1c7150df5da146b3dcf82fc309eab24e5f56c935ed0e357ead",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5de770716cb36925ea1fedcbb42ae855b46bc276",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
