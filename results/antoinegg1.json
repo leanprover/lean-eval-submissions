@@ -137,6 +137,29 @@
         "ref": "aa4d393dd1e3be077e166948a9cc9cebde1ea8b7",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T09:35:26Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 2121,
+        "kind": "issue"
+      },
+      "problem_id": "wang_zahl_kakeya_dimH",
+      "production_metadata": {
+        "production_description": "Models: Claude Opus 5.5 + GPT-6 Astra.\n\nNote on the Model field: \"Humanifa + GPT 5.6 sol\" is the public label our team (Humanfia) has used for its earlier lean-eval submissions, kept here for consistency. It is a team identity, not the list of models used. A request to display it as \"Humanfia\" (https://github.com/leanprover/lean-eval-leaderboard/issues/92) has not been applied yet. This proof was produced with Claude Opus 5.5 and GPT-6 Astra.\n\nProduced by Humanfia's LOT (Lean Option Tree) orchestrator: agent sessions recursively split the statement into frozen sub-obligations, prove them in parallel, and every step is checked with the official lean-eval checker (comparator, nanoda and Lean kernel replay). The proof is fully machine-written; humans built the orchestrator and the seed package and operated the infrastructure. Builds on Mathlib; the run started from a seed package of our own (route notes, the cited papers as informal mathematics, and a few Lean lemmas written for it).",
+        "solution_publication_date": "2026-11-20",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_c6ad2324be74b6cefadb6e4fcc56262c43db19c45a158c056abcf40d97174ca6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0ce286931745a292d161f71aa61f5263bbd6de5e",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
