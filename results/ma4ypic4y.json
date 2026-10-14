@@ -1760,6 +1760,28 @@
         "ref": "8d3eb88ddce94f3bc26d815d3b23d0d348d34e8b",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T07:44:38Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2117,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_property_t",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json retain the original Claude Opus 5.5 campaign attribution and describe generated certificate data. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution.\n\nThe original provenance reports an unattended proof campaign using public metadata of other submissions as hints, without rival source code. The source package retains its Apache 2.0 license and benchmark license; pinned Mathlib and Lean Pool dependencies keep their own authorship and licenses. No third-party source files are declared as copied into the submitted proof.\n\nFull official source-only verification of the exact 210 submitted Lean files completed against current benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. Source-bound receipt SHA256: fe2b2060ba09e02eb5d74d51fe61031881fc8e7686f52537a393914a4fbb45d1. All source hashes match this immutable Git commit and the receipt; protected files, dependency sources, pins, and binaries remained unchanged. The Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_22c6cc0e8a24b0f96fd43db371c4311f035557a040f8aafdd4764b9404e842e0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bfb9019c15653061b6ab098bfe5a4468ba0555ec",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
