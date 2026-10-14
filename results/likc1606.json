@@ -22,6 +22,29 @@
         "ref": "1062b1e6c3d5bda6ae4a218e41bd34dbf11a2c35",
         "repo": "LikC1606/7570e284ff8b474a4139db2092de6eec"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T05:07:37Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2115,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rademacher_enflo_type",
+      "production_metadata": {
+        "production_description": "This is one retry of https://github.com/leanprover/lean-eval-submissions/issues/2114 after an infrastructure failure, using the exact same public repository commit and proof bytes. The previous archive job succeeded, but the evaluation fetch received HTTP 403 from the GitHub repository API with no App installation token and never evaluated the proof. The official notification classified it as an infrastructure failure. No proof or model metadata changed.\n\nDeepScientist Math's cooperative Lean proof solver using gpt-6.1-sol with xhigh reasoning. The final continuation used Lead, two Researcher roles and an Engineer, followed by independent statement/proof review, Lean kernel checks and the official local Lean-Eval comparator. It reused kernel-checked helper proofs from earlier attempts with the same system; this is a continuation result rather than a fresh-from-zero run. The final continuation took 30 turns and approximately 250 minutes, including preparation and evaluation. Human-directed work selected the problem, fixed runtime/environment issues, adjusted library-access and scheduling policies, and arranged the continuation.\n\nThe exact sources in this pinned commit passed the local official comparator at leanprover/lean-eval commit 96a09300f9debeef864d8037635d6e0248c43960 (Lean 4.33.0, Mathlib 6f1ef4e5dd604a435bddba4747b13970cd65d2a1). The original theorem's kernel receipt lists only propext, Classical.choice and Quot.sound; solver-owned proof sources contain no sorry. The official submission CI will independently evaluate against its current benchmark/toolchain. Target problem: annals_rademacher_enflo_type, statement revision 1.",
+        "solution_publication_date": "2026-10-14",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_cd2f1ecd681608f6b5f8be7c6d9570a263ef6c5306ba9b67040b9d5827786267",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "0c40463f2714beea03c5e8416ba9e7c62aa6aa50",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
     }
   ],
   "schema_version": 2,
