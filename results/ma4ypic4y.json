@@ -1782,6 +1782,28 @@
         "ref": "bfb9019c15653061b6ab098bfe5a4468ba0555ec",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T10:08:04Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2123,
+        "kind": "issue"
+      },
+      "problem_id": "annals_bounded_multiplicative_functions",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json retain the original Claude Opus 5.5 campaign attribution. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution.\n\nThe original provenance reports an unattended sandboxed proof campaign that used public metadata of other submissions as hints, without rival source code. The package is Apache 2.0 and retains 16 third-party source notices. Adapted Lean Pool files are attributed to David Ledvinka, The FLT Project, and Arend Mellendijk; the PNT adaptation also credits A. Kontorovich and T. Tao. Lean Pool is pinned at e9d53e9cbcff8dfd0cc816ba94db7a26b082929f. The benchmark license is retained and Mathlib and Lean Pool dependencies keep their own authorship and licenses.\n\nFull official source-only verification of the exact 170 submitted Lean files completed against current benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. Source-bound receipt SHA256: 03044e758145499cbe72c0d4b965bcf477c83f519bf8a7d9691bdb160861ca94. All source hashes match this immutable Git commit and the receipt; protected files, dependency sources, pins, and binaries remained unchanged. The Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_2b63f5e131dd757cdce632a3eae5b3e2afdcceeb76183caa24d20f37c8bb522a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9008f4a8432f3e03a06e4cb72e059a22a67c2c37",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
