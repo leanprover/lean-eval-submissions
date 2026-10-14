@@ -1738,6 +1738,28 @@
         "ref": "5de770716cb36925ea1fedcbb42ae855b46bc276",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T06:25:43Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2118,
+        "kind": "issue"
+      },
+      "problem_id": "ckmrv_fourier_interpolation",
+      "production_metadata": {
+        "production_description": "Credits: @ma4ypic4y and @haskiindahouse. The source README and PROVENANCE.json retain the original Claude Opus 5.5 campaign attribution. For this leaderboard entry, the owner declares a corrected model attribution: max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution.\n\nThe original provenance reports an unattended proof campaign using public metadata of other submissions as hints, without rival source code. The proof adapts a Lean Pool cutoff estimate (OpenAI attribution) and includes Lean Modular Forms library modules by Chris Birkbeck with renamed module paths. Their Apache 2.0 licenses, file notices, and authorship are retained; the benchmark license is also retained. The reused library content is a declared dependency of the proof, not claimed as newly authored.\n\nFull official source-only verification of the exact 284 submitted Lean files completed against current benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1: lake test exit 0, Nanoda and Lean default kernel acceptance, no prohibited axioms. Source-bound receipt SHA256: 3142c62d63711f22bdc40f802cb934950cb7e23bb6063058fc8ef87edfc474c8. The current verification metadata commit changes only README.md and VERIFICATION.json from the verified parent; every submitted Lean source hash matches the receipt. Protected files, dependency sources, pins, and binaries remained unchanged. The Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4ce4723b963d614901c187135a4d6f8c1a523156b3722f8bee43876f33c19a1b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8d3eb88ddce94f3bc26d815d3b23d0d348d34e8b",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
