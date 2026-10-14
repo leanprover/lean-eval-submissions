@@ -160,6 +160,29 @@
         "ref": "0ce286931745a292d161f71aa61f5263bbd6de5e",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-10-14T11:42:16Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 2122,
+        "kind": "issue"
+      },
+      "problem_id": "annals_motivic_invariants",
+      "production_metadata": {
+        "production_description": "Models: Claude Opus 5.5 + GPT-6 Astra.\n\nNote on the Model field: \"Humanifa + GPT 5.6 sol\" is the public label our team (Humanfia) has used for its earlier lean-eval submissions, kept here for consistency. It is a team identity, not the list of models used. A request to display it as \"Humanfia\" (https://github.com/leanprover/lean-eval-leaderboard/issues/92) has not been applied yet. This proof was produced with Claude Opus 5.5 and GPT-6 Astra.\n\nProduced by Humanfia's LOT (Lean Option Tree) orchestrator: agent sessions recursively split the statement into frozen sub-obligations, prove them in parallel, and every step is checked with the official lean-eval checker (comparator, nanoda and Lean kernel replay). The proof is fully machine-written; humans built the orchestrator and the seed package and operated the infrastructure. Builds on Mathlib and lean-pool (RiemannRochFunctionFields); the run started from a seed package of our own (route notes, the cited papers as informal mathematics, and a few Lean lemmas written for it).",
+        "solution_publication_date": "2026-11-20",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_280387b95fc3deb89d13a0c8aad34e1b3ac50c8075b1c0fffdfd9fd6b43c532d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f1084ee14e3f87e38c7f9ca10e22a763f6f7add",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
