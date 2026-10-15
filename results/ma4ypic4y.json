@@ -1870,6 +1870,28 @@
         "ref": "bf8b06c565a822e72a37431dec681eb78317692d",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-15T09:20:03Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2138,
+        "kind": "issue"
+      },
+      "problem_id": "hilbert_smith_padic_dimension_three",
+      "production_metadata": {
+        "production_description": "The source README and PROVENANCE.json record an original Claude Opus 5.5 multi-agent formalization campaign by @haskiindahouse. For this leaderboard entry, the owner declares the corrected model attribution max gp (GPT-6), described as gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified historical runtime attribution. Credits: @ma4ypic4y and @haskiindahouse.\n\nThe package has 415 original campaign Lean files and 3,276 adapted, Apache-2.0 vendored Lean files. The vendored sources include 3,221 modules from qinz1yang/differential-geometry at fd2f07fba4c6c102ba626c59153ad98da8f0d442, with its attributed nested external libraries, and 55 modules from mccorvie/classification-of-surfaces at e3c7230fe78d7b056a415d9ecae6f77887046b32. The package retains upstream authorship, licenses, notices, source maps and modification notes under provenance/. The formalization uses these licensed libraries; it does not claim that their results were independently re-derived by the campaign. Benchmark Mathlib and other pinned dependencies retain their own authorship.\n\nFull official source-only verification against benchmark 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1, completed lake test with exit 0 and Nanoda plus Lean default kernel acceptance. The complete log and source-bound receipt SHA256 53609d1335655a59cc852d32b3512bf7d6ce6b329b9a3613be3690d7d03f5867 match all 3,691 submitted Lean files. No prohibited axioms; protected files, 8,116 dependency sources, pins and binaries remained unchanged. The exact Git archive, official evaluator discovery and overlay, and GitHub byte readback were checked. Hosted acceptance is not yet claimed.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_83e0cde26e6127025399b37a7501baf5618f18d22d152f59fe473fa46e55c94f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ec1e00f190ba5a531a1298f154481ff7e2b9ffb3",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
