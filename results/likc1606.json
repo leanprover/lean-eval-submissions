@@ -68,6 +68,29 @@
         "ref": "1a46c11651e8346a13af410ae3e12292da694d81",
         "repo": "LikC1606/deepscientist-math-proofs"
       }
+    },
+    {
+      "accepted_at": "2026-10-15T17:07:09Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2141,
+        "kind": "issue"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {
+        "production_description": "Proof of annals_fractional_expectation_thresholds, statement revision 1, including both the universal constant K and theorem_1_1. Produced with DeepScientist Math, gpt-6.1-sol, xhigh, using cooperative Lead, two Researchers, Engineer, and independent Reviewer roles. The persisted run contains 239 role turns and was resumed across runtime/environment repairs; this is not a claim of one uninterrupted fresh-from-zero solve. Human direction selected the problem and requested runtime repairs and submission. A coding assistant repaired the runtime and prepared this submission package. The final environment-repair retries made no new model calls and changed no proof bytes.\n\nThe independent reviewer accepted frozen candidate 06dd44031d8ef14eacd8bdc9f8a666998ece052d, source digest 968789d0fb0ef79f396fdda622f47c31a83a76957bdfc00ddb25c93e63a8f4fe. The local official lake test then passed with exit code 0 against benchmark commit 38361be884302c7edce1908c4aef8296eb2cb27e (Lean 4.35.0-rc3): both Nanoda and the Lean default kernel accepted the solution. That final comparator run took 541.019 seconds. This is local verification evidence; hosted official CI acceptance is requested by this issue.\n\nThe public source snapshot contains only this benchmark workspace. verification.json records the exact published proof hashes and local comparator receipt. Submission.lean SHA-256: 028ce084c75d9015852e6912d05ebf50f40d05522b47267e52c3365c7f19d56e. Submission/Helpers.lean SHA-256: e0ea3f43432ed60c497193a8bb900ca71bdbb4a16e0c256a6d1bac0b4f273fad.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_e828f03e5091a05facc633456fd035164e4fc6fb9523a32984264a2e944bb7f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "003d58b9a333858bf878e5984348ee21bb0aed72",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
     }
   ],
   "schema_version": 2,
