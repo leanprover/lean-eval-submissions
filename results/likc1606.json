@@ -45,6 +45,29 @@
         "ref": "0c40463f2714beea03c5e8416ba9e7c62aa6aa50",
         "repo": "LikC1606/deepscientist-math-proofs"
       }
+    },
+    {
+      "accepted_at": "2026-10-15T06:53:56Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2135,
+        "kind": "issue"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {
+        "production_description": "Compatibility repair of submission #2133 for annals_equiangular_lines_fixed_angle, statement revision 1. That submission failed to compile against the official benchmark's newer Lean/Mathlib APIs. The existing proof has now been ported to benchmark commit 38361be884302c7edce1908c4aef8296eb2cb27e, Lean 4.35.0-rc3, and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. A coding assistant directly adapted spectral-radius API uses and implicit vector arguments, and removed two redundant tactics. Both original cases remain covered.\n\nLocal direct compilation of ChallengeDeps, Submission.Helpers, Submission, and the unchanged official bridge completed with exit code 0 under the new pins. The separate target-axiom check also passed: Submission.theorem_1_2 depends only on propext, Classical.choice, and Quot.sound. The original official lake test is still running as of submission; no new comparator or independent-kernel pass is claimed yet. compatibility-verification.json records the exact source hashes and validation scope at source publication. verification.json retains the historical verification under Lean 4.33 and is not evidence of a pass under the new version.\n\nThis is a continuation result, not a fresh-from-zero solve. Original proof production used DeepScientist Math with gpt-6.1-sol, xhigh, with Lead, two Researchers, and Engineer. The final continuation reviewed a saved candidate in one independent reviewer turn; the immediately preceding run used 40 turns, with additional work in earlier attempts. The 18.6-minute final continuation excludes that earlier work. Human direction selected the task and requested runtime/environment repairs. A coding assistant previously recovered the candidate, corrected public-statement parsing, removed unrelated unfinished helpers, and arranged review and evaluation; this compatibility port additionally includes the direct proof edits described above.",
+        "solution_publication_date": "2026-10-15",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_84d5927f130f4c73c060e2d6809467a85bc05909077c0d9e9fab48b5a47d40f5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "1a46c11651e8346a13af410ae3e12292da694d81",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
     }
   ],
   "schema_version": 2,
