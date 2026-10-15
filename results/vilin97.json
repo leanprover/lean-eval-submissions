@@ -7883,6 +7883,27 @@
         "ref": "64f68b9d4270dba4448dd1b024974971da5102d4",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-10-15T11:21:00Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 2140,
+        "kind": "issue"
+      },
+      "problem_id": "sphere_theorem_differentiable",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_562986429e4c12dd4a5f6d74871e8447be606cf453ac4bfde52e8131c3969303",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "247abef1c922f464411d2fe03f0f0158d4204694",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
