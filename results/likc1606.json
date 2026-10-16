@@ -91,6 +91,52 @@
         "ref": "003d58b9a333858bf878e5984348ee21bb0aed72",
         "repo": "LikC1606/deepscientist-math-proofs"
       }
+    },
+    {
+      "accepted_at": "2026-10-16T12:03:59Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2143,
+        "kind": "issue"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "production_description": "Proofs of dimitrov and hopf_rinow, both statement revision 1, produced by TheoremOS (the standalone continuation of DeepScientist Math) using gpt-6.1-sol, xhigh. The declared system/model label is retained from earlier DeepScientist Math submissions. The cooperative solver used a Lead, two Researchers, an Engineer, and independent fixed-candidate review. The final continuations recorded 13 role turns for Dimitrov and 16 for Hopf-Rinow, reusing same-problem helper proofs and research from earlier runs. These counts exclude earlier work and environment-repair retries. Human direction selected the tasks and requested runtime repairs, continuation, and submission; a coding assistant repaired the environment and prepared this package.\n\nBoth unchanged candidates passed the local official lake test against leanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e, with Lean 4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. Both Nanoda and the Lean default kernel accepted each solution. Final environment-repair retries made no new model calls and changed no proof bytes. This is local verification evidence; this issue requests independent hosted CI evaluation.\n\nDimitrov candidate: 4cbc7b9a41f58e54879f513f36c1bc9253bfa26b; reviewed source digest aa67bead46354f9a67a62057e6cef76cc8879a7a23f8fdc98bd95f606037029e; local receipt official-e24ceed48b27c14dc18ebf98. Hopf-Rinow candidate: 54aef14c8bf34ccce36c9a0918be9a39a8bfd1dc; reviewed source digest d6c4133112482ce44be7f9ad32ee8cdf85f57cd4a901885c2b6811a8c9a68aad; local receipt official-27c7700c026006db16d251ef. Each workspace's verification.json records the exact published proof hashes and local receipt. Every published proof file is byte-identical to the reviewed and locally accepted candidate.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_eb4477c9e625253ef5484433bf2172820bd786c614beafffeace79741c932f9a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b6909c3211863eac52c040c8812da3df4ce3af4d",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
+    },
+    {
+      "accepted_at": "2026-10-16T12:03:59Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2143,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_rinow",
+      "production_metadata": {
+        "production_description": "Proofs of dimitrov and hopf_rinow, both statement revision 1, produced by TheoremOS (the standalone continuation of DeepScientist Math) using gpt-6.1-sol, xhigh. The declared system/model label is retained from earlier DeepScientist Math submissions. The cooperative solver used a Lead, two Researchers, an Engineer, and independent fixed-candidate review. The final continuations recorded 13 role turns for Dimitrov and 16 for Hopf-Rinow, reusing same-problem helper proofs and research from earlier runs. These counts exclude earlier work and environment-repair retries. Human direction selected the tasks and requested runtime repairs, continuation, and submission; a coding assistant repaired the environment and prepared this package.\n\nBoth unchanged candidates passed the local official lake test against leanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e, with Lean 4.35.0-rc3 and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22. Both Nanoda and the Lean default kernel accepted each solution. Final environment-repair retries made no new model calls and changed no proof bytes. This is local verification evidence; this issue requests independent hosted CI evaluation.\n\nDimitrov candidate: 4cbc7b9a41f58e54879f513f36c1bc9253bfa26b; reviewed source digest aa67bead46354f9a67a62057e6cef76cc8879a7a23f8fdc98bd95f606037029e; local receipt official-e24ceed48b27c14dc18ebf98. Hopf-Rinow candidate: 54aef14c8bf34ccce36c9a0918be9a39a8bfd1dc; reviewed source digest d6c4133112482ce44be7f9ad32ee8cdf85f57cd4a901885c2b6811a8c9a68aad; local receipt official-27c7700c026006db16d251ef. Each workspace's verification.json records the exact published proof hashes and local receipt. Every published proof file is byte-identical to the reviewed and locally accepted candidate.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ae00f43d0c2f9880c65938ee71207ba0d4d0eab50e652233efc6851c58263886",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b6909c3211863eac52c040c8812da3df4ce3af4d",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
     }
   ],
   "schema_version": 2,
