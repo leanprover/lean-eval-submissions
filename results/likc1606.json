@@ -137,6 +137,98 @@
         "ref": "b6909c3211863eac52c040c8812da3df4ce3af4d",
         "repo": "LikC1606/deepscientist-math-proofs"
       }
+    },
+    {
+      "accepted_at": "2026-10-16T19:07:38Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2144,
+        "kind": "issue"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "production_description": "Four proofs, all statement revision 1: annals_improved_bounds_sunflower_lemma,\nannals_lorentzian_polynomials, annals_optimal_moebius, and\nannals_algebraic_integers. Produced with TheoremOS, the standalone continuation of\nDeepScientist Math, using gpt-6.1-sol with xhigh reasoning. The declared system\nlabel is retained from earlier DeepScientist Math submissions. The cooperative\nworkflow used Lead, two Researchers, Engineer, and independent fixed-candidate\nreview. The persisted final continuations record 1, 32, 38, and 64 role turns,\nrespectively. These counts exclude earlier work and retries, and are not total\nproduction cost or claims of fresh-from-zero solves.\n\nHuman direction selected tasks, requested runtime recovery, and authorized\nsubmission. A coding assistant repaired the runtime and prepared this package.\nThe Sunflower recovery also integrated a saved same-problem completion before\nfresh helper rechecks and independent review; its one recorded role turn is\nthe final reviewer, not a claim of a one-turn solve. The other continuations\nalso reuse saved same-problem work. Final packaging made no proof edits and\nno new solver model calls.\n\nAll four unchanged candidates passed local official lake test against\nleanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e,\nLean 4.35.0-rc3, and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nBoth Nanoda and the Lean default kernel accepted each solution. These are\nlocal verification results; this issue requests independent hosted CI evaluation.\n\nSunflower: reviewed solver commit 89d3b2ae1046b769c61bec916b7b2e514bb3b51f;\nlocal receipt official-5d529fee4ce52fcbdd7b9f5e.\nLorentzian: reviewed solver commit dc082e99532a292b8d7cfd800f9830db8651e696;\nlocal receipt official-77ec6166e2084c56f0db5506.\nMoebius: reviewed solver commit b48eebc842a49f114c97ac439f3aa3991858284b;\nlocal receipt official-56aa819a8ed10d397631a424.\nAlgebraic integers: reviewed solver commit 431e8fb70db64d14b8d510a4f1e759ff5be3dada;\nlocal receipt official-3958121e2cdc96e06fd66bf1.\n\nEach workspace's verification.json records exact file hashes, review binding,\nand local comparator receipt. All published proof bytes match both the reviewed\nsolver commit and accepted official projection. Frozen dependency pins are\npreserved. Only these four workspaces are included; previously accepted problems\nare excluded to avoid duplicate evaluation.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_900ca327ab9ef34640cae9438f8c6825dcc442d58c94a317a138d171b890cf30",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "43cffcc2851efebefd9609abee0c537c64bd9dbf",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
+    },
+    {
+      "accepted_at": "2026-10-16T19:07:38Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2144,
+        "kind": "issue"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "production_description": "Four proofs, all statement revision 1: annals_improved_bounds_sunflower_lemma,\nannals_lorentzian_polynomials, annals_optimal_moebius, and\nannals_algebraic_integers. Produced with TheoremOS, the standalone continuation of\nDeepScientist Math, using gpt-6.1-sol with xhigh reasoning. The declared system\nlabel is retained from earlier DeepScientist Math submissions. The cooperative\nworkflow used Lead, two Researchers, Engineer, and independent fixed-candidate\nreview. The persisted final continuations record 1, 32, 38, and 64 role turns,\nrespectively. These counts exclude earlier work and retries, and are not total\nproduction cost or claims of fresh-from-zero solves.\n\nHuman direction selected tasks, requested runtime recovery, and authorized\nsubmission. A coding assistant repaired the runtime and prepared this package.\nThe Sunflower recovery also integrated a saved same-problem completion before\nfresh helper rechecks and independent review; its one recorded role turn is\nthe final reviewer, not a claim of a one-turn solve. The other continuations\nalso reuse saved same-problem work. Final packaging made no proof edits and\nno new solver model calls.\n\nAll four unchanged candidates passed local official lake test against\nleanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e,\nLean 4.35.0-rc3, and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nBoth Nanoda and the Lean default kernel accepted each solution. These are\nlocal verification results; this issue requests independent hosted CI evaluation.\n\nSunflower: reviewed solver commit 89d3b2ae1046b769c61bec916b7b2e514bb3b51f;\nlocal receipt official-5d529fee4ce52fcbdd7b9f5e.\nLorentzian: reviewed solver commit dc082e99532a292b8d7cfd800f9830db8651e696;\nlocal receipt official-77ec6166e2084c56f0db5506.\nMoebius: reviewed solver commit b48eebc842a49f114c97ac439f3aa3991858284b;\nlocal receipt official-56aa819a8ed10d397631a424.\nAlgebraic integers: reviewed solver commit 431e8fb70db64d14b8d510a4f1e759ff5be3dada;\nlocal receipt official-3958121e2cdc96e06fd66bf1.\n\nEach workspace's verification.json records exact file hashes, review binding,\nand local comparator receipt. All published proof bytes match both the reviewed\nsolver commit and accepted official projection. Frozen dependency pins are\npreserved. Only these four workspaces are included; previously accepted problems\nare excluded to avoid duplicate evaluation.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_754ebf9ac8fca530207401a65d2ba9ed047b8502423f6a9b1bead9d29ae3e32f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "43cffcc2851efebefd9609abee0c537c64bd9dbf",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
+    },
+    {
+      "accepted_at": "2026-10-16T19:07:38Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2144,
+        "kind": "issue"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {
+        "production_description": "Four proofs, all statement revision 1: annals_improved_bounds_sunflower_lemma,\nannals_lorentzian_polynomials, annals_optimal_moebius, and\nannals_algebraic_integers. Produced with TheoremOS, the standalone continuation of\nDeepScientist Math, using gpt-6.1-sol with xhigh reasoning. The declared system\nlabel is retained from earlier DeepScientist Math submissions. The cooperative\nworkflow used Lead, two Researchers, Engineer, and independent fixed-candidate\nreview. The persisted final continuations record 1, 32, 38, and 64 role turns,\nrespectively. These counts exclude earlier work and retries, and are not total\nproduction cost or claims of fresh-from-zero solves.\n\nHuman direction selected tasks, requested runtime recovery, and authorized\nsubmission. A coding assistant repaired the runtime and prepared this package.\nThe Sunflower recovery also integrated a saved same-problem completion before\nfresh helper rechecks and independent review; its one recorded role turn is\nthe final reviewer, not a claim of a one-turn solve. The other continuations\nalso reuse saved same-problem work. Final packaging made no proof edits and\nno new solver model calls.\n\nAll four unchanged candidates passed local official lake test against\nleanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e,\nLean 4.35.0-rc3, and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nBoth Nanoda and the Lean default kernel accepted each solution. These are\nlocal verification results; this issue requests independent hosted CI evaluation.\n\nSunflower: reviewed solver commit 89d3b2ae1046b769c61bec916b7b2e514bb3b51f;\nlocal receipt official-5d529fee4ce52fcbdd7b9f5e.\nLorentzian: reviewed solver commit dc082e99532a292b8d7cfd800f9830db8651e696;\nlocal receipt official-77ec6166e2084c56f0db5506.\nMoebius: reviewed solver commit b48eebc842a49f114c97ac439f3aa3991858284b;\nlocal receipt official-56aa819a8ed10d397631a424.\nAlgebraic integers: reviewed solver commit 431e8fb70db64d14b8d510a4f1e759ff5be3dada;\nlocal receipt official-3958121e2cdc96e06fd66bf1.\n\nEach workspace's verification.json records exact file hashes, review binding,\nand local comparator receipt. All published proof bytes match both the reviewed\nsolver commit and accepted official projection. Frozen dependency pins are\npreserved. Only these four workspaces are included; previously accepted problems\nare excluded to avoid duplicate evaluation.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_fdf58e3dcbea1b56e69611529919fef3b43c5e0b070c93f153a2eeba89e52baf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "43cffcc2851efebefd9609abee0c537c64bd9dbf",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
+    },
+    {
+      "accepted_at": "2026-10-16T19:07:38Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "DeepScientist Math + GPT-6.1 (gpt-6.1-sol)",
+      "intake": {
+        "issue_number": 2144,
+        "kind": "issue"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {
+        "production_description": "Four proofs, all statement revision 1: annals_improved_bounds_sunflower_lemma,\nannals_lorentzian_polynomials, annals_optimal_moebius, and\nannals_algebraic_integers. Produced with TheoremOS, the standalone continuation of\nDeepScientist Math, using gpt-6.1-sol with xhigh reasoning. The declared system\nlabel is retained from earlier DeepScientist Math submissions. The cooperative\nworkflow used Lead, two Researchers, Engineer, and independent fixed-candidate\nreview. The persisted final continuations record 1, 32, 38, and 64 role turns,\nrespectively. These counts exclude earlier work and retries, and are not total\nproduction cost or claims of fresh-from-zero solves.\n\nHuman direction selected tasks, requested runtime recovery, and authorized\nsubmission. A coding assistant repaired the runtime and prepared this package.\nThe Sunflower recovery also integrated a saved same-problem completion before\nfresh helper rechecks and independent review; its one recorded role turn is\nthe final reviewer, not a claim of a one-turn solve. The other continuations\nalso reuse saved same-problem work. Final packaging made no proof edits and\nno new solver model calls.\n\nAll four unchanged candidates passed local official lake test against\nleanprover/lean-eval commit 38361be884302c7edce1908c4aef8296eb2cb27e,\nLean 4.35.0-rc3, and Mathlib 5e0c4e5239cb0a2d86d68a884bf52cfd963fce22.\nBoth Nanoda and the Lean default kernel accepted each solution. These are\nlocal verification results; this issue requests independent hosted CI evaluation.\n\nSunflower: reviewed solver commit 89d3b2ae1046b769c61bec916b7b2e514bb3b51f;\nlocal receipt official-5d529fee4ce52fcbdd7b9f5e.\nLorentzian: reviewed solver commit dc082e99532a292b8d7cfd800f9830db8651e696;\nlocal receipt official-77ec6166e2084c56f0db5506.\nMoebius: reviewed solver commit b48eebc842a49f114c97ac439f3aa3991858284b;\nlocal receipt official-56aa819a8ed10d397631a424.\nAlgebraic integers: reviewed solver commit 431e8fb70db64d14b8d510a4f1e759ff5be3dada;\nlocal receipt official-3958121e2cdc96e06fd66bf1.\n\nEach workspace's verification.json records exact file hashes, review binding,\nand local comparator receipt. All published proof bytes match both the reviewed\nsolver commit and accepted official projection. Frozen dependency pins are\npreserved. Only these four workspaces are included; previously accepted problems\nare excluded to avoid duplicate evaluation.",
+        "solution_publication_date": "2026-10-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_732cc0e7a945ac4d818fd898ef530e1b57fcaffe360ab70bc5f457e9d78da41d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "43cffcc2851efebefd9609abee0c537c64bd9dbf",
+        "repo": "LikC1606/deepscientist-math-proofs"
+      }
     }
   ],
   "schema_version": 2,
