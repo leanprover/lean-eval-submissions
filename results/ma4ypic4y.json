@@ -1892,6 +1892,28 @@
         "ref": "ec1e00f190ba5a531a1298f154481ff7e2b9ffb3",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-16T03:54:17Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2142,
+        "kind": "issue"
+      },
+      "problem_id": "milnor_exotic_sphere_seven",
+      "production_metadata": {
+        "production_description": "The source README and PROVENANCE.json describe an original Claude Opus 5.5 via Claude Code multi-agent formalization campaign by @haskiindahouse. For this leaderboard entry, the owner declares the corrected model attribution **max gp (GPT-6)**, described as **gpt 6.1 sol (gpt-6.1-sol)**. This is an owner-declared correction, not an independently verified historical runtime attribution. Credits: @ma4ypic4y and @haskiindahouse.\n\nThe formalization contains 584 Lean source files. Forty vendored Apache-2.0 files come from Yury G. Kudryashov's SardMoreira and Jiazhen Xia's WhiteheadTheorem through Vilin97/lean-pool commit e9d53e9cbcff8dfd0cc816ba94db7a26b082929f. One campaign file adapts Boris Alexeev's simplex–cube homeomorphism from HopfProblem via the same lean-pool commit. The source keeps their authorship, headers, licenses, notices, upstream links and modification notes in PROVENANCE.json and provenance/. These licensed libraries are dependencies; their results are not claimed as independently re-derived by the campaign. Benchmark Mathlib and other pinned dependencies retain their own authorship.\n\nThe exact 584 submitted Lean source files were checked byte for byte against a completed official source-only verifier run on benchmark commit 38361be884302c7edce1908c4aef8296eb2cb27e, statement revision 1. The full `lake test` exited 0; Nanoda and the Lean default kernel accepted; there were no prohibited axioms. Protected files, dependency sources, pins and verifier binaries remained unchanged. The full log and source-bound receipt have SHA256 66fd6ebdd8db72c2bb03544b647e1a2b7c88ee2c190dc7fa8b4536e147bd1287 and 145efe3bf928973fd0f944aec73e6b46326740fea850a3a825e75fb8faa22b50, respectively. The exact Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Local verification is distinct from hosted acceptance.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_43b64afe5b9c995f7af523f1cf7f334951be37ff57b8516e5e7b2b5195446700",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c4f837cffd725c1461207ae8c27b24339de7203",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
