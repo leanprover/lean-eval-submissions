@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-10-17T15:28:14Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Deepseek-v4.1 Flash-1017",
+      "intake": {
+        "issue_number": 2147,
+        "kind": "issue"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "production_description": "Replication, not new mathematics. The Lean sources are byte-identical to the public accepted submission `trureturing` at `the-omega-institute/trureturing-lean-eval` commit `92adfe225bb26dfed06f5ba77d9abbb7f680733f` (Apache-2.0), which formalizes Giles Gardam's known counterexample. The original acceptance and attribution are recorded on the problem page. No originality is claimed.\n\nRuntime and harness: B3ehive 2.2.0 execution flow; Zenpi-dev (`weiyangzen/zenpi@833c50856bdc464316d7d9a746e8c91c81d77b34`, 2026-10-16); DeepSeek `deepseek-flash` via `192.168.50.168:18080`. The model was used for packaging/review, not to derive the reused proof; the model label above identifies the submitted runtime as requested by the submitter.\n\nLocal verification: fresh workspace from benchmark commit `38361be884302c7edce1908c4aef8296eb2cb27e`; `lake build` passed; `lake test` exited 0 with comparator and nanoda both accepting. macOS used comparator's `fake-landrun.sh`; the official Linux run with real `landrun` is delegated to hosted CI. No `sorry`/`admit`; axioms are within propext/Quot.sound/Classical.choice. This issue requests independent hosted evaluation. Since the source is byte-identical to an already accepted submission, maintainers should hash-match and mark it derivative rather than count it as independent evidence.",
+        "solution_publication_date": "2026-10-17",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ba4393951591935085700bf3faa322913d61f7a9910436ad3ae6b3cf1ec83708",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c570be967a0ebff4ce37b1ce8ea3657e00776078",
+        "repo": "weiyangzen/lean-eval-v1-zenpi"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "weiyangzen"
+}
