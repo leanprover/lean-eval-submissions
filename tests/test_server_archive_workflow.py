@@ -6,7 +6,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "server-archive.yml"
 SUBMISSION = ROOT / ".github" / "workflows" / "submission.yml"
@@ -18,13 +17,13 @@ class ServerArchiveWorkflowTests(unittest.TestCase):
         cls.text = WORKFLOW.read_text(encoding="utf-8")
         cls.submission = SUBMISSION.read_text(encoding="utf-8")
 
-    def test_is_reusable_and_selected_only_for_server_dispatch(self) -> None:
+    def test_is_reusable_and_called_by_server_only_submission_workflow(self) -> None:
         self.assertIn("  workflow_call:", self.text)
         self.assertNotIn("  workflow_dispatch:", self.text)
         caller = self.submission.split("\n  archive_server:", 1)[1].split(
             "\n  archive:", 1
         )[0]
-        self.assertIn("github.event_name == 'workflow_dispatch'", caller)
+        self.assertNotIn("if:", caller)
         self.assertIn("uses: ./.github/workflows/server-archive.yml", caller)
         self.assertIn("id-token: write", caller)
         self.assertIn("callback_environment: ${{ inputs.callback_environment }}", caller)
@@ -81,14 +80,10 @@ class ServerArchiveWorkflowTests(unittest.TestCase):
             self.text,
         )
 
-    def test_issue_lane_cannot_assume_the_kms_role(self) -> None:
-        issue = self.submission.split("\n  archive_issue:", 1)[1].split(
-            "\n  archive_server:", 1
-        )[0]
-        self.assertIn("github.event_name == 'issues'", issue)
-        self.assertNotIn("id-token: write", issue)
-        self.assertNotIn("AWS_WRAP_ROLE_ARN", issue)
-        self.assertNotIn("archive_envelope.py", issue)
+    def test_retired_issue_lane_cannot_receive_archive_authority(self) -> None:
+        self.assertNotIn("\n  archive_issue:", self.submission)
+        self.assertNotIn("github.event.issue", self.submission)
+        self.assertNotIn("github.event_name", self.submission)
 
 
 if __name__ == "__main__":

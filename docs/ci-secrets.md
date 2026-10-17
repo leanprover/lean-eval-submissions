@@ -82,9 +82,9 @@ also pipes these existing secrets directly into each private broker as
 separate repository-scoped contents/metadata-read token only to prove the exact
 repository and commit before server intake mutates State.
 
-The issue template
-[`.github/ISSUE_TEMPLATE/submit.yml`](../.github/ISSUE_TEMPLATE/submit.yml)
-instructs contributors to install this app on their submission repo.
+The [LeanEval submission service](https://lean-lang.org/eval/submit/)
+instructs contributors with private source repositories to install this app
+before submitting.
 
 ### Reconstruction from scratch
 
