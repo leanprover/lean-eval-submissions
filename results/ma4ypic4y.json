@@ -1958,6 +1958,28 @@
         "ref": "c7e9a0b0a0b556a24f51442244ddfb468cbf4a1a",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-18T06:50:42Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2151,
+        "kind": "issue"
+      },
+      "problem_id": "annals_wilkies_conjecture",
+      "production_metadata": {
+        "production_description": "Problem: `annals_wilkies_conjecture`, statement revision 1. The source README and PROVENANCE.json describe a Claude Opus 5.5 via Claude Code formalization campaign. For this leaderboard entry, the owner declares the corrected model attribution **max gp (GPT-6)**, described as **gpt 6.1 sol (gpt-6.1-sol)**. This is an owner-declared correction, not an independently verified historical runtime attribution. Credits: @ma4ypic4y and @haskiindahouse.\n\nThe proof package contains 1265 Lean source files. Thirty-eight files retain third-party authorship and license notices. Classical complex Weierstrass preparation and division files by BochaoKong and SardMoreira files by Yury G. Kudryashov were adapted from `Vilin97/lean-pool` at commit `e9d53e9cbcff8dfd0cc816ba94db7a26b082929f` under Apache-2.0; the package keeps their notices and records the original paths and modifications in its `License.lean` modules and PROVENANCE.json. Permitted Mathlib and lean-pool dependencies retain their authorship. The campaign does not claim to have independently re-derived these library results.\n\nAll 1265 submitted Lean source hashes match a completed official source-only verifier run against benchmark commit `38361be884302c7edce1908c4aef8296eb2cb27e` and the current statement revision. The verifier's internal candidate label predates this Git metadata commit, but its source-bound receipt matches every source file byte for byte. The full `lake test` exited 0; Nanoda and the Lean default kernel accepted; no prohibited axioms were found. Protected workspace files, dependency sources, pinned tools and verifier binaries remained unchanged. The full log SHA256 is `d71be2a5abefdbe10bda913f2e7e76dc12f50a4fd88743da218336ba98eb51f4` and the source-bound receipt SHA256 is `37030d56267db6f4f676317c2acd3771d4b7fac278c0ec31aa39b012bfa188c5`. The exact Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Local verification is distinct from hosted acceptance.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4a7a231beeaaf3f3e82883ee587f26cde0e11d1631b71416af6802e2c28611c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2406476ca4341c6cc8f33460266c9b1a40377862",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
