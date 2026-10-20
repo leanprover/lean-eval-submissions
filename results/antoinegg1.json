@@ -229,6 +229,29 @@
         "ref": "b4a38c14529405a1a8cc023ed36be841f86c3d7e",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-10-20T07:14:31Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 2153,
+        "kind": "issue"
+      },
+      "problem_id": "hilbert_smith_padic_dimension_three",
+      "production_metadata": {
+        "production_description": "Models: Claude Opus 5.5, GPT-6 Astra and GPT-6.1 sol.\n\nNote on the Model field: \"Humanifa + GPT 5.6 sol\" is the public label our team (Humanfia) has used for its earlier lean-eval submissions, kept here for consistency. It is a team identity, not the list of models used. A request to display it as \"Humanfia\" (lean-eval-leaderboard issue #92) has not been applied yet. This proof was produced with Claude Opus 5.5, GPT-6 Astra and GPT-6.1 sol.\n\nProduced by Humanfia's LOT (Lean Option Tree) orchestrator: agent sessions recursively split the statement into frozen sub-obligations, prove them in parallel, and every step is checked with the official lean-eval checker (comparator, nanoda and Lean kernel replay). The proof is fully machine-written; humans built the orchestrator and the seed package, chose the external code the run could use, and operated the infrastructure. It follows the route of Pardon's proof (J. Amer. Math. Soc. 26 (2013)).\n\nBuilds on Mathlib and lean-pool, which is imported as a dependency (projects imported: Brouwer, ClassificationOfSurfaces, FiniteGraphFundamentalGroup, HopfProblem, JacobianDiffgeo, PLAcceleratedNesterovLean, Polytopes, RiemannMappingTheorem, SardMoreira, Schoenflies). Some files of the proof contain code copied or adapted from lean-pool projects (Brouwer, ClassificationOfSurfaces, EhrhartVolumeInequality, FiniteGraphFundamentalGroup, HopfProblem, JacobianDiffgeo, SardMoreira, Schoenflies), and four files are modified copies of, or new code around, three files on cell triangulations from OpenAI's `openai/math` repository (Apache-2.0). Each such file keeps its copyright and attribution header. `NOTICE` at the tree's root lists the imported libraries, every piece of copied or adapted code with its licence, and where each of those files now is; the licence texts are in `LICENSES/` (lean-pool's LICENSE, Brouwer's MIT licence, and the NOTICE and LICENSE that come with the cell-triangulation code).\n\nThe submitted tree holds only the import closure of the theorem's module: 5271 Lean files under `Submission/`. To fit the evaluation's 4-core time limit, they are joined into 1083 modules: 4672 files form 484 merged modules, and 599 files are kept as they are. Files are joined only along their imports, and only when every file that imports one of them already imports all of them, so no module sees more names than before. Each joined file's text appears unchanged between the lines `-- ====== begin <original path> ======` and `-- ====== end <original path> ======`: first its header comments, then its text after the imports, inside its own `section ... end` (with an `end` added for each section or namespace the file leaves open). The statement and every proof are unchanged. Size: 1099 files, 9.67 MB as a gzipped tar.\n\nChecked before submission with the official comparator setup (comparator d03acab, lean4export 076e8e5, nanoda 68d5ca9, Lean kernel replay; permitted axioms propext, Quot.sound, Classical.choice) in an isolated container: \"Your solution is okay!\" for this tree (with the problem's `PROBLEM.md`, which the checker expects; the submitted tree leaves it out as in our other submissions). This check took 43 min at 16 CPUs (container memory peak 21.3 GiB). Measured on a runner-sized container (4 CPUs, 15 GB memory, Lean-Eval's layout with lean-pool built from source), the whole check took 2 h 47 min (2 h 25 min of it compiling), with a comparator peak of 8.0 GiB and at most 3.5 GiB for any single Lean process.",
+        "solution_publication_date": "2026-11-20",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_f2d05edf6e4637b7d9dc781877ec134ab287852bd6a66a0c9d653f8882e528ca",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bbf626fb603e5ff59f8bd4d2378df872cdc95250",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
