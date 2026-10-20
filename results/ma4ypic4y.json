@@ -1980,6 +1980,28 @@
         "ref": "2406476ca4341c6cc8f33460266c9b1a40377862",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-20T10:27:44Z",
+      "benchmark_commit": "38361be884302c7edce1908c4aef8296eb2cb27e",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2154,
+        "kind": "issue"
+      },
+      "problem_id": "mandelbrot_boundary_dimh",
+      "production_metadata": {
+        "production_description": "Problem: `mandelbrot_boundary_dimh`, statement revision 1. The source README and PROVENANCE.json describe a Claude Opus 5.5 via Claude Code formalization campaign. For this leaderboard entry, the owner declares the corrected model attribution **max gp (GPT-6)**, described as **gpt 6.1 sol (gpt-6.1-sol)**. This is an owner-declared correction, not an independently verified historical runtime attribution. Credits: @ma4ypic4y and @haskiindahouse.\n\nThe package contains 685 Lean source files. Its PROVENANCE.json declares no third-party source reuse; the pinned Mathlib and lean-pool dependencies retain their own authorship and licenses. The proof uses those permitted libraries and does not claim to independently re-derive their results.\n\nAll 685 submitted Lean source hashes match a completed official source-only verifier run against benchmark commit `38361be884302c7edce1908c4aef8296eb2cb27e` and statement revision 1. The verifier ran on parent commit `93bd0673e885096712cc8a0ca8dc2e0d7a6da810`; this submitted descendant changes only README.md and VERIFICATION.json, with every Lean source, lakefile.toml, and lean-toolchain byte unchanged. The full `lake test` exited 0; Nanoda and the Lean default kernel accepted; no prohibited axioms were found. Protected workspace files, dependency sources, pinned tools and verifier binaries remained unchanged. The full log SHA256 is `362c7d492631fdc64312d37db6e1bbc5d137d3f045303a4c5cc5ed47d9b32696` and the source-bound receipt SHA256 is `b6d417c9c96f9e3aa8b36ef1e3fee760bcae71a07a65af556bffeba155be4d9c`. The exact Git archive, current evaluator discovery and overlay, and GitHub byte readback were checked. Local verification is distinct from hosted acceptance.\n\nRetry of [#2152](https://github.com/leanprover/lean-eval-submissions/issues/2152), which was closed as orphaned after hosted dependency-cache build failure before proof evaluation. The bot explicitly invited re-submission. This retry uses the same immutable commit and source snapshot; the previous failure was not a proof rejection.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_278cc96ae2067103f2227a3ac5959751a5d5e3e9e89105af0460b4c4d6cbde9e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "adcac3c75d37a47518a81d04e335d20ce651f041",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
