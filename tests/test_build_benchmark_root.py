@@ -56,12 +56,17 @@ class BuildBenchmarkRootTests(unittest.TestCase):
                         "argv": sys.argv[1:],
                         "cwd": os.getcwd(),
                         "env": {{k: v for k, v in os.environ.items()
-                                if k.startswith("LAKE_") or k == "GITHUB_ENV"}},
+                                if k.startswith("LAKE_") or k in ("GITHUB_ENV", "CURL")}},
                     }}) + "\\n")
-                target = sys.argv[2] if len(sys.argv) > 2 else "root"
+                targets = sys.argv[sys.argv.index("build") + 1:]
+                target = targets[0] if targets else "root"
                 for line in json.loads(os.environ.get("FAKE_LAKE_OUTPUT", "{{}}")).get(target, []):
                     print(line, flush=True)
                 time.sleep(float(os.environ.get("FAKE_LAKE_LINGER", "0")))
+                if os.environ.get("FAKE_LAKE_FAIL_FIRST_RESTORE") == "1":
+                    with open({str(self.calls)!r}) as f:
+                        if len(f.readlines()) == 1:
+                            sys.exit(3)
                 sys.exit(int(os.environ.get("FAKE_LAKE_RC", "0")))
                 """
             ),
@@ -140,7 +145,7 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertEqual(rc, 0, stderr)
         calls = self._calls()
         self.assertEqual(
-            [call["argv"] for call in calls], [["build", "TauCeti"], ["build"]]
+            [call["argv"] for call in calls], [["-v", "--no-build", "build", "TauCeti"], ["build"]]
         )
         for call in calls:
             self.assertEqual(pathlib.Path(call["cwd"]), self.root.resolve())
@@ -150,6 +155,7 @@ class BuildBenchmarkRootTests(unittest.TestCase):
                     "LAKE_CONFIG": "/tmp/dependency-cache.toml",
                     "LAKE_ARTIFACT_CACHE": "true",
                     "LAKE_RESTORE_ARTIFACTS": "true",
+                    "CURL": str(br.CACHE_CURL),
                 },
             )
         # The fetch script saw no GITHUB_ENV, so later steps inherit nothing.
@@ -177,7 +183,7 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("compiled TauCeti instead of downloading it", stderr)
         self.assertIn("Built TauCeti.Algebra.Lie.B", stderr)
-        self.assertEqual([call["argv"] for call in self._calls()], [["build", "TauCeti"]])
+        self.assertEqual([call["argv"] for call in self._calls()], [["-v", "--no-build", "build", "TauCeti"]])
 
     def test_failed_tauceti_job_counts_as_compiling(self) -> None:
         self.assertTrue(br.COMPILED_TAUCETI.search("✖ [3/9] Building TauCeti.X"))
@@ -189,6 +195,52 @@ class BuildBenchmarkRootTests(unittest.TestCase):
             "✔ [3/9] Built Mathlib.Order.Basic (1.2s)",
         ):
             self.assertIsNone(br.COMPILED_TAUCETI.search(line), line)
+
+    def test_cache_restore_failure_preserves_download_diagnostics_and_stops(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'echo "{TAUCETI_EXPORT}"\n')
+        os.environ["FAKE_LAKE_RC"] = "3"
+        os.environ["FAKE_LAKE_OUTPUT"] = json.dumps(
+            {"TauCeti": ["✖ [2/3] Building TauCeti.Unavailable",
+                         "input found in package artifact cache, but some output(s) have issues:",
+                         "- curl: (22) The requested URL returned error: 503"]}
+        )
+        with mock.patch.object(br.time, "sleep"):
+            rc, stdout, stderr = self._run()
+        self.assertEqual(rc, 1)
+        self.assertIn("curl: (22)", stdout)
+        self.assertIn("503", stdout)
+        self.assertIn("No dependency compilation was permitted", stderr)
+        self.assertEqual(len(self._calls()), 2)
+        self.assertTrue(all("--no-build" in call["argv"] for call in self._calls()))
+
+    def test_restoration_retries_before_building_the_root(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'test -x "$CURL"\necho "{TAUCETI_EXPORT} CURL=/unused/benchmark-wrapper"\n')
+        os.environ["FAKE_LAKE_FAIL_FIRST_RESTORE"] = "1"
+        with mock.patch.object(br.time, "sleep"):
+            rc, stdout, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertIn("retrying without compiling", stdout)
+        self.assertEqual(["--no-build" in c["argv"] for c in self._calls()], [True, True, False])
+        self.assertTrue(all(c["env"]["CURL"] == str(br.CACHE_CURL) for c in self._calls()))
+
+    def test_root_build_still_rejects_tauceti_compilation(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'echo "{TAUCETI_EXPORT}"\n')
+        os.environ["FAKE_LAKE_OUTPUT"] = json.dumps(
+            {"root": ["Built TauCeti.Unexpected (1s)"]}
+        )
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 1)
+        self.assertIn("compiled TauCeti instead of downloading it", stderr)
+        self.assertEqual(len(self._calls()), 2)
 
     def test_fetch_script_failure_or_bad_output_fails_closed(self) -> None:
         (self.root / "lake-manifest.json").write_text(
