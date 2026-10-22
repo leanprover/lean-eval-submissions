@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import json
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,7 +18,7 @@ import evaluate_submission as ev  # noqa: E402
 
 @unittest.skipUnless(
     os.environ.get("LEAN_EVAL_SANDBOX_TEST") == "1",
-    "requires Lean and landrun; run in the solution dependency sandbox CI job",
+    "requires Lean and bubblewrap; run in the solution dependency sandbox CI job",
 )
 class SolutionDependencySandboxTest(unittest.TestCase):
     def test_private_build_cache_enables_cold_solution_imports(self) -> None:
@@ -49,7 +51,7 @@ class SolutionDependencySandboxTest(unittest.TestCase):
                 '[[require]]\nname = "lean-pool"\n'
                 f'git = "{pool.as_uri()}"\nrev = "{rev}"\n'
             )
-            toolchain = os.environ.get("ELAN_TOOLCHAIN", "leanprover/lean4:v4.34.0")
+            toolchain = os.environ.get("ELAN_TOOLCHAIN", "leanprover/lean4:v4.35.0-rc3")
             for project in (benchmark, workspace):
                 (project / "lean-toolchain").write_text(toolchain + "\n")
             (benchmark / "lakefile.toml").write_text(
@@ -61,11 +63,19 @@ class SolutionDependencySandboxTest(unittest.TestCase):
             (benchmark / ".lake" / "packages").mkdir(parents=True, exist_ok=True)
             (workspace / "lakefile.toml").write_text(
                 'name = "workspace"\n' + require
+                + '[[lean_lib]]\nname = "Challenge"\n'
+                + '[[lean_lib]]\nname = "Solution"\n'
                 + '[[lean_lib]]\nname = "Submission"\n'
             )
             (workspace / "Submission.lean").write_text(
                 "import LeanPool.Extra\n"
                 "theorem submitted : (2 : Nat) + 2 = 4 := pool_fact\n"
+            )
+            (workspace / "Challenge.lean").write_text(
+                "theorem target : (2 : Nat) + 2 = 4 := rfl\n"
+            )
+            (workspace / "Solution.lean").write_text(
+                "import Submission\ntheorem target : (2 : Nat) + 2 = 4 := submitted\n"
             )
             (workspace / ".lake" / "build").mkdir(parents=True)
             (workspace / ".lake" / "packages").symlink_to(
@@ -75,21 +85,32 @@ class SolutionDependencySandboxTest(unittest.TestCase):
                 benchmark / "lake-manifest.json", workspace / "lake-manifest.json"
             )
             lean_prefix = Path(self._run(["lean", "--print-prefix"], benchmark).stdout.strip())
-            sandbox = [
-                "landrun", "--ro", "/", "--rw", "/dev",
-                "--rox", str(Path(shutil.which("git")).resolve().parent),
-                "--rox", str(lean_prefix), "--rwx", str(workspace / ".lake"),
-                "--env", "PATH", "--env", "HOME", "--env", "LEAN_ABORT_ON_PANIC=1",
-                "--ldd", "--add-exec", str(lean_prefix / "bin" / "lake"),
-                "build", "Submission",
-            ]
-            if Path("/nix/store").is_dir():
-                # Nix wraps git with an interpreter and helper executables;
-                # Ubuntu CI uses the ordinary /usr/bin/git binary.
-                sandbox[1:1] = ["--rox", "/nix/store"]
+            (workspace / "config.json").write_text(json.dumps({
+                "challenge_module": "Challenge", "solution_module": "Solution",
+                "theorem_names": ["target"],
+                "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"],
+                "external_kernels": {"nanoda": [str(lean_prefix / "bin/nanoda_bin")]},
+            }))
+            real_bwrap = str(Path(shutil.which(os.environ.get("COMPARATOR_BWRAP", "bwrap"))).resolve())
+            cache = str((benchmark / ".lake/packages").resolve())
+            wrapper = root / "bwrap-with-cache"
+            wrapper.write_text(
+                f"#!{Path(shutil.which('sh')).resolve()}\n"
+                "inserted=\nfor arg do\n  shift\n"
+                '  if [ "$arg" = -- ] && [ -z "$inserted" ]; then\n'
+                f'    set -- "$@" --ro-bind {shlex.quote(cache)} {shlex.quote(cache)}\n'
+                '    inserted=1\n  fi\n  set -- "$@" "$arg"\ndone\n'
+                f'exec {shlex.quote(real_bwrap)} "$@"\n'
+            )
+            wrapper.chmod(0o755)
+            sandbox = [str(lean_prefix / "bin/lake"), "comparator", "--config", "config.json"]
+            # Only the adapter's private Lean Pool layout changes between runs.
+            previous_bwrap = os.environ.get("COMPARATOR_BWRAP")
+            self.addCleanup(self._restore_bwrap, previous_bwrap)
+            os.environ["COMPARATOR_BWRAP"] = str(wrapper)
             cold = subprocess.run(sandbox, cwd=workspace, text=True, capture_output=True)
             self.assertNotEqual(cold.returncode, 0, cold.stdout + cold.stderr)
-            self.assertIn("permission denied", cold.stdout + cold.stderr)
+            self.assertIn("read-only file system", cold.stdout + cold.stderr)
 
             # Production setup creates a private build directory without
             # elaborating either dependency or submitted source on the runner.
@@ -99,10 +120,19 @@ class SolutionDependencySandboxTest(unittest.TestCase):
             shared_pool = benchmark / ".lake/packages/lean-pool"
             self.assertFalse((private_pool / ".lake").is_symlink())
             built = self._run(sandbox, workspace)
+            self.assertIn("nanoda kernel accepts the solution", built.stdout)
+            self.assertIn("Lean default kernel accepts the solution", built.stdout)
             self.assertNotIn("warning:", built.stdout + built.stderr)
             self.assertTrue((private_pool / ".lake/build/lib/lean/LeanPool/Extra.olean").is_file())
             self.assertFalse((shared_pool / ".lake/build/lib/lean/LeanPool/Extra.olean").exists())
             self.assertFalse((private_pool / ".lake/build/lib/lean/LeanPool/Basic.olean").exists())
+
+    @staticmethod
+    def _restore_bwrap(previous: str | None) -> None:
+        if previous is None:
+            os.environ.pop("COMPARATOR_BWRAP", None)
+        else:
+            os.environ["COMPARATOR_BWRAP"] = previous
 
     def _run(self, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(args, cwd=cwd, text=True, capture_output=True)

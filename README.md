@@ -12,7 +12,7 @@ This repository owns two things:
 - **The results store** — `results/<github-login>.json`, the append-only
   public log of solved problems.
 
-The benchmark problem set, the `lean-eval` CLI, and the comparator/landrun
+The benchmark problem set, the `lean-eval` CLI, and the Lake comparator/bubblewrap
 security model live in [`leanprover/lean-eval`](https://github.com/leanprover/lean-eval).
 The public leaderboard that renders these results is
 [`leanprover/lean-eval-leaderboard`](https://github.com/leanprover/lean-eval-leaderboard)
