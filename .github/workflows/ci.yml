@@ -173,3 +173,35 @@ jobs:
             echo "artifact round-trip mismatch"
             exit 1
           fi
+
+  acceptance-measurement-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Prepare the pinned toolchain
+        run: |
+          mkdir -p .ci/acceptance
+          printf '%s\n' 'leanprover/lean4:v4.35.0-rc3' > .ci/acceptance/lean-toolchain
+          printf '%s\n' 'name = "acceptance-smoke"' > .ci/acceptance/lakefile.toml
+          printf '%s\n' '{"version":"1.2.0","packagesDir":".lake/packages","packages":[],"name":"acceptance-smoke","lakeDir":".lake"}' > .ci/acceptance/lake-manifest.json
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: .ci/acceptance
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-mathlib-cache: false
+          use-github-cache: false
+      - name: Install pinned bubblewrap
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes meson ninja-build libcap-dev
+          bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
+      - name: Measure accepted and rejected fixtures through Lake comparator
+        env:
+          ELAN_TOOLCHAIN: leanprover/lean4:v4.35.0-rc3
+        run: python scripts/smoke_acceptance_measurements.py --sandbox "$RUNNER_TEMP/lean-eval-bwrap/bwrap"

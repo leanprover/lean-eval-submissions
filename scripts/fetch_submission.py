@@ -600,6 +600,7 @@ SERVER_METADATA_FIELDS = {
     "harness",
     "human_involvement",
     "input_tokens",
+    "cached_input_tokens",
     "notes",
     "output_tokens",
     "prompt",
@@ -641,7 +642,7 @@ def _validate_server_metadata(metadata: dict) -> None:
             _server_text({str(index): value}, str(index), 256)
     if "web_access" in metadata and not isinstance(metadata["web_access"], bool):
         raise FetchError("server web_access is invalid")
-    for field in ("input_tokens", "output_tokens"):
+    for field in ("input_tokens", "cached_input_tokens", "output_tokens"):
         value = metadata.get(field)
         if field in metadata and (
             isinstance(value, bool)
@@ -660,6 +661,8 @@ def _validate_server_metadata(metadata: dict) -> None:
             or value > maximum
         ):
             raise FetchError(f"server {field} is invalid")
+    if metadata.get("cached_input_tokens", 0) > metadata.get("input_tokens", 9007199254740991):
+        raise FetchError("cached input exceeds total input")
     if "billing_mode" in metadata and metadata.get("billing_mode") not in {"api", "subscription", "unknown"}:
         raise FetchError("server billing_mode is invalid")
 

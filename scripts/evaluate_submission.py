@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import contextlib
+import hashlib
 import json
 import os
 import pathlib
@@ -917,6 +919,43 @@ def _cap_summary_size(summary: dict) -> dict:
     return summary
 
 
+@contextlib.contextmanager
+def _acceptance_sandbox(metrics_dir, workspaces_root, problem_ids, repo_root):
+    if metrics_dir is None:
+        yield
+        return
+    from measure_acceptance_sandbox import install
+    try:
+        sandbox = shutil.which(os.environ.get("COMPARATOR_BWRAP", "bwrap"))
+        if sandbox is None:
+            raise EvaluateError("trusted bubblewrap is unavailable")
+        sandbox = pathlib.Path(sandbox).resolve()
+        prefix = pathlib.Path(subprocess.check_output(
+            ["lean", "--print-prefix"], cwd=repo_root, text=True
+        ).strip())
+        solutions = {pid: json.loads((workspaces_root / pid / "config.json").read_text())["solution_module"]
+                     for pid in problem_ids}
+        wrapper = install(metrics_dir, workspaces_root, solutions, sandbox, prefix)
+        components = {
+            "toolchain": subprocess.check_output([str(prefix / "bin/lean"), "--githash"], text=True).strip(),
+            "bubblewrap_sha256": hashlib.sha256(sandbox.read_bytes()).hexdigest(),
+        }
+        (metrics_dir / "setup.json").write_text(json.dumps(components))
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+        print("acceptance measurement setup unavailable", file=sys.stderr)
+        yield
+        return
+    previous = os.environ.get("COMPARATOR_BWRAP")
+    os.environ["COMPARATOR_BWRAP"] = str(wrapper)
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("COMPARATOR_BWRAP", None)
+        else:
+            os.environ["COMPARATOR_BWRAP"] = previous
+
+
 def evaluate_submission(
     *,
     source_dir: pathlib.Path,
@@ -928,6 +967,7 @@ def evaluate_submission(
     shared_packages: pathlib.Path | None = None,
     problem_id: str | None = None,
     statement_revision: int | None = None,
+    acceptance_metrics_dir: pathlib.Path | None = None,
     measurement_command: list[str] | None = None,
     authoritative_checker: str | None = None,
     preprimed_workspaces: bool = False,
@@ -987,6 +1027,14 @@ def evaluate_submission(
         source_dir, set(manifest_revisions), generated_root=generated_root
     )
 
+    if acceptance_metrics_dir is not None:
+        if acceptance_metrics_dir.is_symlink() or _is_inside(acceptance_metrics_dir, source_dir):
+            raise EvaluateError("acceptance metrics directory is not trusted")
+        try:
+            acceptance_metrics_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError:
+            print("acceptance measurement directory unavailable", file=sys.stderr)
+            acceptance_metrics_dir = None
     overlay_records: list[dict] = []
     # Create the tempdir inside repo_root (directly by default, or under the
     # validated workspace parent) so that:
@@ -1038,24 +1086,25 @@ def evaluate_submission(
                 + extra
             )
 
-        if run_eval_runner is None:
-            if preprimed_workspaces:
-                run_eval_output = _run_preprimed_eval(
-                    problem_ids=overlaid_ids,
-                    workspaces_root=workspaces_root,
-                    repo_root=repo_root,
-                )
+        with _acceptance_sandbox(acceptance_metrics_dir, workspaces_root, overlaid_ids, repo_root):
+            if run_eval_runner is None:
+                if preprimed_workspaces:
+                    run_eval_output = _run_preprimed_eval(
+                        problem_ids=overlaid_ids,
+                        workspaces_root=workspaces_root,
+                        repo_root=repo_root,
+                    )
+                else:
+                    run_eval_output = _run_run_eval(
+                        problem_ids=overlaid_ids,
+                        workspaces_root=workspaces_root,
+                        repo_root=repo_root,
+                    )
             else:
-                run_eval_output = _run_run_eval(
+                run_eval_output = run_eval_runner(
                     problem_ids=overlaid_ids,
                     workspaces_root=workspaces_root,
-                    repo_root=repo_root,
                 )
-        else:
-            run_eval_output = run_eval_runner(
-                problem_ids=overlaid_ids,
-                workspaces_root=workspaces_root,
-            )
 
     passed = _extract_passed(run_eval_output)
 
@@ -1085,6 +1134,7 @@ def evaluate_submission(
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--acceptance-metrics-dir", type=pathlib.Path)
     parser.add_argument("--source-dir", type=pathlib.Path, required=True)
     parser.add_argument("--generated-root", type=pathlib.Path, required=True)
     parser.add_argument(
@@ -1193,6 +1243,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             problem_id=args.problem_id,
             statement_revision=args.statement_revision,
+            acceptance_metrics_dir=args.acceptance_metrics_dir.resolve() if args.acceptance_metrics_dir else None,
             measurement_command=_measurement_command(args.measurement_command_json),
             authoritative_checker=args.authoritative_checker,
             preprimed_workspaces=args.preprimed_workspaces,
