@@ -1,0 +1,52 @@
+name: Reconcile acceptance measurements
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Earliest acceptance timestamp to inspect (UTC)
+        type: string
+        default: '2026-10-22T00:00:00Z'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: acceptance-measurement-reconciliation
+  cancel-in-progress: false
+jobs:
+  authorize-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Require protected upstream main
+        env:
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+          test "$EVENT_REF_PROTECTED" = true
+  reconcile:
+    needs: authorize-manual
+    if: >-
+      always() && ((github.event_name == 'workflow_dispatch' && needs.authorize-manual.result == 'success') ||
+      (github.event_name == 'schedule' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudflare-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Read the published, redacted measurement state
+        run: curl --fail --silent --show-error --max-time 30 https://lean-lang.org/eval/site-data/public-state.json --output /tmp/public-state.json
+      - name: Retry source-free recorder receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+          MEASUREMENTS_SINCE: ${{ inputs.since || '2026-10-22T00:00:00Z' }}
+        run: python scripts/reconcile_acceptance_measurements.py --results-root . --public-state /tmp/public-state.json --since "$MEASUREMENTS_SINCE"

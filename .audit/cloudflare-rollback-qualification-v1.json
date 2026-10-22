@@ -1,5 +1,7 @@
 {
   "lifecycle_callback_contract_files": [
+    "schemas/acceptance-measurement-v1.schema.json",
+    "server/src/acceptance-measurement.ts",
     "server/src/api-contract.ts",
     "server/src/app.ts",
     "server/src/auth.ts",
@@ -16,7 +18,7 @@
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "4da9901c64c719af76dc7f87312a31920361139657e9b4599db5c0b1e67db02d",
+  "lifecycle_callback_contract_sha256": "8760851babc0b2c4f8130dd4496cdc4fcc7dac8ce89d41c157597c184189949d",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
@@ -24,9 +26,9 @@
   "scheduled_reconciliation_when_intake_disabled": "no_op",
   "schema_version": 1,
   "state_event_schema_path": "schema/state-event-v1.schema.json",
-  "state_event_schema_sha256": "501d5521f831e412471d296535f7ce390fe4afa19b814b74699156430a2adac8",
+  "state_event_schema_sha256": "4bfd5117f97cdda959096f47bdaecd1c50e329c4769e5f7c023c85f7c5252923",
   "state_event_schema_version": 1,
-  "state_main_commit": "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00",
+  "state_main_commit": "83a21bc6f94ff0be37ae70e44f5e5ded8be66318",
   "state_repository": "leanprover/lean-eval-state",
   "wrangler_version": "4.131.0"
 }

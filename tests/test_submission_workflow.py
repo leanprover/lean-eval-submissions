@@ -99,7 +99,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
                 "  intake:", "  evaluate:", "  archive_issue:",
                 "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
-                "  evaluation_state:", "  record:", "  result_state:", "  notify:",
+                "  evaluation_state:", "  record:", "  result_state:", "  notify:", "  measurement_state:",
             ],
             "expected exactly the reviewed submission jobs",
         )
@@ -164,7 +164,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
 
     def test_idempotent_lifecycle_callbacks_survive_bounded_state_throttling(self) -> None:
-        self.assertEqual(self.text.count("curl --fail-with-body"), 4)
+        self.assertEqual(self.text.count("curl --fail-with-body"), 5)
         for option in (
             "--connect-timeout 10",
             "--max-time 30",
@@ -173,7 +173,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "--retry-max-time 900",
             "--retry-connrefused",
         ):
-            self.assertEqual(self.text.count(option), 4)
+            self.assertEqual(self.text.count(option), 5)
         self.assertNotIn("--retry-all-errors", self.text)
         self.assertEqual(self.text.count('--output "$response_file"'), 4)
         self.assertNotIn('cat "$response_file"', self.text)
@@ -396,7 +396,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
     def test_archive_state_callback_is_source_free_and_step_scoped(self) -> None:
         self.assertEqual(
             self.text.count("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"),
-            4,
+            5,
         )
         failure_callback = self.text.split("\n  archive_failure_state:", 1)[1].split("\n  archive_state:", 1)[0]
         self.assertIn("/internal/v1/archive-failed", failure_callback)

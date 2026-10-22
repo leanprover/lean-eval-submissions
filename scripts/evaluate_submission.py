@@ -928,6 +928,7 @@ def evaluate_submission(
     shared_packages: pathlib.Path | None = None,
     problem_id: str | None = None,
     statement_revision: int | None = None,
+    acceptance_metrics_dir: pathlib.Path | None = None,
     measurement_command: list[str] | None = None,
     authoritative_checker: str | None = None,
     preprimed_workspaces: bool = False,
@@ -987,6 +988,10 @@ def evaluate_submission(
         source_dir, set(manifest_revisions), generated_root=generated_root
     )
 
+    if acceptance_metrics_dir is not None:
+        acceptance_metrics_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if acceptance_metrics_dir.is_symlink() or _is_inside(acceptance_metrics_dir, source_dir):
+            raise EvaluateError("acceptance metrics directory is not trusted")
     overlay_records: list[dict] = []
     # Create the tempdir inside repo_root (directly by default, or under the
     # validated workspace parent) so that:
@@ -1001,13 +1006,21 @@ def evaluate_submission(
         workspaces_root.mkdir(parents=True, exist_ok=True)
         overlaid_ids: list[str] = []
         for match in matches:
+            adapter = measurement_command
+            if acceptance_metrics_dir is not None:
+                import sys
+                landrun = shutil.which("landrun")
+                if landrun is None: raise EvaluateError("trusted landrun is unavailable")
+                adapter = [sys.executable, str(REPO_ROOT / "scripts/measure_acceptance_phase.py"),
+                           "--metrics-path", str(acceptance_metrics_dir / (match.problem_id + ".json")),
+                           "--landrun", str(pathlib.Path(landrun).resolve()), "--"]
             record = overlay_match(
                 match,
                 generated_root=generated_root,
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
                 root_manifest=repo_root / "lake-manifest.json",
-                measurement_command=measurement_command,
+                measurement_command=adapter,
                 authoritative_checker=authoritative_checker,
                 # If a fake run-eval runner is injected (tests), the
                 # synthetic pristine workspaces don't carry a real lakefile
@@ -1085,6 +1098,7 @@ def evaluate_submission(
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--acceptance-metrics-dir", type=pathlib.Path)
     parser.add_argument("--source-dir", type=pathlib.Path, required=True)
     parser.add_argument("--generated-root", type=pathlib.Path, required=True)
     parser.add_argument(
@@ -1193,6 +1207,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             problem_id=args.problem_id,
             statement_revision=args.statement_revision,
+            acceptance_metrics_dir=args.acceptance_metrics_dir.resolve() if args.acceptance_metrics_dir else None,
             measurement_command=_measurement_command(args.measurement_command_json),
             authoritative_checker=args.authoritative_checker,
             preprimed_workspaces=args.preprimed_workspaces,

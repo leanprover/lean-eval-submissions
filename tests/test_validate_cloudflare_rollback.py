@@ -11,7 +11,7 @@ from scripts import validate_cloudflare_rollback as rollback
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
-PROTECTED_STATE_COMMIT = "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00"
+PROTECTED_STATE_COMMIT = "83a21bc6f94ff0be37ae70e44f5e5ded8be66318"
 STATE_SCHEMA_SHA256 = "501d5521f831e412471d296535f7ce390fe4afa19b814b74699156430a2adac8"
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
 BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
@@ -86,8 +86,10 @@ class RollbackContractCoverageTests(unittest.TestCase):
             len(set(rollback.CALLBACK_CONTRACT_FILES)),
         )
 
-    def test_qualification_paths_are_bounded_typescript_sources(self) -> None:
+    def test_qualification_paths_are_bounded_callback_sources(self) -> None:
         for relative in rollback.CALLBACK_CONTRACT_FILES:
+            if relative == "schemas/acceptance-measurement-v1.schema.json":
+                continue
             self.assertTrue(relative.startswith("server/src/"))
             self.assertTrue(relative.endswith(".ts"))
 

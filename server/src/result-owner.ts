@@ -1,9 +1,9 @@
 import { decodeProductionMetadata, type ProductionMetadata } from "./api-contract";
 
 export const PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00" as const;
+  "83a21bc6f94ff0be37ae70e44f5e5ded8be66318" as const;
 export const STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "0999e6bcaee386b1fa9aa55da096b5f7a9161615" as const;
+  "db2c056ac5b0c5b91bdbca4b24d0af7726d9957a" as const;
 export const RESULT_OWNER_STATE_CONTRACT_COMMIT =
   PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
 
@@ -44,6 +44,7 @@ export type VerifiedLegacyResult = Readonly<{
   resultId: string;
   ownerLogin: string;
   baseResult: LegacyResultBase;
+  metadataContext?: Readonly<{ productionMetadata: Readonly<Record<string, unknown>>; benchmarkCommit: string; submissionId: string | null }>;
 }>;
 
 export type ResultIdentityGuard = Readonly<{
@@ -356,6 +357,7 @@ export function decodeResultOverlay(value: unknown): ResultOverlay {
     }
     decodeProductionMetadata({ [field]: provenance.value });
   }
+  decodeProductionMetadata(Object.fromEntries(Object.entries(metadata).map(([field, entry]) => [field, object(entry, "metadata provenance").value])));
   return { ...data, base_result: validateBase(data.base_result), metadata } as ResultOverlay;
 }
 

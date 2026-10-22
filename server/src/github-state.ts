@@ -152,18 +152,18 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
-      schema: { mode: "040000", type: "tree", sha: "a39d9b597abbecc41122b592c61dd0f23c7b74ad" },
-      scripts: { mode: "040000", type: "tree", sha: "13d9caf6663eb4fc6187890da8d0cfd0eddf5a91" },
+      docs: { mode: "040000", type: "tree", sha: "5d390d3b4a08778ac4d5f392a614043c2660c94d" },
+      schema: { mode: "040000", type: "tree", sha: "7a44c2fea6988e1019de8f824640cd62761b0425" },
+      scripts: { mode: "040000", type: "tree", sha: "ce620e408780342464dc4f73ddb87a777043003f" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
-      docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
-      schema: { mode: "040000", type: "tree", sha: "fc40d90206bbc40049cd6f9739c66fe48f4c5c2d" },
-      scripts: { mode: "040000", type: "tree", sha: "18261d3a1f81606e60dcf39c5d278dec222bcfb3" },
+      docs: { mode: "040000", type: "tree", sha: "ef1c82c9c25592a6534048fb92f9939b5d94b6e2" },
+      schema: { mode: "040000", type: "tree", sha: "42250bb10e41f7959c01e694dfd27d630b58d474" },
+      scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
     },
   },
 };
@@ -172,18 +172,18 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
     commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
-      schema: { mode: "040000", type: "tree", sha: "a39d9b597abbecc41122b592c61dd0f23c7b74ad" },
-      scripts: { mode: "040000", type: "tree", sha: "13d9caf6663eb4fc6187890da8d0cfd0eddf5a91" },
+      docs: { mode: "040000", type: "tree", sha: "5d390d3b4a08778ac4d5f392a614043c2660c94d" },
+      schema: { mode: "040000", type: "tree", sha: "7a44c2fea6988e1019de8f824640cd62761b0425" },
+      scripts: { mode: "040000", type: "tree", sha: "ce620e408780342464dc4f73ddb87a777043003f" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
-      docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
-      schema: { mode: "040000", type: "tree", sha: "fc40d90206bbc40049cd6f9739c66fe48f4c5c2d" },
-      scripts: { mode: "040000", type: "tree", sha: "18261d3a1f81606e60dcf39c5d278dec222bcfb3" },
+      docs: { mode: "040000", type: "tree", sha: "ef1c82c9c25592a6534048fb92f9939b5d94b6e2" },
+      schema: { mode: "040000", type: "tree", sha: "42250bb10e41f7959c01e694dfd27d630b58d474" },
+      scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
     },
   },
 };
@@ -227,6 +227,7 @@ export type LegacyResultBackfillRequest = Readonly<{
   resultId: string;
   ownerLogin: string;
   productionMetadata: ProductionMetadata;
+  expectedMutationEventId?: string;
 }>;
 
 export type ResultRetractionRequest = Readonly<{
@@ -1954,6 +1955,22 @@ export class GitHubStateRepository {
 
   async assertResultOwnerContract(): Promise<string> {
     return (await this.#resultOwnerSnapshot()).headSha;
+  }
+
+  async readMetadataForOwner(resultId: string, ownerLogin: string): Promise<{ metadata: Record<string, unknown>; revision: string; submissionId: string | null } | null> {
+    const snapshot = await this.#resultOwnerSnapshot();
+    let context;
+    try { context = await this.#resultAmendmentAt(resultId, snapshot); }
+    catch (error) { if (error instanceof ResultOwnerStateError && error.status === 404) return null; throw error; }
+    if (context.view.owner_login !== ownerLogin) throw new ResultOwnerStateError(404, "result not found");
+    if (context.overlay !== null) {
+      return { metadata: Object.fromEntries(Object.entries(context.overlay.metadata).map(([key, field]) => [key, field.value])), revision: context.view.mutation_event_id, submissionId: null };
+    }
+    const authority = await readEventAt(this.#config, this.#fetcher, context.view.authority_event_id, snapshot.headSha);
+    if (authority.event_type !== "result.recorded") throw new StateEventConflictError(resultId);
+    const submission = await readSubmissionAt(this.#config, this.#fetcher, (authority as ResultRecordedEvent).payload.submission_id, snapshot.headSha);
+    if (submission?.owner_login !== ownerLogin) throw new ResultOwnerStateError(404, "result not found");
+    return { metadata: { ...submission.production_metadata }, revision: submission.mutation_event_id, submissionId: submission.submission_id };
   }
 
   async readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView> {
@@ -4820,6 +4837,9 @@ export class GitHubStateRepository {
           resultId: request.resultId,
           mutationEventId: request.eventId,
         };
+      }
+      if (request.expectedMutationEventId !== undefined && request.expectedMutationEventId !== view.mutation_event_id) {
+        throw new ResultOwnerStateError(409, "metadata changed; reload before saving");
       }
       if (metadataAlreadyEqual(overlay, request.productionMetadata)) {
         return {
