@@ -389,6 +389,13 @@ jobs:
         # that pin no TauCeti get a plain `lake build`. See the script.
         run: python scripts/build_benchmark_root.py lean-eval
 
+      - name: Install bubblewrap for Lake comparator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes meson ninja-build libcap-dev
+          bwrap_path=$(bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap")
+          echo "COMPARATOR_BWRAP=$bwrap_path" >> "$GITHUB_ENV"
+
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
