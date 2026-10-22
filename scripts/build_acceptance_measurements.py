@@ -7,13 +7,6 @@ import json
 import pathlib
 from acceptance_measurement import measurement_series, validate_measurement
 
-COMPONENTS = {
-    "comparator": "d03acab154d269c06e60e4de7e4cc85deebff94b",
-    "lean4export": "076e8e57707e813375e8f9da8bf989799ace9680",
-    "nanoda": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
-    "landrun": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
-}
-
 
 def build(
     *,
@@ -31,6 +24,7 @@ def build(
     measured_at,
     architecture,
     submission=None,
+    components=None,
 ):
     receipts = []
     expected_numeric = {"status", "reason_code"} | {
@@ -84,10 +78,10 @@ def build(
             "workflow_run_id": workflow_run_id,
             "attempt": attempt,
             "measured_at": measured_at,
-            "runner_class": "github-ubuntu-latest-acceptance-v1",
+            "runner_class": "namespace-ubuntu-24.04-amd64-16x32-lake-v1",
             "architecture": architecture,
             "cache_state": "solution-cold-dependencies-cached",
-            "components": COMPONENTS,
+            "components": components,
             **metrics[problem],
         }
         measurement["series"] = measurement_series(measurement)
@@ -130,6 +124,7 @@ def main():
         attempt=args.attempt,
         measured_at=metrics["measured_at"],
         architecture=metrics["architecture"],
+        components=metrics["components"],
         submission={
             "kind": metadata["submission_kind"],
             "repo": metadata["submission_repo"],

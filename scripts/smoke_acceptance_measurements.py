@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise measured acceptance through real Lean, Landrun, export, and nanoda."""
+"""Exercise measured acceptance through the real toolchain Lake comparator."""
 
 from __future__ import annotations
 import argparse
@@ -7,97 +7,87 @@ import json
 import os
 import pathlib
 import subprocess
-import sys
 import tempfile
 from collect_acceptance_metrics import collect
+from measure_acceptance_sandbox import install
 
 
-def smoke(comparator, landrun, exporter, checker):
+def smoke(sandbox):
+    prefix = pathlib.Path(
+        subprocess.check_output(["lean", "--print-prefix"], text=True).strip()
+    )
     with tempfile.TemporaryDirectory(prefix="lean-eval-compute-smoke-") as directory:
         root = pathlib.Path(directory)
-        workspace = root / "workspace"
-        workspace.mkdir()
+        workspaces = root / "workspaces"
         metrics = root / "metrics"
+        workspaces.mkdir()
         metrics.mkdir()
-        (workspace / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
-        (workspace / "lakefile.toml").write_text(
-            'name = "compute_smoke"\n\n[[lean_lib]]\nname = "Challenge"\n\n[[lean_lib]]\nname = "Solution"\n\n[[lean_lib]]\nname = "RejectedSolution"\n'
+        wrapper = install(
+            metrics,
+            workspaces,
+            {"Solution": "Solution", "RejectedSolution": "Solution"},
+            sandbox,
+            prefix,
         )
-        for name in ("Challenge", "Solution"):
-            (workspace / (name + ".lean")).write_text(
+        environment = dict(os.environ, COMPARATOR_BWRAP=str(wrapper))
+        for name, valid in (("Solution", True), ("RejectedSolution", False)):
+            workspace = workspaces / name
+            workspace.mkdir()
+            (workspace / "lean-toolchain").write_text("leanprover/lean4:v4.35.0-rc3\n")
+            (workspace / "lakefile.toml").write_text(
+                'name = "compute_smoke"\n[[lean_lib]]\nname = "Challenge"\n[[lean_lib]]\nname = "Solution"\n'
+            )
+            (workspace / "Challenge.lean").write_text(
                 "theorem target : (2 : Nat) + 2 = 4 := by rfl\n"
             )
-        (workspace / "RejectedSolution.lean").write_text(
-            "theorem target : (2 : Nat) + 2 = 5 := by rfl\n"
-        )
-        environment = os.environ.copy()
-        environment.update(
-            COMPARATOR_LANDRUN=str(landrun),
-            COMPARATOR_LEAN4EXPORT=str(exporter),
-            COMPARATOR_NANODA=str(checker),
-        )
-        prefix = subprocess.run(
-            ["lean", "--print-prefix"],
-            cwd=workspace,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        environment["PATH"] = (
-            str(pathlib.Path(prefix) / "bin") + os.pathsep + environment["PATH"]
-        )
-        subprocess.run(
-            ["lake", "update"],
-            cwd=workspace,
-            env=environment,
-            check=True,
-            capture_output=True,
-        )
-        config = {
-            "challenge_module": "Challenge",
-            "solution_module": "Solution",
-            "theorem_names": ["target"],
-            "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"],
-            "enable_nanoda": True,
-        }
-        for name, expected in (("Solution", 0), ("RejectedSolution", 1)):
-            config["solution_module"] = name
-            config["measurement_command"] = [
-                sys.executable,
-                str(pathlib.Path(__file__).with_name("measure_acceptance_phase.py")),
-                "--metrics-path",
-                str(metrics / (name + ".json")),
-                "--landrun",
-                str(landrun),
-                "--",
-            ]
+            (workspace / "Solution.lean").write_text(
+                "theorem target : (2 : Nat) + 2 = "
+                + ("4" if valid else "5")
+                + " := by rfl\n"
+            )
+            config = {
+                "challenge_module": "Challenge",
+                "solution_module": "Solution",
+                "theorem_names": ["target"],
+                "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"],
+                "external_kernels": {"nanoda": [str(prefix / "bin/nanoda_bin")]},
+            }
             (workspace / "config.json").write_text(json.dumps(config))
-            result = subprocess.run(
-                ["lake", "env", str(comparator), "config.json"],
+            subprocess.run(
+                [str(prefix / "bin/lake"), "update"],
                 cwd=workspace,
                 env=environment,
+                check=True,
                 capture_output=True,
-                text=True,
             )
-            if (result.returncode == 0) != (expected == 0):
+            result = subprocess.run(
+                [str(prefix / "bin/lake"), "comparator", "--config", "config.json"],
+                cwd=workspace,
+                env=environment,
+                text=True,
+                capture_output=True,
+            )
+            if (result.returncode == 0) != valid:
                 raise ValueError(
                     "comparator verdict changed: " + result.stdout + result.stderr
                 )
             measured = collect(metrics, [name])[name]
-            if name == "Solution" and measured["status"] != "available":
+            if (measured["status"] == "available") != valid:
                 raise ValueError(
-                    "accepted fixture did not produce complete measurements"
+                    "measurement incomplete or partial: "
+                    + result.stdout
+                    + result.stderr
+                    + json.dumps(measured)
+                    + "\nRaw metrics: "
+                    + (
+                        (metrics / (name + ".json")).read_text()
+                        if (metrics / (name + ".json")).exists()
+                        else "absent"
+                    )
                 )
-            if name == "RejectedSolution" and measured["status"] != "failed":
-                raise ValueError("rejected fixture published partial totals")
             print(
                 json.dumps(
-                    {
-                        "fixture": name,
-                        "accepted": result.returncode == 0,
-                        "measurement": measured,
-                    },
+                    {"fixture": name, "accepted": valid, "measurement": measured},
                     sort_keys=True,
                 )
             )
@@ -105,15 +95,9 @@ def smoke(comparator, landrun, exporter, checker):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("comparator", "landrun", "exporter", "checker"):
-        parser.add_argument("--" + name, type=pathlib.Path, required=True)
+    parser.add_argument("--sandbox", type=pathlib.Path, required=True)
     args = parser.parse_args()
-    smoke(
-        *(
-            getattr(args, name).resolve()
-            for name in ("comparator", "landrun", "exporter", "checker")
-        )
-    )
+    smoke(args.sandbox.resolve())
     return 0
 
 

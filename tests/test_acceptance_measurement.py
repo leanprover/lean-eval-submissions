@@ -57,14 +57,103 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from collect_acceptance_metrics import collect, measure
 from build_acceptance_measurements import build
 from measure_acceptance_phase import main as phase_main
+from measure_acceptance_sandbox import phase_for
+from evaluate_submission import _acceptance_sandbox
+import os
 
 
 class AcceptanceProducerTests(unittest.TestCase):
+    def test_native_phase_selection_excludes_challenge_and_resolution(self):
+        tools = {
+            name: "/trusted/" + name
+            for name in ("lake", "leanexport", "nanoda_bin", "leanchecker")
+        }
+        for command, expected in [
+            (["/trusted/lake", "env"], None),
+            (["/trusted/lake", "build", "Challenge"], None),
+            (["/trusted/leanexport", "Challenge", "--", "target"], None),
+            (["/trusted/lake", "build", "Solution"], "build"),
+            (["/trusted/leanexport", "Solution", "--", "target"], "build"),
+            (["/trusted/nanoda_bin", "/tmp/config"], "checker"),
+            (
+                ["/trusted/leanchecker", "--silent", "--from-export", "/tmp/export"],
+                "checker",
+            ),
+        ]:
+            with self.subTest(command=command):
+                self.assertEqual(
+                    phase_for(["--unshare-all", "--", *command], tools, "Solution"),
+                    expected,
+                )
+
+    def test_native_wrapper_restores_environment_after_evaluation_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            workspace = root / "workspaces" / "problem"
+            workspace.mkdir(parents=True)
+            (workspace / "config.json").write_text(
+                json.dumps({"solution_module": "Solution"})
+            )
+            metrics = root / "metrics"
+            metrics.mkdir()
+            with (
+                mock.patch.dict(os.environ, {"COMPARATOR_BWRAP": "/original/bwrap"}),
+                mock.patch(
+                    "evaluate_submission.shutil.which", return_value=sys.executable
+                ),
+                mock.patch(
+                    "evaluate_submission.subprocess.check_output",
+                    side_effect=["/trusted", "a" * 40],
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "proof failed"):
+                    with _acceptance_sandbox(
+                        metrics, workspace.parent, ["problem"], root
+                    ):
+                        self.assertEqual(
+                            os.environ["COMPARATOR_BWRAP"], str(metrics / "bwrap")
+                        )
+                        self.assertEqual(
+                            json.loads((metrics / "setup.json").read_text())[
+                                "toolchain"
+                            ],
+                            "a" * 40,
+                        )
+                        raise RuntimeError("proof failed")
+                self.assertEqual(os.environ["COMPARATOR_BWRAP"], "/original/bwrap")
+
+    def test_native_measurement_setup_failure_does_not_suppress_evaluation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            workspace = root / "workspaces" / "problem"
+            workspace.mkdir(parents=True)
+            (workspace / "config.json").write_text(
+                json.dumps({"solution_module": "Solution"})
+            )
+            with (
+                mock.patch.dict(os.environ, {"COMPARATOR_BWRAP": "/original/bwrap"}),
+                mock.patch(
+                    "evaluate_submission.shutil.which", return_value=sys.executable
+                ),
+                mock.patch(
+                    "evaluate_submission.subprocess.check_output",
+                    return_value="/trusted",
+                ),
+                mock.patch(
+                    "measure_acceptance_sandbox.install",
+                    side_effect=OSError("disk full"),
+                ),
+            ):
+                with _acceptance_sandbox(
+                    root / "metrics", workspace.parent, ["problem"], root
+                ):
+                    self.assertEqual(os.environ["COMPARATOR_BWRAP"], "/original/bwrap")
+
     def test_complete_two_phase_measurement_and_missing_counters(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             metrics = measure.empty_metrics()
-            for phase in ("build", "build", "checker"):
+            for phase in ("build", "build", "checker", "checker"):
                 measure.aggregate(
                     metrics,
                     phase,
@@ -155,6 +244,7 @@ class AcceptanceProducerTests(unittest.TestCase):
             attempt=m["attempt"],
             measured_at=m["measured_at"],
             architecture=m["architecture"],
+            components=m["components"],
         )
         self.assertEqual(build(**kwargs), [m])
         numeric["workflow_commit"] = "b" * 40

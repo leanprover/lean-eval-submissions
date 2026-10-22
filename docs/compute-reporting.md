@@ -10,9 +10,9 @@ remain valid; `cached_input_tokens` is the only added production metadata key.
 
 ## Acceptance measurement
 
-The pinned comparator receives an explicit trusted measurement adapter. Its
+The toolchain Lake comparator invokes an explicit trusted bubblewrap adapter. Its
 `build` phase includes building the solution and exporting it; its `checker`
-phase measures the external independent checker. Challenge preparation,
+phase measures nanoda and Lean’s own checker together. Challenge preparation,
 dependency download, root/tool compilation, GitHub queue time and source fetch
 are excluded. Solution outputs start cold; restored dependency outputs are
 reused. Imported Lean Pool modules without cached outputs remain part of the
@@ -20,10 +20,10 @@ submission's build cost. These are observational acceptance measurements, not
 benchmarks on identical physical hardware.
 
 `measure_acceptance_phase.py` reuses the replay counter implementation outside
-Landrun. It counts userspace retired instructions across descendants and uses a
+bubblewrap. It counts userspace retired instructions across descendants and uses a
 monotonic wall clock. Unavailable counters retain an explicit reason and never
 become zero. The trusted metrics directory is outside writable submission paths.
-Two successful build/export invocations and one successful checker invocation
+Two successful build/export invocations and two successful checker invocations
 are required before publishing totals. Persistence errors invalidate all phase
 totals and preserve the wrapped command's exit status.
 
@@ -42,9 +42,10 @@ version 7 of the public State projection carries measurements and dated metadata
 updates. Projection versions 1–6 retain their existing public schema bytes and
 omit the new cached-input field.
 
-The measurement series includes the toolchain, component revisions, architecture,
-runner class and cache policy. `github-ubuntu-latest-acceptance-v1` identifies the
-phase adapter semantics; bump its version when those semantics change. The exact
+The measurement series includes the toolchain Git commit (which locks the bundled
+comparator, exporter and checkers), the exact bubblewrap binary SHA256, architecture,
+runner class and cache policy. `namespace-ubuntu-24.04-amd64-16x32-lake-v1` identifies
+the current acceptance runner and phase adapter; bump it when those semantics change. The exact
 workflow commit and run/attempt are retained as evidence. Wall time is visibly
 marked **very noisy**. Instruction counts also depend on architecture and setup.
 A failed measurement does not change proof acceptance or its immutable credit.

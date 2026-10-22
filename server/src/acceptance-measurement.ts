@@ -29,7 +29,7 @@ export type AcceptanceMeasurement = Readonly<{
   problem_id: string; statement_revision: number; benchmark_commit: string; results_commit: string; toolchain: string;
   series: string; attempt: number; workflow_run_id: number; workflow_commit: string; measured_at: string;
   runner_class: string; architecture: string; cache_state: "solution-cold-dependencies-cached";
-  components: Readonly<Record<"comparator" | "lean4export" | "nanoda" | "landrun", string>>;
+  components: Readonly<Record<"toolchain" | "bubblewrap_sha256", string>>;
   status: "available" | "failed"; reason_code: null | "measurement_invalid" | "measurement_unavailable";
   build_wall_time_ms: number | null; build_retired_instructions: number | null; build_retired_instructions_unavailable_reason: string | null;
   checker_wall_time_ms: number | null; checker_retired_instructions: number | null; checker_retired_instructions_unavailable_reason: string | null;

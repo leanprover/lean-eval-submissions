@@ -31,7 +31,7 @@ def collect(metrics_dir, passed):
             if path.stat().st_size > 16384:
                 raise ValueError("oversize metrics")
             metrics = measure.validate_metrics(json.loads(path.read_text()))
-            for phase, count in (("build", 2), ("checker", 1)):
+            for phase, count in (("build", 2), ("checker", 2)):
                 record = metrics["phases"][phase]
                 if record["invocations"] != count or any(
                     t != {"kind": "exited", "code": 0} for t in record["terminations"]
@@ -66,6 +66,7 @@ def main():
                 .isoformat(timespec="milliseconds")
                 .replace("+00:00", "Z"),
                 "architecture": platform.machine(),
+                "components": json.loads((args.metrics_dir / "setup.json").read_text()),
                 "problems": collect(
                     args.metrics_dir, json.loads(args.results.read_text())["passed"]
                 ),
