@@ -389,6 +389,14 @@ jobs:
         # that pin no TauCeti get a plain `lake build`. See the script.
         run: python scripts/build_benchmark_root.py lean-eval
 
+      - name: Install bubblewrap for Lake comparator
+        id: bwrap
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes meson ninja-build libcap-dev
+          bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
+          echo "path=$RUNNER_TEMP/lean-eval-bwrap/bwrap" >> "$GITHUB_OUTPUT"
+
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
@@ -453,9 +461,13 @@ jobs:
       # the lean-eval checkout. See leanprover/lean-eval SECURITY.md >
       # "Validations done at submission time".
       - name: Probe sandbox is engaged
+        env:
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
         run: python lean-eval/scripts/sandbox_engaged_probe.py --require-tools
 
       - name: Probe env-var allowlist
+        env:
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
         run: python lean-eval/scripts/security_probes/env_dump_probe.py --require-tools
 
       - name: Extract submission source
@@ -476,6 +488,7 @@ jobs:
         env:
           PROBLEM_ID: ${{ inputs.problem_id }}
           STATEMENT_REVISION: ${{ inputs.statement_revision }}
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
         run: |
           EVALUATION_ARGS=(
             --source-dir /tmp/submission-src
