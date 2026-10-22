@@ -1818,6 +1818,28 @@
         "ref": "39ab2515f9820af14f82f5effeac9f54c381285f",
         "repo": "SkidanovAlex/leaneval-deepseek"
       }
+    },
+    {
+      "accepted_at": "2026-10-22T04:03:34Z",
+      "benchmark_commit": "12e31fb41aaae0476404ce2dfbaa7c5ea4fcdf56",
+      "declared_model": "NEAR AI w/ DeepSeek V4",
+      "intake": {
+        "issue_number": 2155,
+        "kind": "issue"
+      },
+      "problem_id": "derived_solidification_free_CW_homology",
+      "production_metadata": {
+        "solution_publication_date": "2026-11-12",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_c9385789c24e424cdc943372524d3d8d774d9addc04202d9c2631a9efb03a217",
+      "statement_revision": 2,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "391c9d6c969c46478278dea308b549c8b6afe906",
+        "repo": "SkidanovAlex/leaneval-deepseek"
+      }
     }
   ],
   "schema_version": 2,
