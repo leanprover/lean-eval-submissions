@@ -160,6 +160,8 @@ jobs:
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
       toolchain: ${{ steps.benchmark.outputs.toolchain }}
+    env:
+      COMPARATOR_BWRAP: ${{ runner.temp }}/lean-eval-bwrap/bwrap
     steps:
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'
@@ -393,8 +395,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes meson ninja-build libcap-dev
-          bwrap_path=$(bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap")
-          echo "COMPARATOR_BWRAP=$bwrap_path" >> "$GITHUB_ENV"
+          bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
