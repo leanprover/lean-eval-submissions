@@ -18,7 +18,7 @@ reaches its service. Both builds below run with LAKE_RESTORE_ARTIFACTS=true,
 which copies every downloaded output into the shared
 `.lake/packages/<pkg>/.lake/build` tree:
 
-  1. `lake build TauCeti`: the whole TauCeti library, so a submission may
+  1. `lake -v --no-build build TauCeti`: the whole TauCeti library, so a submission may
      import any TauCeti module, not only those the benchmark imports.
   2. `lake build`: the benchmark root itself.
 
@@ -27,9 +27,11 @@ environment is reduced to PATH, HOME and LEAN_ABORT_ON_PANIC), then find
 TauCeti up to date on disk and need neither the artifact cache nor the
 network.
 
-TauCeti must never be compiled here. A cache miss makes Lake report
-`Built TauCeti.<module>`; the first such line stops the build and fails,
-instead of silently compiling TauCeti for half an hour.
+TauCeti must never be compiled here. Cache-only materialization prevents Lake
+from falling back to compilation, and verbose logs retain the underlying
+artifact-download errors. Individual downloads have bounded retries and atomic
+publication through lake_cache_curl.py. The compilation guard also remains on
+the subsequent root build.
 """
 
 from __future__ import annotations
@@ -44,11 +46,13 @@ import sys
 
 FETCH_SCRIPT = pathlib.Path("scripts") / "fetch_dependency_caches.sh"
 TAUCETI = "TauCeti"
-# Lake prints `<icon> [i/n] <verb> <caption>` for each finished job; the verb
-# is `Built` (or `Building` if the job failed) only when it compiled.
+# Ordinary builds report `Built` or `Building` for compilation. Cache-only
+# failures can also say `Building` without ever running the compiler.
 COMPILED_TAUCETI = re.compile(r"\bBuil(?:t|ding) TauCeti\b")
+BUILT_TAUCETI = re.compile(r"\bBuilt TauCeti\b")
 EXPORT_KEY = re.compile(r"LAKE_[A-Z_]+")
 REQUIRED_EXPORTS = {"LAKE_CONFIG", "LAKE_ARTIFACT_CACHE"}
+CACHE_CURL = pathlib.Path(__file__).resolve().with_name("lake_cache_curl.py")
 
 
 class BuildRootError(Exception):
@@ -100,6 +104,7 @@ def fetch_cache_settings(root: pathlib.Path) -> dict[str, str]:
     # Make the script print its settings instead of appending them to
     # $GITHUB_ENV, which would expose them to every later step.
     env.pop("GITHUB_ENV", None)
+    env["CURL"] = str(CACHE_CURL)
     result = subprocess.run(
         ["bash", str(FETCH_SCRIPT), "."],
         cwd=root,
@@ -119,8 +124,9 @@ def lake_build(
     env: dict[str, str],
     *,
     forbid_tauceti_compile: bool,
+    cache_only: bool = False,
 ) -> None:
-    args = ["lake", "build", *targets]
+    args = ["lake", *(["-v", "--no-build"] if cache_only else []), "build", *targets]
     print(f"--- {' '.join(args)} ---", flush=True)
     process = subprocess.Popen(
         args,
@@ -133,9 +139,12 @@ def lake_build(
     )
     assert process.stdout is not None
     compiled: str | None = None
+    compile_pattern = BUILT_TAUCETI if cache_only else COMPILED_TAUCETI
     for line in process.stdout:
         sys.stdout.write(line)
-        if forbid_tauceti_compile and COMPILED_TAUCETI.search(line):
+        # --no-build labels an out-of-date target "Building" even though its
+        # compiler was never run. Retain those targets' verbose diagnostics.
+        if forbid_tauceti_compile and compile_pattern.search(line):
             compiled = line.strip()
             process.terminate()
             break
@@ -145,11 +154,18 @@ def lake_build(
     if compiled is not None:
         raise BuildRootError(
             f"`{' '.join(args)}` compiled TauCeti instead of downloading it "
-            f"({compiled!r}). TauCeti's published cache does not cover this "
-            "build; check that the benchmark pins exactly the toolchain and "
-            "Mathlib of its TauCeti commit."
+            f"({compiled!r}). Inspect the cache download diagnostics and verify "
+            "the benchmark's toolchain and Mathlib match its TauCeti commit."
         )
     if returncode != 0:
+        if cache_only:
+            raise BuildRootError(
+                f"`{' '.join(args)}` could not restore the published dependency cache "
+                f"after bounded download retries (exit code {returncode}). "
+                "No dependency compilation was permitted. Inspect the verbose "
+                "artifact diagnostics above; retry on a fresh runner if retrieval "
+                "failed, or check the pinned toolchain, Mathlib and cache coverage."
+            )
         raise BuildRootError(f"`{' '.join(args)}` failed with exit code {returncode}")
 
 
@@ -160,8 +176,9 @@ def build_benchmark_root(root: pathlib.Path) -> None:
     env = dict(os.environ)
     env.pop("GITHUB_ENV", None)
     env.update(fetch_cache_settings(root))
+    env["CURL"] = str(CACHE_CURL)
     env["LAKE_RESTORE_ARTIFACTS"] = "true"
-    lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True)
+    lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True, cache_only=True)
     lake_build(root, [], env, forbid_tauceti_compile=True)
 
 

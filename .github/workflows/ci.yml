@@ -107,6 +107,36 @@ jobs:
           LEAN_EVAL_SANDBOX_TEST: '1'
         run: python3 -m unittest discover -v -s tests -p test_solution_dependency_sandbox.py
 
+  lake-cache-restoration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Create pinned Lake cache fixture
+        run: |
+          mkdir -p .ci/lake-cache
+          printf '%s\n' 'leanprover/lean4:v4.35.0-rc3' > .ci/lake-cache/lean-toolchain
+          printf '%s\n' 'name = "lake-cache-test"' > .ci/lake-cache/lakefile.toml
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: .ci/lake-cache
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-mathlib-cache: false
+          use-github-cache: false
+
+      - name: Test failed transfers and real Lake cache recovery
+        env:
+          ELAN_TOOLCHAIN: leanprover/lean4:v4.35.0-rc3
+          LEAN_EVAL_LAKE_CACHE_TEST: '1'
+        run: python3 -m unittest discover -v -s tests -p test_lake_cache_restore.py
+
   artifact-upload:
     runs-on: ubuntu-24.04
     permissions:

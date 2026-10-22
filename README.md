@@ -250,6 +250,14 @@ etc.).
 
 ## Operator notes
 
+Trusted TauCeti preparation uses cache-only Lake restoration before building
+the benchmark. Artifact downloads retry up to three times, have connection and
+transfer timeouts, and are atomically renamed only after a successful transfer.
+If restoration still fails, verbose logs retain the artifact error and evaluation
+stops before proof checking. A cache miss never authorizes compiling TauCeti.
+The curl wrapper and cache settings are scoped to trusted preparation; later
+sandboxed evaluation remains offline.
+
 - Secrets, GitHub Apps, and branch protection: [`docs/ci-secrets.md`](docs/ci-secrets.md).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).
 - Local-only replay planner and disposable-VM contract:
