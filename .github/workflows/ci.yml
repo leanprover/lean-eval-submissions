@@ -186,6 +186,7 @@ jobs:
           mkdir -p .ci/acceptance
           printf '%s\n' 'leanprover/lean4:v4.35.0-rc3' > .ci/acceptance/lean-toolchain
           printf '%s\n' 'name = "acceptance-smoke"' > .ci/acceptance/lakefile.toml
+          printf '%s\n' '{"version":"1.2.0","packagesDir":".lake/packages","packages":[],"name":"acceptance-smoke","lakeDir":".lake"}' > .ci/acceptance/lake-manifest.json
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
         with:
           lake-package-directory: .ci/acceptance
