@@ -120,6 +120,7 @@ jobs:
           mkdir -p .ci/lake-cache
           printf '%s\n' 'leanprover/lean4:v4.35.0-rc3' > .ci/lake-cache/lean-toolchain
           printf '%s\n' 'name = "lake-cache-test"' > .ci/lake-cache/lakefile.toml
+          printf '%s\n' '{"version":"1.2.0","packagesDir":".lake/packages","packages":[],"name":"lake-cache-test","lakeDir":".lake"}' > .ci/lake-cache/lake-manifest.json
 
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
         with:
