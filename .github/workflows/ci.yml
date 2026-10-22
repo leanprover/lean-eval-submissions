@@ -205,8 +205,8 @@ jobs:
       - name: Build the pinned measurement tools
         run: |
           set -euo pipefail
-          lake --dir .ci/comparator build comparator
-          lake --dir .ci/comparator/.lake/packages/lean4export build lean4export
+          (cd .ci/comparator && lake build comparator)
+          (cd .ci/comparator/.lake/packages/lean4export && lake build lean4export)
           CGO_ENABLED=0 GOBIN="$RUNNER_TEMP/compute-tools" go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
           git clone https://github.com/robsimmons/nanoda_lib.git .ci/nanoda
           git -C .ci/nanoda checkout 68d5ca9db226849b41a6fff59d796ff19d0a8840
