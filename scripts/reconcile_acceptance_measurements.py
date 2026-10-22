@@ -48,6 +48,30 @@ def receipts(archive, run_id, commit):
             yield m
 
 
+def recovery_runs(report, state, verification_root, since):
+    published = {
+        (m["result_id"], m["workflow_run_id"])
+        for m in state.get("acceptance_measurements", [])
+    }
+    by_run = {}
+    for row in report["results"]:
+        if (
+            row["status"] == "measured"
+            or dt.datetime.fromisoformat(row["accepted_at"].replace("Z", "+00:00"))
+            < since
+        ):
+            continue
+        rid = row["result_id"]
+        path = verification_root / (rid + ".json")
+        if path.exists():
+            run_id = json.loads(path.read_text())["run_id"]
+            # A published failure is accounted for. Reposting it every cycle
+            # would consume the bounded batch and starve older lost receipts.
+            if (rid, run_id) not in published:
+                by_run.setdefault(run_id, set()).add(rid)
+    return by_run
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", type=pathlib.Path, required=True)
@@ -66,20 +90,9 @@ def main():
     since = dt.datetime.fromisoformat(args.since.replace("Z", "+00:00"))
     if since.tzinfo != dt.timezone.utc:
         raise ValueError("since must be UTC")
-    report = coverage(
-        load_records(args.results_root), json.loads(args.public_state.read_text())
-    )
-    missing = {
-        r["result_id"]
-        for r in report["results"]
-        if r["status"] != "measured"
-        and dt.datetime.fromisoformat(r["accepted_at"].replace("Z", "+00:00")) >= since
-    }
-    by_run = {}
-    for rid in sorted(missing):
-        path = args.results_root / "verification" / (rid + ".json")
-        if path.exists():
-            by_run.setdefault(json.loads(path.read_text())["run_id"], set()).add(rid)
+    state = json.loads(args.public_state.read_text())
+    report = coverage(load_records(args.results_root), state)
+    by_run = recovery_runs(report, state, args.results_root / "verification", since)
     posted = 0
     unresolved = 0
     for run_id, wanted in sorted(by_run.items(), reverse=True)[: args.limit]:

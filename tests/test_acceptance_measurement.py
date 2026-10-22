@@ -164,12 +164,44 @@ class AcceptanceProducerTests(unittest.TestCase):
 
 from compute_reporting_coverage import coverage
 from plan_compute_backfill import plan
-from reconcile_acceptance_measurements import receipts
+from reconcile_acceptance_measurements import receipts, recovery_runs
+import datetime as dt
 import io
 import zipfile
 
 
 class CoverageAndRecoveryTests(unittest.TestCase):
+    def test_published_failure_does_not_starve_older_missing_receipts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            newest, older = "r2_" + "a" * 64, "r2_" + "b" * 64
+            for rid, run in ((newest, 3), (older, 2)):
+                (root / (rid + ".json")).write_text(json.dumps({"run_id": run}))
+            report = {
+                "results": [
+                    {
+                        "result_id": rid,
+                        "status": "failed",
+                        "accepted_at": "2026-10-22T00:00:00Z",
+                    }
+                    for rid in (newest, older)
+                ]
+            }
+            state = {
+                "acceptance_measurements": [
+                    {"result_id": newest, "workflow_run_id": 3, "status": "failed"}
+                ]
+            }
+            self.assertEqual(
+                recovery_runs(
+                    report,
+                    state,
+                    root,
+                    dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc),
+                ),
+                {2: {older}},
+            )
+
     def test_recovery_rejects_untrusted_artifact_paths_and_identity(self):
         for name, value in [
             ("../source.json", fixture()),
