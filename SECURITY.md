@@ -21,7 +21,7 @@ and where a future red-teamer should look first.
 
 It covers the **submission pipeline** — issue intake, fetching submission
 source, the evaluation workflow, and recording results. The
-**comparator / landrun sandbox** that actually bounds untrusted Lean —
+**Lake comparator / bubblewrap sandbox** that actually bounds untrusted Lean —
 the Challenge/Submission/Solution architecture, where untrusted code
 runs, the trust model for the comparator, the pinned-dependency policy,
 and the sandbox probes — lives in the benchmark repository and is
@@ -52,8 +52,8 @@ The attacker does not control:
   `config.json`, `WorkspaceTest.lean` in the generated workspace. These
   are taken from a pristine `generated/<id>/` checkout of
   `leanprover/lean-eval` each run.
-- Any pinned upstream commit (landrun, lean4export, comparator,
-  GitHub Actions). Pin policy and the bump procedure are documented in
+- Any pinned toolchain, bubblewrap release, mathematics dependency, or
+  GitHub Action. Pin policy and the bump procedure are documented in
   `leanprover/lean-eval`'s `SECURITY.md`.
 - Which `leanprover/lean-eval` commit is evaluated against: the
   `evaluate` job resolves `leanprover/lean-eval@main` HEAD and records
@@ -68,7 +68,7 @@ job validates the current form shape, required publication declaration,
 supported source URL, and three checked acknowledgements before applying the
 label and allowing evaluation. Malformed API issues stay unlabeled. The
 security boundary remains the pristine benchmark overlay and comparator's
-landrun sandbox, not the intake label.
+bubblewrap sandbox, not the intake label.
 
 ## 2. Submission confidentiality
 
@@ -91,9 +91,9 @@ properties of `submission.yml`'s structure that we do not actively probe:
   `.git/config` (regression test: `FetchSubmissionTarballHygieneTests`).
 - Both checkouts (`lean-eval-submissions` and `leanprover/lean-eval`)
   use `persist-credentials: false`, and `.git` is stripped from both
-  before any untrusted Lean runs. Comparator's landrun policy is
-  `--ro /`, so anything left on the runner under a path the sandbox can
-  stat is readable by the untrusted Lean elaborator.
+  before any untrusted Lean runs. Lake comparator masks home and temporary
+  directories but binds the remaining host filesystem read-only. Anything
+  left visible there can be read by submitted code.
 
 `tests/test_submission_workflow.py` is the structural guard for the
 first, third, and fourth bullets — a workflow refactor that regresses
@@ -146,8 +146,8 @@ wrapped identity, or KMS/DynamoDB/Lambda authority.
 ## 3. The two-checkout evaluation workflow
 
 `submission.yml`'s `evaluate` job is the only place untrusted submitter
-Lean is elaborated, and it is elaborated only inside comparator's landrun
-sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
+Lean is elaborated, and it is elaborated only inside comparator's bubblewrap
+sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
 "where untrusted code runs" table). The job:
 
 1. Checks out this repo (the pipeline scripts) and `leanprover/lean-eval`
@@ -157,12 +157,13 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 3. Independently fetches the submission with a step-scoped `lean-eval-bot`
    token and verifies the deterministic metadata digest against archive.
 4. Strips `.git` from both checkouts before untrusted Lean runs.
-5. Builds landrun / lean4export / comparator / the `lean-eval` CLI.
+5. Builds the trusted benchmark and CLI, and installs pinned bubblewrap.
+   The benchmark toolchain supplies comparator, exporter, Lean checker, and NanoDa.
 6. Fetches Mathlib's independent cache, but does not restore from or save
    to the repository's GitHub Actions cache. The evaluate job deliberately
    omits `actions: write`, so artifacts from a runner that executes
    untrusted submitter code never enter a shared mutable cache scope.
-7. Runs the sandbox-engaged and env-allowlist probes **from the
+7. Runs the sandbox-engaged and environment-isolation probes **from the
    `leanprover/lean-eval` checkout** (`lean-eval/scripts/...`). Those
    probes live in the benchmark repo because they guard against sandbox
    regressions introduced by *benchmark-repo* changes; this pipeline
@@ -173,7 +174,7 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 When Lean Pool is present, workspace setup shares its pinned source through
 read-only symlinks and creates a private `.lake` directory under the
 workspace's `.lake/packages/lean-pool/`. Comparator builds only imported
-modules there, inside landrun. Other dependency packages stay shared and
+modules there, inside bubblewrap. Other dependency packages stay shared and
 read-only. Lean Pool's build outputs are neither reused between submissions
 nor written back to the benchmark checkout. Replay path overrides also
 point Lean Pool at this private package directory.
