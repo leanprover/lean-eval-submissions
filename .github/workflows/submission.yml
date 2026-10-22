@@ -2,7 +2,7 @@
 # LEADERBOARD_WRITE_TOKEN PAT) is documented in docs/ci-secrets.md.
 #
 # Security model: untrusted submitter Lean code is ONLY ever elaborated
-# inside comparator's landrun sandbox (invoked from `lake test` via
+# inside Lake comparator's bubblewrap sandbox (invoked from `lake test` via
 # WorkspaceTest.lean). The non-negotiable invariants of this workflow
 # (`APP_INSTALLATION_TOKEN` scoped to each job's single source-fetch
 # step, .git stripped from BOTH evaluation checkouts before lake runs,
@@ -286,7 +286,7 @@ jobs:
           # Step-scoped: the app token is NOT present in the env of any
           # later step in this job. This is the load-bearing assumption
           # that lets fetch + evaluate share a job without leaking
-          # access to private submission repos into the landrun-sandboxed
+          # access to private submission repos into the bubblewrap-sandboxed
           # evaluation. Do not promote this to a job-level env or
           # secrets block.
           APP_INSTALLATION_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -352,7 +352,7 @@ jobs:
           swap-storage: false
 
       - name: Strip git state before running untrusted Lean
-        # Both checkouts: comparator's landrun policy is `--ro /`, so any
+        # Both checkouts: Lake exposes the host read-only, so any
         # authenticated remote left in a `.git/config` anywhere the
         # sandbox can stat it is readable by the untrusted Lean elaborator.
         run: rm -rf .git lean-eval/.git

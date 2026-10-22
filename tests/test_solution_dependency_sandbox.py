@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -94,10 +95,12 @@ class SolutionDependencySandboxTest(unittest.TestCase):
             cache = str((benchmark / ".lake/packages").resolve())
             wrapper = root / "bwrap-with-cache"
             wrapper.write_text(
-                f"#!{Path(sys.executable).resolve()}\nimport os, sys\n"
-                "args = sys.argv[1:]\ni = args.index('--')\n"
-                f"os.execv({real_bwrap!r}, [{real_bwrap!r}, *args[:i], "
-                f"'--ro-bind', {cache!r}, {cache!r}, *args[i:]])\n"
+                f"#!{Path(shutil.which('sh')).resolve()}\n"
+                "inserted=\nfor arg do\n  shift\n"
+                '  if [ "$arg" = -- ] && [ -z "$inserted" ]; then\n'
+                f'    set -- "$@" --ro-bind {shlex.quote(cache)} {shlex.quote(cache)}\n'
+                '    inserted=1\n  fi\n  set -- "$@" "$arg"\ndone\n'
+                f'exec {shlex.quote(real_bwrap)} "$@"\n'
             )
             wrapper.chmod(0o755)
             sandbox = [str(lean_prefix / "bin/lake"), "comparator", "--config", "config.json"]
