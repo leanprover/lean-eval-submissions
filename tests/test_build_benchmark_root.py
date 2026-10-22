@@ -63,6 +63,10 @@ class BuildBenchmarkRootTests(unittest.TestCase):
                 for line in json.loads(os.environ.get("FAKE_LAKE_OUTPUT", "{{}}")).get(target, []):
                     print(line, flush=True)
                 time.sleep(float(os.environ.get("FAKE_LAKE_LINGER", "0")))
+                if os.environ.get("FAKE_LAKE_FAIL_FIRST_RESTORE") == "1":
+                    with open({str(self.calls)!r}) as f:
+                        if len(f.readlines()) == 1:
+                            sys.exit(3)
                 sys.exit(int(os.environ.get("FAKE_LAKE_RC", "0")))
                 """
             ),
@@ -203,12 +207,27 @@ class BuildBenchmarkRootTests(unittest.TestCase):
                          "input found in package artifact cache, but some output(s) have issues:",
                          "- curl: (22) The requested URL returned error: 503"]}
         )
-        rc, stdout, stderr = self._run()
+        with mock.patch.object(br.time, "sleep"):
+            rc, stdout, stderr = self._run()
         self.assertEqual(rc, 1)
         self.assertIn("curl: (22)", stdout)
         self.assertIn("503", stdout)
         self.assertIn("No dependency compilation was permitted", stderr)
-        self.assertEqual(len(self._calls()), 1)
+        self.assertEqual(len(self._calls()), 2)
+        self.assertTrue(all("--no-build" in call["argv"] for call in self._calls()))
+
+    def test_restoration_retries_before_building_the_root(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'test -x "$CURL"\necho "{TAUCETI_EXPORT} CURL=/unused/benchmark-wrapper"\n')
+        os.environ["FAKE_LAKE_FAIL_FIRST_RESTORE"] = "1"
+        with mock.patch.object(br.time, "sleep"):
+            rc, stdout, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertIn("retrying without compiling", stdout)
+        self.assertEqual(["--no-build" in c["argv"] for c in self._calls()], [True, True, False])
+        self.assertTrue(all(c["env"]["CURL"] == str(br.CACHE_CURL) for c in self._calls()))
 
     def test_root_build_still_rejects_tauceti_compilation(self) -> None:
         (self.root / "lake-manifest.json").write_text(

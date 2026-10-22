@@ -252,8 +252,9 @@ etc.).
 
 Trusted TauCeti preparation uses cache-only Lake restoration before building
 the benchmark. Artifact downloads retry up to three times, have connection and
-transfer timeouts, and are atomically renamed only after a successful transfer.
-If restoration still fails, verbose logs retain the artifact error and evaluation
+transfer/stall timeouts, and are atomically renamed only after a successful transfer.
+Cache-only restoration is retried once after a failure. If it still fails,
+verbose logs retain the artifact error and evaluation
 stops before proof checking. A cache miss never authorizes compiling TauCeti.
 The curl wrapper and cache settings are scoped to trusted preparation; later
 sandboxed evaluation remains offline.

@@ -43,6 +43,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 FETCH_SCRIPT = pathlib.Path("scripts") / "fetch_dependency_caches.sh"
 TAUCETI = "TauCeti"
@@ -53,10 +54,15 @@ BUILT_TAUCETI = re.compile(r"\bBuilt TauCeti\b")
 EXPORT_KEY = re.compile(r"LAKE_[A-Z_]+")
 REQUIRED_EXPORTS = {"LAKE_CONFIG", "LAKE_ARTIFACT_CACHE"}
 CACHE_CURL = pathlib.Path(__file__).resolve().with_name("lake_cache_curl.py")
+CACHE_RESTORE_ATTEMPTS = 2
 
 
 class BuildRootError(Exception):
     """The benchmark root could not be built without compiling TauCeti."""
+
+
+class CacheRestoreError(BuildRootError):
+    """Cache-only dependency materialization failed without compiling anything."""
 
 
 def pins_tauceti(root: pathlib.Path) -> bool:
@@ -82,7 +88,7 @@ def parse_exports(stdout: str) -> dict[str, str]:
     exports: dict[str, str] = {}
     for word in shlex.split(lines[0])[1:]:
         key, sep, value = word.partition("=")
-        if not sep or not EXPORT_KEY.fullmatch(key):
+        if not sep or (key != "CURL" and not EXPORT_KEY.fullmatch(key)):
             raise BuildRootError(f"unexpected export {word!r} from {FETCH_SCRIPT}")
         exports[key] = value
     missing = REQUIRED_EXPORTS - set(exports)
@@ -159,12 +165,12 @@ def lake_build(
         )
     if returncode != 0:
         if cache_only:
-            raise BuildRootError(
+            raise CacheRestoreError(
                 f"`{' '.join(args)}` could not restore the published dependency cache "
                 f"after bounded download retries (exit code {returncode}). "
                 "No dependency compilation was permitted. Inspect the verbose "
-                "artifact diagnostics above; retry on a fresh runner if retrieval "
-                "failed, or check the pinned toolchain, Mathlib and cache coverage."
+                "diagnostics above for unavailable artifacts or out-of-date "
+                "dependencies, and check the pinned toolchain, Mathlib and cache coverage."
             )
         raise BuildRootError(f"`{' '.join(args)}` failed with exit code {returncode}")
 
@@ -178,7 +184,19 @@ def build_benchmark_root(root: pathlib.Path) -> None:
     env.update(fetch_cache_settings(root))
     env["CURL"] = str(CACHE_CURL)
     env["LAKE_RESTORE_ARTIFACTS"] = "true"
-    lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True, cache_only=True)
+    for attempt in range(1, CACHE_RESTORE_ATTEMPTS + 1):
+        try:
+            lake_build(root, [TAUCETI], env, forbid_tauceti_compile=True, cache_only=True)
+            break
+        except CacheRestoreError:
+            if attempt == CACHE_RESTORE_ATTEMPTS:
+                raise
+            print(
+                f"::notice::Cache-only restoration failed (attempt {attempt} of "
+                f"{CACHE_RESTORE_ATTEMPTS}); retrying without compiling dependencies.",
+                flush=True,
+            )
+            time.sleep(5)
     lake_build(root, [], env, forbid_tauceti_compile=True)
 
 
