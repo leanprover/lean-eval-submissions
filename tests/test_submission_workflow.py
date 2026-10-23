@@ -149,10 +149,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.all_text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
-        # 9: intake; two each in archive and evaluate; one trusted evaluation
-        # callback; record's two; and notify's classifier checkout.
+        # 9: intake; escalation; two each in archive and attempt; one trusted
+        # evaluation callback; and record's two.
         self.assertEqual(
-            self.all_text.count("uses: actions/checkout@"), 10, "expected 10 checkout steps"
+            self.all_text.count("uses: actions/checkout@"), 9, "expected 9 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(

@@ -1360,23 +1360,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # `actions: read` lets the classifier below read the evaluate job's step
-    # list and log; `contents: read` is for the checkout that supplies it.
     permissions:
       issues: write
-      contents: read
-      actions: read
     steps:
-      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.11.10'
-
       - name: Comment on workflow failure
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -150,7 +150,7 @@ wrapped identity, or KMS/DynamoDB/Lambda authority.
 
 ## 3. The two-checkout evaluation workflow
 
-`submission.yml`'s `evaluate` job is the only place untrusted submitter
+`evaluate-attempt.yml`'s `evaluate` job is the only place untrusted submitter
 Lean is elaborated, and it is elaborated only inside comparator's bubblewrap
 sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
 "where untrusted code runs" table). The job:
