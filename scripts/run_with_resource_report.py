@@ -56,6 +56,7 @@ def run(command: list[str], report: pathlib.Path) -> int:
         sample = tail + chunk
         resource_diagnostic |= RESOURCE_ERROR.search(sample.decode(errors='replace')) is not None
         tail = sample[-256:]
+    child.stdout.close()
     code = child.wait()
     killed = code in {-9, -15, 137, 143}
     oom = oom_count() > before
