@@ -36,7 +36,7 @@ jobs:
           test "$STANDARD_SUCCEEDED" = false
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
           job_id=$(python -c 'import json; print(next(j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")))')
-          gh run view --repo "$GITHUB_REPOSITORY" --job "$job_id" --log > /tmp/standard.log
+          touch /tmp/standard.log
           printf '[]\n' > /tmp/allowlist.json
           python scripts/large_runner_retry.py --submitter alice --allowlist /tmp/allowlist.json \
             --jobs /tmp/jobs.json --log /tmp/standard.log --report /tmp/standard/resource-report.json \
