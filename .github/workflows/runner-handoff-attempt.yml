@@ -12,7 +12,7 @@ jobs:
     runs-on:
       - ${{ inputs.tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x64-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
       - namespace-features:container.privileged=true
-    timeout-minutes: 5
+    timeout-minutes: ${{ inputs.tier == 'standard' && 1 || 5 }}
     outputs:
       succeeded: ${{ steps.outcome.outputs.succeeded }}
     steps:
@@ -29,7 +29,7 @@ jobs:
         run: |
           if [ "$TIER" = standard ]; then
             python scripts/run_with_resource_report.py --report /tmp/out/resource-report.json -- \
-              python -c 'import os, signal; os.kill(os.getpid(), signal.SIGKILL)'
+              python -c 'import time; time.sleep(90)'
           else
             python scripts/run_with_resource_report.py --report /tmp/out/resource-report.json -- \
               python -c 'print("controlled larger attempt completed")'

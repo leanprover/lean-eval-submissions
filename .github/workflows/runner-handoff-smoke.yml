@@ -23,6 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        continue-on-error: true
         with:
           name: submission-results-standard
           path: /tmp/standard
@@ -33,7 +34,7 @@ jobs:
           STANDARD_SUCCEEDED: ${{ needs.evaluate_standard.outputs.succeeded }}
         run: |
           set -euo pipefail
-          test "$STANDARD_SUCCEEDED" = false
+          test "$STANDARD_SUCCEEDED" != true
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
           job_id=$(python -c 'import json; print(next(j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")))')
           touch /tmp/standard.log
