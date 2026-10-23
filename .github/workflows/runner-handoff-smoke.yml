@@ -5,6 +5,42 @@ on:
 permissions:
   contents: read
 jobs:
+  evaluate_positive:
+    uses: ./.github/workflows/runner-handoff-attempt.yml
+    with:
+      tier: standard
+      mode: positive
+  skipped_escalation:
+    needs: evaluate_positive
+    if: ${{ !cancelled() && needs.evaluate_positive.outputs.succeeded != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+  verify_positive:
+    needs: [evaluate_positive, skipped_escalation]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: A passing proof does not require policy or escalation
+        env:
+          STANDARD_SUCCEEDED: ${{ needs.evaluate_positive.outputs.succeeded }}
+          LARGE_SUCCEEDED: ''
+          RETRY: ''
+          ALLOWLIST_REQUIRED: ''
+          ESCALATION_RESULT: ${{ needs.skipped_escalation.result }}
+        run: |
+          test "$STANDARD_SUCCEEDED" = true
+          test "$ESCALATION_RESULT" = skipped
+          python - <<'PY'
+          import pathlib, subprocess
+          text = pathlib.Path('.github/workflows/submission.yml').read_text()
+          block = text.split('\n  evaluate:', 1)[1].split('\n  archive_issue:', 1)[0]
+          script = block.split('        run: |\n', 1)[1]
+          subprocess.run(['bash', '-e', '-c', '\n'.join(line[10:] for line in script.splitlines())], check=True)
+          PY
   evaluate_standard:
     uses: ./.github/workflows/runner-handoff-attempt.yml
     with:
@@ -37,15 +73,14 @@ jobs:
           test "$STANDARD_SUCCEEDED" != true
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
           job_id=$(python -c 'import json; print(next(j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")))')
-          touch /tmp/standard.log
           printf '[]\n' > /tmp/allowlist.json
           python scripts/large_runner_retry.py --submitter alice --allowlist /tmp/allowlist.json \
-            --jobs /tmp/jobs.json --log /tmp/standard.log --report /tmp/standard/resource-report.json \
+            --jobs /tmp/jobs.json --report /tmp/standard/resource-report.json \
             --output /tmp/blocked.json
           python -c 'import json; d=json.load(open("/tmp/blocked.json")); assert d["allowlist_required"] and not d["retry"]; assert "Kim Morrison" in d["message"]; print(d["message"])'
           printf '["alice"]\n' > /tmp/allowlist.json
           python scripts/large_runner_retry.py --submitter alice --allowlist /tmp/allowlist.json \
-            --jobs /tmp/jobs.json --log /tmp/standard.log --report /tmp/standard/resource-report.json \
+            --jobs /tmp/jobs.json --report /tmp/standard/resource-report.json \
             --output /tmp/allowed.json >> "$GITHUB_OUTPUT"
   evaluate_large:
     needs: escalation

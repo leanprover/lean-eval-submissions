@@ -139,6 +139,7 @@ jobs:
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
       source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+      source_commit: ${{ needs.archive.outputs.source_commit }}
       workflow_commit: ${{ inputs.workflow_commit }}
       callback_environment: ${{ inputs.callback_environment }}
       archive_state_callback_required: ${{ inputs.archive_state_callback_required }}
@@ -151,7 +152,9 @@ jobs:
 
   escalation:
     needs: [evaluate_standard, archive]
-    if: ${{ !cancelled() && needs.archive.result == 'success' && needs.evaluate_standard.result != 'skipped' }}
+    # Optional escalation cannot invalidate a completed standard evaluation.
+    continue-on-error: true
+    if: ${{ !cancelled() && needs.archive.result == 'success' && needs.evaluate_standard.result != 'skipped' && needs.evaluate_standard.outputs.succeeded != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -181,14 +184,9 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/contents/configuration/large-runner-allowlist.json?ref=main" \
             -H 'Accept: application/vnd.github.raw+json' > /tmp/allowlist.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
-          job_id=$(python -c 'import json; print(next((j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")), ""))')
-          touch /tmp/evaluate.log
-          if [ -n "$job_id" ]; then
-            gh run view --repo "$GITHUB_REPOSITORY" --job "$job_id" --log > /tmp/evaluate.log 2>/dev/null || true
-          fi
           python scripts/large_runner_retry.py \
             --submitter "$SUBMITTER" --allowlist /tmp/allowlist.json \
-            --jobs /tmp/jobs.json --log /tmp/evaluate.log \
+            --jobs /tmp/jobs.json \
             --report /tmp/standard-results/resource-report.json \
             --output /tmp/retry-decision.json >> "$GITHUB_OUTPUT"
       - name: Explain escalation decision
@@ -216,6 +214,7 @@ jobs:
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
       source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+      source_commit: ${{ needs.archive.outputs.source_commit }}
       workflow_commit: ${{ inputs.workflow_commit }}
       callback_environment: ${{ inputs.callback_environment }}
       archive_state_callback_required: ${{ inputs.archive_state_callback_required }}
@@ -236,7 +235,6 @@ jobs:
     outputs:
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
-      fetch_succeeded: ${{ needs.escalation.outputs.retry == 'true' && needs.evaluate_large.outputs.fetch_succeeded || needs.evaluate_standard.outputs.fetch_succeeded }}
       results_artifact: ${{ needs.escalation.outputs.retry == 'true' && 'submission-results-large' || 'submission-results-standard' }}
       allowlist_required: ${{ needs.escalation.outputs.allowlist_required }}
     steps:
@@ -244,11 +242,10 @@ jobs:
         env:
           STANDARD_SUCCEEDED: ${{ needs.evaluate_standard.outputs.succeeded }}
           LARGE_SUCCEEDED: ${{ needs.evaluate_large.outputs.succeeded }}
-          ESCALATION_RESULT: ${{ needs.escalation.result }}
           RETRY: ${{ needs.escalation.outputs.retry }}
           ALLOWLIST_REQUIRED: ${{ needs.escalation.outputs.allowlist_required }}
         run: |
-          if [ "$ESCALATION_RESULT" != success ] || [ "$ALLOWLIST_REQUIRED" = true ]; then
+          if [ "$ALLOWLIST_REQUIRED" = true ]; then
             exit 1
           fi
           if [ "$RETRY" = true ]; then
@@ -280,6 +277,7 @@ jobs:
       size_within_cap: ${{ steps.size_status.outputs.within_cap }}
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       source_metadata_sha256: ${{ steps.source_identity.outputs.metadata_sha256 }}
+      source_commit: ${{ steps.source_identity.outputs.source_commit }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
       toolchain: ${{ steps.benchmark.outputs.toolchain }}
     steps:
@@ -456,6 +454,7 @@ jobs:
         if: steps.archive_fetch.outcome == 'success'
         run: |
           echo "metadata_sha256=$(sha256sum /tmp/archive-fetch/metadata.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          python -c 'import json; print("source_commit=" + json.load(open("/tmp/archive-fetch/metadata.json"))["submission_ref"])' >> "$GITHUB_OUTPUT"
 
       - name: Comment on archive fetch failure
         if: failure() && steps.archive_fetch.outcome == 'failure' && github.event_name == 'issues'
@@ -617,6 +616,7 @@ jobs:
       size_within_cap: ${{ steps.select.outputs.size_within_cap }}
       audit_ciphertext_ready: ${{ steps.select.outputs.audit_ciphertext_ready }}
       source_metadata_sha256: ${{ steps.select.outputs.source_metadata_sha256 }}
+      source_commit: ${{ steps.select.outputs.source_commit }}
       benchmark_commit: ${{ steps.select.outputs.benchmark_commit }}
       toolchain: ${{ steps.select.outputs.toolchain }}
     steps:
@@ -628,6 +628,7 @@ jobs:
           ISSUE_FETCH_SUCCEEDED: ${{ needs.archive_issue.outputs.fetch_succeeded }}
           ISSUE_SIZE_WITHIN_CAP: ${{ needs.archive_issue.outputs.size_within_cap }}
           ISSUE_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_issue.outputs.audit_ciphertext_ready }}
+          ISSUE_SOURCE_COMMIT: ${{ needs.archive_issue.outputs.source_commit }}
           ISSUE_SOURCE_METADATA_SHA256: ${{ needs.archive_issue.outputs.source_metadata_sha256 }}
           ISSUE_BENCHMARK_COMMIT: ${{ needs.archive_issue.outputs.benchmark_commit }}
           ISSUE_TOOLCHAIN: ${{ needs.archive_issue.outputs.toolchain }}
@@ -635,6 +636,7 @@ jobs:
           SERVER_FETCH_SUCCEEDED: ${{ needs.archive_server.outputs.fetch_succeeded }}
           SERVER_SIZE_WITHIN_CAP: ${{ needs.archive_server.outputs.size_within_cap }}
           SERVER_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_server.outputs.audit_ciphertext_ready }}
+          SERVER_SOURCE_COMMIT: ${{ inputs.source_commit }}
           SERVER_SOURCE_METADATA_SHA256: ${{ needs.archive_server.outputs.source_metadata_sha256 }}
           SERVER_BENCHMARK_COMMIT: ${{ needs.archive_server.outputs.benchmark_commit }}
           SERVER_TOOLCHAIN: ${{ needs.archive_server.outputs.toolchain }}
@@ -645,7 +647,7 @@ jobs:
           else
             prefix=ISSUE
           fi
-          for name in SUBMISSION_METADATA_VALID FETCH_SUCCEEDED SIZE_WITHIN_CAP AUDIT_CIPHERTEXT_READY SOURCE_METADATA_SHA256 BENCHMARK_COMMIT TOOLCHAIN; do
+          for name in SUBMISSION_METADATA_VALID FETCH_SUCCEEDED SIZE_WITHIN_CAP AUDIT_CIPHERTEXT_READY SOURCE_METADATA_SHA256 SOURCE_COMMIT BENCHMARK_COMMIT TOOLCHAIN; do
             variable="${prefix}_${name}"
             printf '%s=%s\n' "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')" "${!variable}" >> "$GITHUB_OUTPUT"
           done
@@ -1360,23 +1362,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # `actions: read` lets the classifier below read the evaluate job's step
-    # list and log; `contents: read` is for the checkout that supplies it.
     permissions:
       issues: write
-      contents: read
-      actions: read
     steps:
-      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.11.10'
-
       - name: Comment on workflow failure
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1388,13 +1376,8 @@ jobs:
           ARCHIVE_FETCH_SUCCEEDED: ${{ needs.archive.outputs.fetch_succeeded }}
           ARCHIVE_SIZE_WITHIN_CAP: ${{ needs.archive.outputs.size_within_cap }}
           EVALUATE_WHY: The evaluation pipeline failed; consult the selected attempt in the workflow logs.
-          BLAMES_SUBMISSION: 'false'
           LOGS: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Close only when the submitter is the one who has to act. An
-          # infrastructure failure closed as "not planned" reads as a
-          # verdict on their proof and buries the failure from operators.
-          CLOSE=false
           if [ "$ARCHIVE_FETCH_SUCCEEDED" != "true" ] || [ "$ARCHIVE_SIZE_WITHIN_CAP" != "true" ]; then
             BODY="❌ Audit archival preparation did not complete; evaluation did not start and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           elif [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
@@ -1403,15 +1386,9 @@ jobs:
             BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); evaluation did not start and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           elif [ "$EVALUATE_RESULT" != "success" ]; then
             BODY="❌ Submission evaluation did not produce results. $EVALUATE_WHY See the workflow logs: $LOGS"
-            CLOSE="$BLAMES_SUBMISSION"
           else
             BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). An operator will need to investigate. See the workflow logs: $LOGS"
           fi
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
             --body "$BODY"
-          if [ "$CLOSE" = "true" ]; then
-            gh issue close ${{ github.event.issue.number }} \
-              --repo "${{ github.repository }}" \
-              --reason "not planned" || true
-          fi

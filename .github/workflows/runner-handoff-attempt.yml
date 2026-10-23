@@ -3,6 +3,7 @@ on:
   workflow_call:
     inputs:
       tier: {type: string, required: true}
+      mode: {type: string, default: resource}
     outputs:
       succeeded:
         value: ${{ jobs.evaluate.outputs.succeeded }}
@@ -26,8 +27,14 @@ jobs:
       - name: Run evaluate_submission.py
         env:
           TIER: ${{ inputs.tier }}
+          MODE: ${{ inputs.mode }}
         run: |
-          if [ "$TIER" = standard ]; then
+          if [ "$MODE" = positive ]; then
+            mkdir -p /tmp/out
+            printf '{"run_eval":{"attempted_problems":1,"succeeded_problems":1}}\n' > /tmp/out/summary.json
+            python scripts/run_with_resource_report.py --summary /tmp/out/summary.json --report /tmp/out/resource-report.json -- \
+              python -c 'print("out of memory SIGKILL exit code 137")'
+          elif [ "$TIER" = standard ]; then
             python scripts/run_with_resource_report.py --deadline "$(($(date +%s) + 2))" --report /tmp/out/resource-report.json -- \
               python -c 'import time; time.sleep(90)'
           else
@@ -37,7 +44,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: submission-results-${{ inputs.tier }}
+          name: ${{ inputs.mode == 'positive' && 'positive-results' || format('submission-results-{0}', inputs.tier) }}
           path: /tmp/out/resource-report.json
       - name: Record attempt outcome
         id: outcome
