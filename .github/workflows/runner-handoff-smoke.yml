@@ -1,0 +1,79 @@
+name: Isolated larger-runner handoff
+on:
+  push:
+    branches: [experiment/allowlisted-runner-smoke]
+permissions:
+  contents: read
+jobs:
+  evaluate_standard:
+    uses: ./.github/workflows/runner-handoff-attempt.yml
+    with:
+      tier: standard
+  escalation:
+    needs: evaluate_standard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      retry: ${{ steps.decide.outputs.retry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: submission-results-standard
+          path: /tmp/standard
+      - name: Exercise blocked and allowed policies
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STANDARD_SUCCEEDED: ${{ needs.evaluate_standard.outputs.succeeded }}
+        run: |
+          set -euo pipefail
+          test "$STANDARD_SUCCEEDED" = false
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
+          job_id=$(python -c 'import json; print(next(j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")))')
+          gh run view --repo "$GITHUB_REPOSITORY" --job "$job_id" --log > /tmp/standard.log
+          printf '[]\n' > /tmp/allowlist.json
+          python scripts/large_runner_retry.py --submitter alice --allowlist /tmp/allowlist.json \
+            --jobs /tmp/jobs.json --log /tmp/standard.log --report /tmp/standard/resource-report.json \
+            --output /tmp/blocked.json
+          python -c 'import json; d=json.load(open("/tmp/blocked.json")); assert d["allowlist_required"] and not d["retry"]; assert "Kim Morrison" in d["message"]; print(d["message"])'
+          printf '["alice"]\n' > /tmp/allowlist.json
+          python scripts/large_runner_retry.py --submitter alice --allowlist /tmp/allowlist.json \
+            --jobs /tmp/jobs.json --log /tmp/standard.log --report /tmp/standard/resource-report.json \
+            --output /tmp/allowed.json >> "$GITHUB_OUTPUT"
+  evaluate_large:
+    needs: escalation
+    if: ${{ !cancelled() && needs.escalation.outputs.retry == 'true' }}
+    uses: ./.github/workflows/runner-handoff-attempt.yml
+    with:
+      tier: large
+  verify:
+    needs: [evaluate_standard, escalation, evaluate_large]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify the actual production outcome-selection script
+        env:
+          STANDARD_SUCCEEDED: ${{ needs.evaluate_standard.outputs.succeeded }}
+          LARGE_SUCCEEDED: ${{ needs.evaluate_large.outputs.succeeded }}
+          RETRY: ${{ needs.escalation.outputs.retry }}
+          ALLOWLIST_REQUIRED: 'false'
+          ESCALATION_RESULT: ${{ needs.escalation.result }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, subprocess
+          assert os.environ['RETRY'] == 'true'
+          assert os.environ['LARGE_SUCCEEDED'] == 'true'
+          text = pathlib.Path('.github/workflows/submission.yml').read_text()
+          block = text.split('\n  evaluate:', 1)[1].split('\n  archive_issue:', 1)[0]
+          script = block.split('        run: |\n', 1)[1]
+          subprocess.run(['bash', '-e', '-c', '\n'.join(line[10:] for line in script.splitlines())], check=True)
+          PY
