@@ -19,7 +19,7 @@ RESOURCE_FAILURE = 75
 # Match diagnostics, not incidental mentions of memory in Lean source paths.
 RESOURCE_ERROR = re.compile(
     r"out of memory|cannot allocate memory|std::bad_alloc|"
-    r"(?:exited|exit(?:ed)? with(?: code)?|exit code)[: ]+(?:137|143)\b|"
+    r"(?:exited|exit(?:ed)? with(?: code)?|exit code)[: ]+(?:137|143|-9|-15)\b|"
     r"terminated by signal (?:9|15)\b|\bSIGKILL\b",
     re.IGNORECASE,
 )
@@ -44,7 +44,18 @@ def oom_count() -> int:
     return count
 
 
-def run(command: list[str], report: pathlib.Path, timeout_seconds: int | None = None) -> int:
+def all_attempts_passed(summary: pathlib.Path | None) -> bool:
+    if summary is None:
+        return False
+    try:
+        evaluation = json.loads(summary.read_text())['run_eval']
+        return evaluation['attempted_problems'] == evaluation['succeeded_problems']
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def run(command: list[str], report: pathlib.Path, timeout_seconds: int | None = None,
+        summary: pathlib.Path | None = None) -> int:
     before = oom_count()
     resource_diagnostic = False
     if timeout_seconds is not None:
@@ -68,6 +79,10 @@ def run(command: list[str], report: pathlib.Path, timeout_seconds: int | None = 
     timed_out = timeout_seconds is not None and code == 124
     reason = ('evaluation_timeout' if timed_out else 'out_of_memory' if oom
               else 'process_killed' if killed else 'resource_diagnostic' if resource_diagnostic else None)
+    # Submitted code can print resource-looking text. A completed, fully
+    # successful evaluation takes precedence over those heuristic signals.
+    if code == 0 and all_attempts_passed(summary):
+        reason = None
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps({'exit_code': code, 'resource_reason': reason}) + '\n')
     return RESOURCE_FAILURE if reason else (code if code >= 0 else 128 - code)
@@ -77,13 +92,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', type=pathlib.Path, required=True)
     parser.add_argument('--deadline', type=int, help='evaluation deadline as Unix seconds')
+    parser.add_argument('--summary', type=pathlib.Path, help='trusted evaluation summary')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
     if not command:
         parser.error('a command is required')
     seconds = None if args.deadline is None else args.deadline - int(time.time())
-    return run(command, args.report, seconds)
+    return run(command, args.report, seconds, args.summary)
 
 
 if __name__ == '__main__':

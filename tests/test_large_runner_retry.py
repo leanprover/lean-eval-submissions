@@ -7,12 +7,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import urllib.request
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
-from large_runner_retry import LogRedirect, allowlisted, decide  # noqa: E402
+from large_runner_retry import allowlisted, decide  # noqa: E402
 import run_with_resource_report  # noqa: E402
 
 
@@ -22,14 +21,9 @@ def job(conclusion: str = 'success', step: str = 'success') -> dict:
 
 
 class RetryTests(unittest.TestCase):
-    def test_log_storage_redirect_does_not_receive_the_github_token(self) -> None:
-        request = urllib.request.Request('https://api.github.com/jobs/1/logs',
-                                         headers={'Authorization': 'Bearer test-token'})
-        redirected = LogRedirect().redirect_request(
-            request, None, 302, 'Found', {}, 'https://storage.example/signed-log',
-        )
-        self.assertIsNotNone(redirected)
-        self.assertIsNone(redirected.get_header('Authorization'))
+    def test_committed_allowlist_is_valid(self) -> None:
+        entries = json.loads((ROOT / 'configuration/large-runner-allowlist.json').read_text())
+        allowlisted('test-user', entries)
 
     def test_cgroup_oom_is_detected_when_child_returns_no_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -40,7 +34,7 @@ class RetryTests(unittest.TestCase):
             self.assertEqual(json.loads(report.read_text())['resource_reason'], 'out_of_memory')
 
     def test_empty_policy_blocks_escalation_with_actionable_message(self) -> None:
-        result = decide('alice', [], job('failure', 'failure'), '',
+        result = decide('alice', [], job('failure', 'failure'),
                         {'resource_reason': 'out_of_memory'})
         self.assertFalse(result['retry'])
         self.assertTrue(result['allowlist_required'])
@@ -55,22 +49,24 @@ class RetryTests(unittest.TestCase):
 
     def test_ordinary_bad_proof_never_retries_or_requests_access(self) -> None:
         for entries in ([], ['alice']):
-            result = decide('alice', entries, job(), 'type mismatch\n')
+            result = decide('alice', entries, job())
             self.assertFalse(result['retry'])
             self.assertFalse(result['allowlist_required'])
 
-    def test_resource_failure_inside_successful_harness_still_escalates(self) -> None:
-        result = decide('alice', ['alice'], job(), 'error: lean exited with code 137')
-        self.assertTrue(result['retry'])
+    def test_success_does_not_depend_on_policy_or_unrelated_logs(self) -> None:
+        self.assertFalse(decide('app[bot]', 'malformed policy', job())['retry'])
+
+    def test_nested_resource_report_retries_a_failed_attempt(self) -> None:
+        self.assertTrue(decide('alice', ['alice'], job('failure', 'failure'),
+                               {'resource_reason': 'out_of_memory'})['retry'])
 
     def test_dead_runner_needs_no_artifact(self) -> None:
-        result = decide('alice', ['alice'], job('failure', 'cancelled'),
-                        'The runner has received a shutdown signal')
+        result = decide('alice', ['alice'], job('failure', 'cancelled'))
         self.assertTrue(result['retry'])
 
     def test_timeout_and_unexpected_job_interruption_retry(self) -> None:
-        self.assertTrue(decide('alice', ['alice'], job('timed_out', 'failure'), '')['retry'])
-        self.assertTrue(decide('alice', ['alice'], job('cancelled', 'cancelled'), '')['retry'])
+        self.assertTrue(decide('alice', ['alice'], job('timed_out', 'failure'))['retry'])
+        self.assertTrue(decide('alice', ['alice'], job('cancelled', 'cancelled'))['retry'])
         workflow = (ROOT / '.github/workflows/submission.yml').read_text()
         escalation = workflow.split('\n  escalation:', 1)[1].split('\n  evaluate_large:', 1)[0]
         self.assertIn('!cancelled()', escalation)
@@ -89,7 +85,7 @@ class RetryTests(unittest.TestCase):
             {'name': 'Run evaluate_submission.py', 'conclusion': 'skipped'}]}
         for details, log in ((preflight, 'exit code 137'),
                              (job(), 'maximum number of heartbeats has been reached')):
-            self.assertFalse(decide('alice', ['alice'], details, log)['retry'])
+            self.assertFalse(decide('alice', ['alice'], details)['retry'])
 
     def test_real_child_signal_and_nested_allocation_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -103,8 +99,30 @@ class RetryTests(unittest.TestCase):
                     '--report', str(report), '--', sys.executable, '-c', code,
                 ], capture_output=True, check=False)
                 self.assertEqual(result.returncode, 75)
-                self.assertTrue(decide('alice', ['alice'], job(), '',
+                self.assertTrue(decide('alice', ['alice'], job('failure', 'failure'),
                                        json.loads(report.read_text()))['retry'])
+
+    def test_passing_proofs_override_resource_text_and_oom_counters(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            summary = root / 'summary.json'
+            report = root / 'report.json'
+            summary.write_text(json.dumps({'run_eval': {
+                'attempted_problems': 2, 'succeeded_problems': 2}}))
+            with patch.object(run_with_resource_report, 'oom_count', side_effect=[0, 1]):
+                code = run_with_resource_report.run(
+                    [sys.executable, '-c', 'print("out of memory SIGKILL exit code 137")'],
+                    report, summary=summary,
+                )
+            self.assertEqual(code, 0)
+            self.assertIsNone(json.loads(report.read_text())['resource_reason'])
+            summary.write_text(json.dumps({'run_eval': {
+                'attempted_problems': 2, 'succeeded_problems': 1}}))
+            code = run_with_resource_report.run(
+                [sys.executable, '-c', 'print("error: exited with code -9")'],
+                report, summary=summary,
+            )
+            self.assertEqual(code, 75)
 
     def test_normalizer_selects_only_the_final_attempt(self) -> None:
         text = (ROOT / '.github/workflows/submission.yml').read_text()
@@ -119,7 +137,9 @@ class RetryTests(unittest.TestCase):
             # Neither failed attempt nor blocked escalation publishes a verdict.
             ('false', 'false', 'true', 'false', 'success', 1),
             ('true', '', 'false', 'true', 'success', 1),
-            ('true', '', 'false', 'false', 'failure', 1),
+            ('true', '', 'false', 'false', 'failure', 0),
+            ('true', '', '', '', 'skipped', 0),
+            ('false', 'true', 'true', 'false', 'failure', 0),
         ]
         for standard, large, retry, blocked, decision_result, expected in cases:
             env = {**os.environ, 'STANDARD_SUCCEEDED': standard, 'LARGE_SUCCEEDED': large,

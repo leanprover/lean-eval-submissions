@@ -101,7 +101,7 @@ properties of `submission.yml`'s structure that we do not actively probe:
   left visible there can be read by submitted code.
 
 `tests/test_submission_workflow.py` is the structural guard for the
-first, third, and fourth bullets — a workflow refactor that regresses
+co-located fetch/evaluation, token scope, tarball hygiene, and checkout bullets — a workflow refactor that regresses
 them fails CI.
 
 The pinned `actions/create-github-app-token` v3.2.0 writes the token to
@@ -177,7 +177,7 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
    pristine `generated/<id>/` workspace and invokes comparator.
 
 The evaluation steps live in `evaluate-attempt.yml`, shared by the standard
-and optional larger attempt. The `evaluate` job in `submission.yml` now selects
+and optional larger attempt. The `evaluate` job in `submission.yml` selects
 the final attempt before State completion and recording. Each attempt has
 contents-read permission only, no lifecycle or recording credentials, and
 never receives plaintext source from the preceding attempt. See

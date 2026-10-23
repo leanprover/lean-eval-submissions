@@ -27,7 +27,7 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 
@@ -484,6 +484,7 @@ def fetch_submission(
     output_dir: pathlib.Path,
     app_token: str | None,
     skip_clone: bool = False,
+    source_commit: str | None = None,
 ) -> dict:
     issue = event_payload.get("issue")
     if not isinstance(issue, dict):
@@ -503,6 +504,10 @@ def fetch_submission(
 
     fields = parse_issue_body(body)
     descriptor = parse_source_url(fields["source_url"])
+    if source_commit is not None:
+        if SHA_RE.fullmatch(source_commit) is None:
+            raise FetchError("Frozen source commit must be an exact 40-character SHA.")
+        descriptor = replace(descriptor, ref=source_commit)
     clone_url = clone_url_for(descriptor, app_token)
     sha = resolve_ref(descriptor, clone_url)
 
@@ -808,6 +813,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip the clone; only parse the URL and emit metadata.",
     )
+    parser.add_argument("--source-commit", help="Use this archived commit for issue submissions.")
     return parser.parse_args(argv)
 
 
@@ -850,6 +856,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir=args.output_dir,
                 app_token=app_token,
                 skip_clone=args.dry_run,
+                source_commit=args.source_commit,
             )
     except FetchError as exc:
         print(str(exc), file=sys.stderr)

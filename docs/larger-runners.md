@@ -7,6 +7,11 @@ commit, toolchain, sandbox, and six-hour job budget. The final attempt alone
 supplies the State completion and leaderboard result. Both attempts retain
 their source-free diagnostics for seven days.
 
+Issue submissions using branch URLs or unpinned gists are refetched at the
+archived commit, so a later push cannot change or invalidate the larger attempt.
+Completed standard evaluations bypass escalation and do not depend on policy
+lookups or notification delivery.
+
 Evaluation has a controlled deadline two minutes before GitHub's hard job
 timeout. This leaves time to upload the resource report and turns an elapsed
 time limit into a normal retryable failure instead of a workflow cancellation.
@@ -33,7 +38,10 @@ submitter resubmits; adding a username does not resurrect completed runs.
 Retry signals include an increased cgroup OOM-kill count, allocation-failure
 diagnostics, unexpected process/runner kills, and an evaluation job timeout.
 A separate trusted GitHub runner makes the decision, so losing the first
-machine does not require an artifact to survive. Ordinary Lean errors,
+machine does not require an artifact to survive. It uses the resource report
+and GitHub job-step status, without downloading or parsing job logs. A fully
+passing evaluation takes precedence over resource-looking diagnostic text.
+Ordinary Lean errors,
 negative proof verdicts, heartbeat limits, user cancellation, and setup or
 download failures do not trigger escalation. A signal exit is evidence for
 trying more resources, not proof that memory was exhausted.

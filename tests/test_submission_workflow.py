@@ -116,9 +116,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         archive = self.text.split("\n  archive_issue:", 1)[1].split(
             "\n  archive_server:", 1
         )[0]
-        self.assertIn("needs: [intake, archive, archive_state]", self.text)
-        self.assertIn("needs.archive.result == 'success'", self.text)
-        self.assertIn("needs.archive_state.result == 'success'", self.text)
+        standard = self.text.split("\n  evaluate_standard:", 1)[1].split("\n  escalation:", 1)[0]
+        self.assertIn("needs: [intake, archive, archive_state]", standard)
+        self.assertIn("needs.archive.result == 'success'", standard)
+        self.assertIn("needs.archive_state.result == 'success'", standard)
         self.assertIn("python scripts/fetch_submission.py", evaluate)
         self.assertIn("python scripts/evaluate_submission.py", evaluate)
         self.assertIn("EXPECTED_METADATA_SHA256", evaluate)
@@ -237,23 +238,9 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertNotIn("failed to compile", self.text)
         self.assertIn("large_runner_retry.py", self.text)
 
-    def test_notify_fetches_the_log_in_a_way_that_survives_escape_sequences(self) -> None:
-        # `gh api .../actions/jobs/<id>/logs` refuses to print a log
-        # containing terminal escape sequences, which every log with Lean's
-        # coloured build output has, and leaves an empty file. That silently
-        # loses the death-by-signal evidence, which lives only in the log.
-        notify = self.text.split("\n  escalation:", 1)[1].split("\n  evaluate_large:", 1)[0]
-        self.assertIn("large_runner_retry.py", notify)
-        classifier = (REPO_ROOT / "scripts/large_runner_retry.py").read_text()
-        self.assertIn("actions/jobs/{job_id}/logs", classifier)
-        self.assertIn("shutil.copyfileobj(response, stream)", classifier)
-
-    def test_notify_closes_the_issue_only_when_the_submitter_must_act(self) -> None:
-        # Closing an infrastructure failure as "not planned" reads as a
-        # verdict on the submission and hides the failure from operators.
+    def test_notify_leaves_infrastructure_failures_open(self) -> None:
         notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn('CLOSE="$BLAMES_SUBMISSION"', notify)
-        self.assertIn('if [ "$CLOSE" = "true" ]; then', notify)
+        self.assertNotIn('gh issue close', notify)
 
     def test_notify_ignores_non_processing_opened_event(self) -> None:
         # Issue Forms can emit both `opened` and `labeled`. If the label is
@@ -316,9 +303,9 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
         self.assertIn("issues: write", intake_block)
         evaluate_header = self.text.split("\n  evaluate_standard:", 1)[1].split(
-            "\n    # Default:", 1
+            "\n  escalation:", 1
         )[0]
-        self.assertIn("needs: intake", evaluate_header)
+        self.assertIn("needs: [intake, archive, archive_state]", evaluate_header)
         self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
         self.assertIn("github.event.label.name == 'submission'", evaluate_header)
 
