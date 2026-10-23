@@ -76,6 +76,11 @@ def resource_failure(job: dict, log: str, report: dict | None) -> str | None:
                        if step.get('name') == 'Run evaluate_submission.py'), None)
     if not evaluation or evaluation.get('conclusion') in {'skipped', None}:
         return None
+    # Explicit user cancellation is excluded by the caller's !cancelled()
+    # gate. A cancelled evaluation step on a lost runner is retryable even
+    # when that machine could not upload logs or a resource report.
+    if job.get('conclusion') == 'cancelled' and evaluation.get('conclusion') == 'cancelled':
+        return 'runner_interrupted'
     if job.get('conclusion') == 'timed_out' or evaluation.get('conclusion') == 'timed_out' or re.search(
         r'##\[error\].*(?:exceeded the maximum execution time|timed out)', log, re.I
     ):
@@ -95,7 +100,7 @@ def decide(login: str, entries: object, job: dict, log: str,
         'resource_reason': reason,
         'allowlist_required': blocked,
         'message': ALLOWLIST_MESSAGE if blocked else (
-            'Retrying once on a larger runner (32 CPUs / 128 GB RAM).'
+            'Retrying once on a larger runner (32 CPUs / 64 GB RAM).'
             if reason else ''
         ),
     }
