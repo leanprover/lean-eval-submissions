@@ -95,7 +95,7 @@ def decide(login: str, entries: object, job: dict, log: str,
         'resource_reason': reason,
         'allowlist_required': blocked,
         'message': ALLOWLIST_MESSAGE if blocked else (
-            'Retrying once on a larger runner (32 CPUs / 128 GB RAM).'
+            'Retrying once on a larger runner (32 CPUs / 64 GB RAM).'
             if reason else ''
         ),
     }

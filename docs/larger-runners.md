@@ -2,7 +2,7 @@
 
 Every submission starts on Namespace with 16 CPUs and 32 GB RAM. A resource
 failure during evaluation can trigger **one** fresh attempt with 32 CPUs and
-128 GB RAM. Both attempts use the same archived source identity, benchmark
+64 GB RAM. Both attempts use the same archived source identity, benchmark
 commit, toolchain, sandbox, and six-hour job budget. The final attempt alone
 supplies the State completion and leaderboard result. Both attempts retain
 their source-free diagnostics for seven days.
@@ -34,7 +34,7 @@ negative proof verdicts, heartbeat limits, user cancellation, and setup or
 download failures do not trigger escalation. A signal exit is evidence for
 trying more resources, not proof that memory was exhausted.
 
-Provisioning 128 GB requires that the Namespace workspace has high-memory
-shapes enabled. The runner uses the same privileged feature required for
-comparator's bubblewrap sandbox. A failed larger attempt ends evaluation;
+The 32 CPU / 64 GB tier has been provisioned successfully in this workspace.
+The runner uses the same privileged feature required for comparator's
+bubblewrap sandbox. A failed larger attempt ends evaluation;
 there is no additional escalation tier or automatic retry loop.

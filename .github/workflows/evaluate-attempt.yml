@@ -48,7 +48,7 @@ jobs:
     continue-on-error: true
     # Both tiers retain the same sandbox and six-hour budget.
     runs-on:
-      - ${{ inputs.runner_tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x128-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
+      - ${{ inputs.runner_tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x64-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
       - namespace-features:container.privileged=true
     timeout-minutes: 360
     permissions:
