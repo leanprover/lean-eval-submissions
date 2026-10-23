@@ -79,10 +79,9 @@ def classify(
         return (
             "runner-killed",
             "The runner was killed part-way through the build (exit 143/137, "
-            "no Lean error). That is the signature of the job exhausting the "
-            "runner's memory: the machine goes away before anything can "
-            "record why, so the build simply stops mid-module. Your proof did "
-            "not fail to compile. " + RUNBOOK,
+            "no Lean error). Exhausting memory is one possible cause; a "
+            "shutdown signal alone does not establish why it stopped. "
+            "This is not evidence that your proof failed to compile. " + RUNBOOK,
             False,
         )
 

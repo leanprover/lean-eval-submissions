@@ -103,6 +103,19 @@ class EvaluationCompletionTests(unittest.TestCase):
                 evaluator_version="d" * 40,
             )
 
+    def test_allowlist_block_is_a_policy_failure_not_a_rejected_proof(self) -> None:
+        archive, _ = self.fixture()
+        completion = build(
+            archive_completion=archive, results=None, evaluate_result="failure",
+            problem_id="two_plus_two", benchmark_commit="c" * 40,
+            toolchain="leanprover/lean4:v4.35.0-rc3", evaluator_version="d" * 40,
+            allowlist_required=True,
+        )
+        self.assertEqual(completion["outcome"], {
+            "status": "failed", "reason_code": "large_runner_allowlist_required",
+            "retryable": False,
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ self-hosted-runner:
     - ubuntu-latest-large
     # Namespace (nscloud) runner, as leanprover/lean4 CI uses.
     - nscloud-ubuntu-24.04-amd64-32x64
+    - nscloud-ubuntu-24.04-amd64-32x128-with-features
     - nscloud-ubuntu-24.04-amd64-16x32-with-features
     - namespace-features:container.privileged=true
     - windows-latest-large

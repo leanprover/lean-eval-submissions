@@ -45,10 +45,10 @@ class ClassifyTests(unittest.TestCase):
         )
         self.assertEqual(category, "runner-killed")
         self.assertFalse(blames)
-        self.assertIn("exhausting", message)
+        self.assertIn("Exhausting", message)
         # The load-bearing correction: the old comment sent submitters to
         # look for a compile error that was never there.
-        self.assertIn("did not fail to compile", message)
+        self.assertIn("not evidence that your proof failed to compile", message)
 
     def test_sigkill_counts_as_a_memory_kill_too(self) -> None:
         category, _, _ = classify.classify(

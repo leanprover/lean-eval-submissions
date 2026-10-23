@@ -122,343 +122,140 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" --repo "$REPOSITORY" --add-label submission
           echo "evaluate=true" >> "$GITHUB_OUTPUT"
 
-  evaluate:
+  evaluate_standard:
     needs: [intake, archive, archive_state]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.archive.result == 'success' &&
       (github.event_name == 'issues' || needs.archive_state.result == 'success') &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
-    # 16 CPU / 32 GB; the privileged feature enables Lake's bubblewrap namespaces.
-    runs-on:
-      - nscloud-ubuntu-24.04-amd64-16x32-with-features
-      - namespace-features:container.privileged=true
-    # Retain the evaluation budget when moving from GitHub-hosted runners.
-    timeout-minutes: 360
-    # `issues: write` is needed by the in-job fetch-failure / evaluate-failure
-    # commenters below. The default `GITHUB_TOKEN` is *not* placed into the
-    # env of any step that runs untrusted Lean: it only appears in the
-    # explicit `env: GH_TOKEN:` blocks on the commenter steps. The
-    # `lean-eval-bot` installation token (which can read private
-    # submission repos) is similarly scoped to the single `Fetch
-    # submission` step's env. persist-credentials:false on BOTH checkouts
-    # + `rm -rf .git` on BOTH before lake runs ensures no checkout token
-    # persists into the lake runtime either.
+    uses: ./.github/workflows/evaluate-attempt.yml
     permissions:
       contents: read
+    with:
+      runner_tier: standard
+      benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
+      toolchain: ${{ needs.archive.outputs.toolchain }}
+      source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+      workflow_commit: ${{ inputs.workflow_commit }}
+      callback_environment: ${{ inputs.callback_environment }}
+      archive_state_callback_required: ${{ inputs.archive_state_callback_required }}
+      source_repository: ${{ inputs.source_repository }}
+      problem_id: ${{ inputs.problem_id }}
+      statement_revision: ${{ inputs.statement_revision }}
+    secrets:
+      LEAN_EVAL_BOT_CLIENT_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+      LEAN_EVAL_BOT_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+
+  escalation:
+    needs: [evaluate_standard, archive]
+    if: ${{ !cancelled() && needs.archive.result == 'success' && needs.evaluate_standard.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
       issues: write
-    # The archive job freezes the benchmark and source identities before this
-    # job starts. This job refetches both and fails closed on any mismatch.
     outputs:
-      fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
-      benchmark_commit: ${{ steps.benchmark.outputs.sha }}
-      toolchain: ${{ steps.benchmark.outputs.toolchain }}
+      retry: ${{ steps.decide.outputs.retry }}
+      allowlist_required: ${{ steps.decide.outputs.allowlist_required }}
     steps:
-      - name: Assert immutable server workflow ref
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
-          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
-          CALLBACK_REQUIRED: ${{ inputs.archive_state_callback_required }}
-        run: |
-          if [[ ! "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "invalid expected workflow commit" >&2
-            exit 1
-          fi
-          if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then
-            echo "dispatch tag no longer resolves to the expected workflow commit" >&2
-            exit 1
-          fi
-          if [ "$CALLBACK_REQUIRED" != "true" ]; then
-            echo "server dispatch did not require the State lifecycle callback" >&2
-            exit 1
-          fi
-          if [ "$CALLBACK_ENVIRONMENT" != "staging" ] && [ "$CALLBACK_ENVIRONMENT" != "production" ]; then
-            echo "server dispatch selected an invalid callback environment" >&2
-            exit 1
-          fi
-
-      # This repo (lean-eval-submissions): supplies the pipeline scripts.
-      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
-      # The benchmark repo: supplies generated/, manifests/, the Lean CLI.
-      # Scored against main HEAD; persist-credentials:false because this
-      # tree shares the runner with the untrusted build.
-      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: leanprover/lean-eval
-          ref: ${{ needs.archive.outputs.benchmark_commit }}
-          path: lean-eval
-          persist-credentials: false
-
-      - name: Resolve benchmark commit
-        id: benchmark
-        env:
-          EXPECTED_BENCHMARK_COMMIT: ${{ needs.archive.outputs.benchmark_commit }}
-          EXPECTED_TOOLCHAIN: ${{ needs.archive.outputs.toolchain }}
-        run: |
-          actual_commit=$(git -C lean-eval rev-parse HEAD)
-          actual_toolchain=$(cat lean-eval/lean-toolchain)
-          if [ "$actual_commit" != "$EXPECTED_BENCHMARK_COMMIT" ]; then
-            echo "benchmark checkout does not match the archived commit" >&2
-            exit 1
-          fi
-          if [ "$actual_toolchain" != "$EXPECTED_TOOLCHAIN" ]; then
-            echo "benchmark toolchain does not match the archived toolchain" >&2
-            exit 1
-          fi
-          echo "sha=$actual_commit" >> "$GITHUB_OUTPUT"
-          echo "toolchain=$actual_toolchain" >> "$GITHUB_OUTPUT"
-
-      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.11.10'
-
-      - name: Extract source owner from issue body
-        id: owner
-        env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          SERVER_SOURCE_REPOSITORY: ${{ inputs.source_repository }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          python - <<'PY'
-          import os, re, sys
-          if os.environ.get("EVENT_NAME") == "workflow_dispatch":
-              repository = os.environ.get("SERVER_SOURCE_REPOSITORY", "")
-              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
-                  sys.exit("invalid server source repository")
-              with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-                  fh.write("kind=github_repo\n")
-                  fh.write(f"owner={repository.split('/', 1)[0]}\n")
-              raise SystemExit(0)
-          body = os.environ.get("ISSUE_BODY", "")
-          m = re.search(
-              r"^###\s+Submission URL\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
-              body,
-              re.MULTILINE | re.DOTALL,
-          )
-          if not m:
-              sys.exit("no Submission URL section in issue body")
-          url = m.group("value").strip()
-          out_path = os.environ["GITHUB_OUTPUT"]
-          with open(out_path, "a") as fh:
-              repo = re.match(r"https://github\.com/([^/]+)/", url)
-              if repo:
-                  fh.write(f"kind=github_repo\n")
-                  fh.write(f"owner={repo.group(1)}\n")
-              elif url.startswith("https://gist.github.com/"):
-                  fh.write(f"kind=gist\n")
-                  fh.write(f"owner=\n")
-              else:
-                  sys.exit(f"unsupported URL in issue body: {url!r}")
-          PY
-
-      - name: Mint lean-eval-bot installation token
-        id: app_token
-        if: steps.owner.outputs.kind == 'github_repo'
-        # actions/create-github-app-token pinned to bcd2ba49 (= refs/tags/v3.2.0 as of 2026-07-30).
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
-          client-id: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
-          owner: ${{ steps.owner.outputs.owner }}
-
-      - name: Clean evaluation scratch dirs
-        # A no-op on the ephemeral hosted runners this workflow targets,
-        # where /tmp starts empty. Kept as defence in depth: on any runner
-        # that persisted /tmp across jobs, stale scratch state would break
-        # fetch's checkout ("untracked working tree files would be
-        # overwritten ... Aborting") and could leak one submission's source
-        # into the next job's build.
-        run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out
-
-      - name: Fetch submission
-        id: fetch
-        env:
-          # Step-scoped: the app token is NOT present in the env of any
-          # later step in this job. This is the load-bearing assumption
-          # that lets fetch + evaluate share a job without leaking
-          # access to private submission repos into the bubblewrap-sandboxed
-          # evaluation. Do not promote this to a job-level env or
-          # secrets block.
-          APP_INSTALLATION_TOKEN: ${{ steps.app_token.outputs.token }}
-        run: |
-          SERVER_FLAG=()
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SERVER_FLAG+=(--server-dispatch)
-          fi
-          python scripts/fetch_submission.py \
-            --event-path "$GITHUB_EVENT_PATH" \
-            "${SERVER_FLAG[@]}" \
-            --output-dir /tmp/fetch-out
-
-      - name: Record fetch status for downstream jobs
-        id: fetch_status
-        if: always()
-        run: |
-          if [ "${{ steps.fetch.outcome }}" = "success" ]; then
-            echo "succeeded=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "succeeded=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Verify frozen source identity
-        if: steps.fetch.outcome == 'success'
-        env:
-          EXPECTED_METADATA_SHA256: ${{ needs.archive.outputs.source_metadata_sha256 }}
-        run: |
-          actual=$(sha256sum /tmp/fetch-out/metadata.json | cut -d' ' -f1)
-          if [[ ! "$EXPECTED_METADATA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "archive did not provide a valid frozen metadata digest" >&2
-            exit 1
-          fi
-          if [ "$actual" != "$EXPECTED_METADATA_SHA256" ]; then
-            echo "evaluation refetch does not match the source archived before evaluation" >&2
-            exit 1
-          fi
-
-      - name: Comment on fetch failure
-        if: failure() && steps.fetch.outcome == 'failure' && github.event_name == 'issues'
+          name: submission-results-standard
+          path: /tmp/standard-results
+      - name: Decide whether to escalate
+        id: decide
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUBMITTER: ${{ github.event_name == 'workflow_dispatch' && inputs.submitted_by || github.event.issue.user.login }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} \
-            --repo "${{ github.repository }}" \
-            --body "❌ Submission fetch failed. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. If your submission repo is private, make sure the \`lean-eval-bot\` GitHub App is installed on it."
-          gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
-
-      - name: Free disk space for Mathlib cache
-        # Standard runners ship with ~14GB free; Mathlib unpacked is
-        # several GB and we hold it twice (repo root + per-workspace).
-        # Strip Android, .NET, Haskell, and other preinstalled caches we
-        # do not need. Frees ~30GB.
-        # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: false
-
-      - name: Strip git state before running untrusted Lean
-        # Both checkouts: Lake exposes the host read-only, so any
-        # authenticated remote left in a `.git/config` anywhere the
-        # sandbox can stat it is readable by the untrusted Lean elaborator.
-        run: rm -rf .git lean-eval/.git
-
-      # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0, also v1 HEAD as of 2026-05-04).
-      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
-        with:
-          lake-package-directory: lean-eval
-          use-mathlib-cache: true
-          # The evaluate job deliberately omits actions:write. Disable the
-          # futile GitHub cache save (and its warning) instead of broadening
-          # the token available to the job that runs untrusted Lean.
-          # Mathlib's independent `lake exe cache get` remains enabled above.
-          use-github-cache: false
-          # Built by the next step, after dependency caches are configured.
-          build: false
-          test: false
-          lint: false
-
-      - name: Build the benchmark root with downloaded dependency caches
-        # Trusted phase: runs before the submission source is unpacked or
-        # any untrusted Lean runs.
-        # TauCeti must never be compiled here: the script downloads its
-        # build outputs into the shared package tree (the whole library,
-        # so a submission may import any TauCeti module) and fails on a
-        # cache miss. The Lake cache settings stay inside this step, and
-        # later workspace builds, including comparator's sandboxed one,
-        # find TauCeti up to date on disk without the network. Benchmarks
-        # that pin no TauCeti get a plain `lake build`. See the script.
-        run: python scripts/build_benchmark_root.py lean-eval
-
-      - name: Install bubblewrap for Lake comparator
-        id: bwrap
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes meson ninja-build libcap-dev
-          bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
-          echo "path=$RUNNER_TEMP/lean-eval-bwrap/bwrap" >> "$GITHUB_OUTPUT"
-
-
-      # SECURITY: probes that gate every submission. A regression here
-      # (sandbox not engaged, or env-var leak) means we cannot trust any
-      # downstream comparator verdict — abort before touching the
-      # submission. The probe scripts live in leanprover/lean-eval (which
-      # owns the comparator/sandbox integration); they are run here from
-      # the lean-eval checkout. See leanprover/lean-eval SECURITY.md >
-      # "Validations done at submission time".
-      - name: Probe sandbox is engaged
-        env:
-          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
-        run: python lean-eval/scripts/sandbox_engaged_probe.py --require-tools
-
-      - name: Probe env-var allowlist
-        env:
-          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
-        run: python lean-eval/scripts/security_probes/env_dump_probe.py --require-tools
-
-      - name: Extract submission source
-        run: |
-          mkdir -p /tmp/submission-src
-          tar -xzf /tmp/fetch-out/source.tar.gz -C /tmp/submission-src --strip-components=1
-
-      - name: Run evaluate_submission.py
-        # Sharing the benchmark repo's .lake/packages tree across every
-        # per-submission workspace lets each workspace reuse Mathlib
-        # (~3GB unpacked) instead of cloning + decompressing it per
-        # workspace. Required to handle submissions that overlay several
-        # generated workspaces on a single runner without "no space left
-        # on device". Each shared workspace gets a copy of the benchmark's
-        # root lake-manifest.json, which pins every package any workspace
-        # requires, instead of running `lake update` (which could check out
-        # different revisions inside the shared tree).
-        env:
-          PROBLEM_ID: ${{ inputs.problem_id }}
-          STATEMENT_REVISION: ${{ inputs.statement_revision }}
-          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
-        run: |
-          EVALUATION_ARGS=(
-            --source-dir /tmp/submission-src
-            --generated-root lean-eval/generated
-            --manifest-dir lean-eval/manifests/problems
-            --output-dir /tmp/evaluate-out
-            --repo-root lean-eval
-            --shared-packages lean-eval/.lake/packages
-          )
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            EVALUATION_ARGS+=(
-              --problem-id "$PROBLEM_ID"
-              --statement-revision "$STATEMENT_REVISION"
-            )
+          set -euo pipefail
+          # Policy follows protected main; adding a username needs no Worker redeploy.
+          gh api "repos/$GITHUB_REPOSITORY/contents/configuration/large-runner-allowlist.json?ref=main" \
+            -H 'Accept: application/vnd.github.raw+json' > /tmp/allowlist.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
+          job_id=$(python -c 'import json; print(next((j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")), ""))')
+          touch /tmp/evaluate.log
+          if [ -n "$job_id" ]; then
+            gh run view --repo "$GITHUB_REPOSITORY" --job "$job_id" --log > /tmp/evaluate.log 2>/dev/null || true
           fi
-          python scripts/evaluate_submission.py "${EVALUATION_ARGS[@]}"
+          python scripts/large_runner_retry.py \
+            --submitter "$SUBMITTER" --allowlist /tmp/allowlist.json \
+            --jobs /tmp/jobs.json --log /tmp/evaluate.log \
+            --report /tmp/standard-results/resource-report.json \
+            --output /tmp/retry-decision.json >> "$GITHUB_OUTPUT"
+      - name: Explain escalation decision
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python -c 'import json; print(json.load(open("/tmp/retry-decision.json"))["message"])' > /tmp/retry-message.txt
+          if [ "$(wc -c < /tmp/retry-message.txt)" -gt 1 ]; then
+            cat /tmp/retry-message.txt >> "$GITHUB_STEP_SUMMARY"
+            if [ "$EVENT_NAME" = issues ]; then
+              gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/retry-message.txt
+            fi
+          fi
 
-      - name: Copy frozen metadata through to record
-        if: always()
-        run: cp /tmp/fetch-out/metadata.json /tmp/evaluate-out/metadata.json || true
+  evaluate_large:
+    needs: [escalation, archive]
+    if: ${{ !cancelled() && needs.escalation.outputs.retry == 'true' }}
+    uses: ./.github/workflows/evaluate-attempt.yml
+    permissions:
+      contents: read
+    with:
+      runner_tier: large
+      benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
+      toolchain: ${{ needs.archive.outputs.toolchain }}
+      source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+      workflow_commit: ${{ inputs.workflow_commit }}
+      callback_environment: ${{ inputs.callback_environment }}
+      archive_state_callback_required: ${{ inputs.archive_state_callback_required }}
+      source_repository: ${{ inputs.source_repository }}
+      problem_id: ${{ inputs.problem_id }}
+      statement_revision: ${{ inputs.statement_revision }}
+    secrets:
+      LEAN_EVAL_BOT_CLIENT_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+      LEAN_EVAL_BOT_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
 
-      - name: Upload evaluate results artifact
-        if: always() && steps.fetch.outcome == 'success'
-        # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: submission-results
-          path: /tmp/evaluate-out/*
-          if-no-files-found: warn
-          retention-days: 7
+  evaluate:
+    # Normalize attempts before the one State callback and leaderboard write.
+    needs: [evaluate_standard, escalation, evaluate_large, archive]
+    if: ${{ !cancelled() && needs.archive.result == 'success' && needs.evaluate_standard.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
+      toolchain: ${{ needs.archive.outputs.toolchain }}
+      fetch_succeeded: ${{ needs.escalation.outputs.retry == 'true' && needs.evaluate_large.outputs.fetch_succeeded || needs.evaluate_standard.outputs.fetch_succeeded }}
+      results_artifact: ${{ needs.escalation.outputs.retry == 'true' && 'submission-results-large' || 'submission-results-standard' }}
+      allowlist_required: ${{ needs.escalation.outputs.allowlist_required }}
+    steps:
+      - name: Require a completed final evaluation
+        env:
+          STANDARD_SUCCEEDED: ${{ needs.evaluate_standard.outputs.succeeded }}
+          LARGE_SUCCEEDED: ${{ needs.evaluate_large.outputs.succeeded }}
+          ESCALATION_RESULT: ${{ needs.escalation.result }}
+          RETRY: ${{ needs.escalation.outputs.retry }}
+          ALLOWLIST_REQUIRED: ${{ needs.escalation.outputs.allowlist_required }}
+        run: |
+          if [ "$ESCALATION_RESULT" != success ] || [ "$ALLOWLIST_REQUIRED" = true ]; then
+            exit 1
+          fi
+          if [ "$RETRY" = true ]; then
+            test "$LARGE_SUCCEEDED" = true
+          else
+            test "$STANDARD_SUCCEEDED" = true
+          fi
 
   archive_issue:
     # Trusted precondition for evaluation. This job independently fetches the
@@ -1052,13 +849,14 @@ jobs:
         id: results_download
         continue-on-error: true
         with:
-          name: submission-results
+          name: ${{ needs.evaluate.outputs.results_artifact }}
           path: /tmp/evaluation-results
 
       - name: Build trusted evaluation completion
         env:
           BENCHMARK_COMMIT: ${{ needs.evaluate.outputs.benchmark_commit }}
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
+          ALLOWLIST_REQUIRED: ${{ needs.evaluate.outputs.allowlist_required }}
           EVALUATOR_VERSION: ${{ github.sha }}
           PROBLEM_ID: ${{ inputs.problem_id }}
           TOOLCHAIN: ${{ needs.evaluate.outputs.toolchain }}
@@ -1075,6 +873,7 @@ jobs:
             --benchmark-commit "$BENCHMARK_COMMIT" \
             --toolchain "$TOOLCHAIN" \
             --evaluator-version "$EVALUATOR_VERSION" \
+            --allowlist-required "$ALLOWLIST_REQUIRED" \
             --output /tmp/evaluation-completion.json \
             "${results_flag[@]}"
 
@@ -1175,7 +974,7 @@ jobs:
       # actions/download-artifact pinned to 3e5f45b2 (= refs/tags/v8.0.1 as of 2026-07-30).
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: submission-results
+          name: ${{ needs.evaluate.outputs.results_artifact }}
           path: /tmp/submission-results
 
       # The writable results store. Checked out with the lean-eval-recorder
@@ -1542,7 +1341,7 @@ jobs:
   # do not duplicate those dedicated archive-job comments. A pre-fetch
   # infrastructure failure remains operator-visible.
   notify:
-    needs: [intake, evaluate, archive, record]
+    needs: [intake, evaluate, archive, record, escalation]
     if: |
       always()
       && github.event_name == 'issues'
@@ -1550,6 +1349,7 @@ jobs:
         (github.event.action == 'labeled' && github.event.label.name == 'submission')
         || (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true')
       )
+      && needs.escalation.outputs.allowlist_required != 'true'
       && needs.archive.outputs.submission_metadata_valid != 'false'
       && needs.archive.outputs.fetch_succeeded != 'false'
       && needs.archive.outputs.size_within_cap != 'false'
@@ -1577,37 +1377,6 @@ jobs:
         with:
           python-version: '3.11.10'
 
-      # Work out what actually went wrong before telling the submitter
-      # anything. A failing `evaluate` job is never the plain compile error
-      # this comment used to assert: a submission whose proof does not
-      # compile exits 0 with `succeeded: false` and gets the ordinary
-      # per-problem result comment from `record` instead. See
-      # scripts/classify_evaluate_failure.py.
-      - name: Explain the evaluate failure
-        id: why
-        if: needs.archive.result == 'success' && needs.evaluate.result != 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs" > /tmp/jobs.json
-          JOB_ID=$(python -c "import json, sys; print(next((j['id'] for j in json.load(open('/tmp/jobs.json')).get('jobs', []) if j.get('name') == 'evaluate'), ''))")
-          # `gh run view --log`, not `gh api .../logs`: the latter refuses to
-          # print a log containing terminal escape sequences, which every
-          # log with Lean's coloured build output does, and would leave an
-          # empty file behind. Death-by-signal is recorded ONLY in this log,
-          # so an empty one silently loses the memory-kill case entirely.
-          # A miss is still survivable: blob storage is not always populated
-          # the instant a job ends, and the classifier then falls back to
-          # the step list.
-          if [ -n "$JOB_ID" ]; then
-            gh run view --repo "$REPOSITORY" --job "$JOB_ID" --log > /tmp/evaluate.log 2>/dev/null || true
-          fi
-          python scripts/classify_evaluate_failure.py \
-            --jobs /tmp/jobs.json \
-            --log /tmp/evaluate.log >> "$GITHUB_OUTPUT"
-
       - name: Comment on workflow failure
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1618,8 +1387,8 @@ jobs:
           AUDIT_CIPHERTEXT_READY: ${{ needs.archive.outputs.audit_ciphertext_ready }}
           ARCHIVE_FETCH_SUCCEEDED: ${{ needs.archive.outputs.fetch_succeeded }}
           ARCHIVE_SIZE_WITHIN_CAP: ${{ needs.archive.outputs.size_within_cap }}
-          EVALUATE_WHY: ${{ steps.why.outputs.message }}
-          BLAMES_SUBMISSION: ${{ steps.why.outputs.blames_submission }}
+          EVALUATE_WHY: The evaluation pipeline failed; consult the selected attempt in the workflow logs.
+          BLAMES_SUBMISSION: 'false'
           LOGS: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # Close only when the submitter is the one who has to act. An
