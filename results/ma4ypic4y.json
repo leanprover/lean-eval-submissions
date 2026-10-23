@@ -2024,6 +2024,28 @@
         "ref": "78defe1cc91e988a8b7e3753369869931c85bde3",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-23T20:29:12Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2166,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_3d_topological",
+      "production_metadata": {
+        "production_description": "Contributor credits: @ma4ypic4y and @haskiindahouse.\n\nProblem: `poincare_3d_topological`, statement revision 1. Leaderboard system: max gp (GPT-6). The submitting owner's corrected production-model attribution is gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified claim about the historical runtime. The archive's original README.md and PROVENANCE.json attribute campaign work to Claude Opus 5.5 and remain intact for provenance.\n\nDeclared reuse: the package incorporates and adapts licensed differential-geometry formalization from https://github.com/qinz1yang/differential-geometry at commit `777299070a5529e96345e0033979706fd00c7e62`. The original authors retain credit; Apache-2.0 license text, 466 source notices and the provenance record are retained. The campaign assembled a proof through its smoothing, extinction and reconstruction lanes and applied it to the exact benchmark theorem. We do not claim original authorship of the reused library.\n\nEarlier submissions #1962 and #1974 used an older, much larger source snapshot and the hosted `evaluate` job was cancelled at the six-hour limit; neither produced a recorded result. This is a changed source package, not a retry of that snapshot: source commit `40796f8ff26bc1134dadc1d7ca3921dc5ae807a5` has 2,993 submitted Lean files; this exact metadata commit is `5401fa55b5acc57ee8735f4e06bb1215a2802289`. The current benchmark source-only `lake test` at `208b6b22d396f28771dba56414b19f47cae5f2a7` ran the official Lake comparator under bubblewrap 0.12.0, exited 0 after 13,385.6 seconds on 16 CPUs, and was accepted by NanoDa and the Lean default kernel with no forbidden axioms or submitted `sorry`. Receipt SHA256: `4995ba3ed6d2b5f05c0507c626afeb7539478bbce55a735ca8fa617cefee8359`. All 2,993 source hashes and the official protected files were checked against the exact GitHub archive and verifier workspace. This local PASS is not a claim of hosted acceptance.\n\nExact source visibility: Private, with no current publication plan. Both publication dates are blank.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4397ca64967f87d7ec3338eafff5360330ba4eebcfa5b343413beb63c5ac1cf6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5401fa55b5acc57ee8735f4e06bb1215a2802289",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,
