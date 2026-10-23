@@ -68,9 +68,21 @@ class RetryTests(unittest.TestCase):
                         'The runner has received a shutdown signal')
         self.assertTrue(result['retry'])
 
-    def test_timeout_retries_but_user_cancellation_does_not(self) -> None:
+    def test_timeout_and_unexpected_job_interruption_retry(self) -> None:
         self.assertTrue(decide('alice', ['alice'], job('timed_out', 'failure'), '')['retry'])
-        self.assertFalse(decide('alice', ['alice'], job('cancelled', 'cancelled'), '')['retry'])
+        self.assertTrue(decide('alice', ['alice'], job('cancelled', 'cancelled'), '')['retry'])
+        workflow = (ROOT / '.github/workflows/submission.yml').read_text()
+        escalation = workflow.split('\n  escalation:', 1)[1].split('\n  evaluate_large:', 1)[0]
+        self.assertIn('!cancelled()', escalation)
+
+    def test_deadline_returns_a_resource_report_instead_of_cancelling_the_job(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = pathlib.Path(directory) / 'timeout.json'
+            code = run_with_resource_report.run(
+                [sys.executable, '-c', 'import time; time.sleep(60)'], report, timeout_seconds=1,
+            )
+            self.assertEqual(code, 75)
+            self.assertEqual(json.loads(report.read_text())['resource_reason'], 'evaluation_timeout')
 
     def test_preflight_and_heartbeat_failures_do_not_buy_more_ram(self) -> None:
         preflight = {'conclusion': 'failure', 'steps': [

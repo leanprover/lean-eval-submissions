@@ -7,6 +7,10 @@ commit, toolchain, sandbox, and six-hour job budget. The final attempt alone
 supplies the State completion and leaderboard result. Both attempts retain
 their source-free diagnostics for seven days.
 
+Evaluation has a controlled deadline two minutes before GitHub's hard job
+timeout. This leaves time to upload the resource report and turns an elapsed
+time limit into a normal retryable failure instead of a workflow cancellation.
+
 The larger attempt requires the authenticated submitter's GitHub username in
 [`configuration/large-runner-allowlist.json`](../configuration/large-runner-allowlist.json).
 The initial list is empty. Add a username as a JSON string in that array and

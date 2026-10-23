@@ -57,6 +57,11 @@ jobs:
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
       succeeded: ${{ steps.outcome.outputs.succeeded }}
     steps:
+      - name: Set evaluation deadline
+        id: deadline
+        # Leave two minutes for artifact upload before GitHub cancels the job.
+        run: echo "epoch=$(($(date +%s) + 358 * 60))" >> "$GITHUB_OUTPUT"
+
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -336,6 +341,7 @@ jobs:
             )
           fi
           python scripts/run_with_resource_report.py \
+            --deadline '${{ steps.deadline.outputs.epoch }}' \
             --report /tmp/evaluate-out/resource-report.json -- \
             python scripts/evaluate_submission.py "${EVALUATION_ARGS[@]}"
 

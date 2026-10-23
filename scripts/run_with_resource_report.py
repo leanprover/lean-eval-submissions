@@ -13,6 +13,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 
 RESOURCE_FAILURE = 75
 # Match diagnostics, not incidental mentions of memory in Lean source paths.
@@ -43,9 +44,13 @@ def oom_count() -> int:
     return count
 
 
-def run(command: list[str], report: pathlib.Path) -> int:
+def run(command: list[str], report: pathlib.Path, timeout_seconds: int | None = None) -> int:
     before = oom_count()
     resource_diagnostic = False
+    if timeout_seconds is not None:
+        # GNU timeout terminates the process group, including descendants that
+        # might otherwise keep the output pipe open after the parent exits.
+        command = ['timeout', '--kill-after=10s', str(max(1, timeout_seconds)), *command]
     child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     assert child.stdout is not None
     # Fixed-size reads avoid buffering a submission's arbitrarily long line.
@@ -60,7 +65,9 @@ def run(command: list[str], report: pathlib.Path) -> int:
     code = child.wait()
     killed = code in {-9, -15, 137, 143}
     oom = oom_count() > before
-    reason = 'out_of_memory' if oom else 'process_killed' if killed else 'resource_diagnostic' if resource_diagnostic else None
+    timed_out = timeout_seconds is not None and code == 124
+    reason = ('evaluation_timeout' if timed_out else 'out_of_memory' if oom
+              else 'process_killed' if killed else 'resource_diagnostic' if resource_diagnostic else None)
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps({'exit_code': code, 'resource_reason': reason}) + '\n')
     return RESOURCE_FAILURE if reason else (code if code >= 0 else 128 - code)
@@ -69,12 +76,14 @@ def run(command: list[str], report: pathlib.Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', type=pathlib.Path, required=True)
+    parser.add_argument('--deadline', type=int, help='evaluation deadline as Unix seconds')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
     if not command:
         parser.error('a command is required')
-    return run(command, args.report)
+    seconds = None if args.deadline is None else args.deadline - int(time.time())
+    return run(command, args.report, seconds)
 
 
 if __name__ == '__main__':
