@@ -10,7 +10,7 @@ jobs:
   evaluate:
     continue-on-error: true
     runs-on:
-      - ${{ inputs.tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x128-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
+      - ${{ inputs.tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x64-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
       - namespace-features:container.privileged=true
     timeout-minutes: 5
     outputs:
