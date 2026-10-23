@@ -181,11 +181,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/contents/configuration/large-runner-allowlist.json?ref=main" \
             -H 'Accept: application/vnd.github.raw+json' > /tmp/allowlist.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > /tmp/jobs.json
-          job_id=$(python -c 'import json; print(next((j["id"] for j in json.load(open("/tmp/jobs.json"))["jobs"] if j["name"].startswith("evaluate_standard /")), ""))')
           touch /tmp/evaluate.log
-          if [ -n "$job_id" ]; then
-            gh run view --repo "$GITHUB_REPOSITORY" --job "$job_id" --log > /tmp/evaluate.log 2>/dev/null || true
-          fi
           python scripts/large_runner_retry.py \
             --submitter "$SUBMITTER" --allowlist /tmp/allowlist.json \
             --jobs /tmp/jobs.json --log /tmp/evaluate.log \

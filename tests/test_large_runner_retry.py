@@ -7,10 +7,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.request
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
-from large_runner_retry import ALLOWLIST_MESSAGE, allowlisted, decide  # noqa: E402
+from large_runner_retry import LogRedirect, allowlisted, decide  # noqa: E402
+import run_with_resource_report  # noqa: E402
 
 
 def job(conclusion: str = 'success', step: str = 'success') -> dict:
@@ -19,6 +22,23 @@ def job(conclusion: str = 'success', step: str = 'success') -> dict:
 
 
 class RetryTests(unittest.TestCase):
+    def test_log_storage_redirect_does_not_receive_the_github_token(self) -> None:
+        request = urllib.request.Request('https://api.github.com/jobs/1/logs',
+                                         headers={'Authorization': 'Bearer test-token'})
+        redirected = LogRedirect().redirect_request(
+            request, None, 302, 'Found', {}, 'https://storage.example/signed-log',
+        )
+        self.assertIsNotNone(redirected)
+        self.assertIsNone(redirected.get_header('Authorization'))
+
+    def test_cgroup_oom_is_detected_when_child_returns_no_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = pathlib.Path(directory) / 'report.json'
+            with patch.object(run_with_resource_report, 'oom_count', side_effect=[0, 1]):
+                result = run_with_resource_report.run([sys.executable, '-c', 'pass'], report)
+            self.assertEqual(result, 75)
+            self.assertEqual(json.loads(report.read_text())['resource_reason'], 'out_of_memory')
+
     def test_empty_policy_blocks_escalation_with_actionable_message(self) -> None:
         result = decide('alice', [], job('failure', 'failure'), '',
                         {'resource_reason': 'out_of_memory'})

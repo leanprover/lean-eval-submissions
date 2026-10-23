@@ -8,8 +8,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
+import shutil
+import sys
+import urllib.error
+import urllib.request
 
 from run_with_resource_report import RESOURCE_ERROR
 
@@ -20,6 +25,36 @@ ALLOWLIST_MESSAGE = (
     '(@kim-em) to add your GitHub username to the larger-runner allowlist, '
     'then resubmit. This is not a rejection of your proof.'
 )
+
+
+class LogRedirect(urllib.request.HTTPRedirectHandler):
+    """GitHub job logs redirect to signed storage; do not forward the token."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            redirected.remove_header('Authorization')
+        return redirected
+
+
+def fetch_log(job_id: int, target: pathlib.Path) -> None:
+    # gh run view --log refuses logs from in-progress workflows, even when
+    # this particular job has finished. Read the job endpoint directly and
+    # keep ANSI bytes out of the terminal/GITHUB_OUTPUT channel.
+    repository = os.environ.get('GITHUB_REPOSITORY', '')
+    token = os.environ.get('GH_TOKEN', '')
+    if not repository or not token:
+        return
+    request = urllib.request.Request(
+        f'https://api.github.com/repos/{repository}/actions/jobs/{job_id}/logs',
+        headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'},
+    )
+    try:
+        with urllib.request.build_opener(LogRedirect()).open(request, timeout=30) as response:
+            with target.open('wb') as stream:
+                shutil.copyfileobj(response, stream)
+    except (OSError, urllib.error.URLError):
+        print('Job log is not available; using step status and the resource report.', file=sys.stderr)
 
 
 def allowlisted(login: str, entries: object) -> bool:
@@ -77,10 +112,12 @@ def main() -> int:
     args = parser.parse_args()
     jobs = json.loads(args.jobs.read_text())['jobs']
     job = next((job for job in jobs if job['name'].startswith('evaluate_standard /')), {})
+    if job.get('id') and (not args.log.is_file() or args.log.stat().st_size == 0):
+        fetch_log(job['id'], args.log)
     report = (json.loads(args.report.read_text())
               if args.report and args.report.is_file() else None)
     result = decide(args.submitter, json.loads(args.allowlist.read_text()), job,
-                    args.log.read_text(errors='replace'), report)
+                    args.log.read_text(errors='replace') if args.log.is_file() else '', report)
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print('retry=' + str(result['retry']).lower())
     print('allowlist_required=' + str(result['allowlist_required']).lower())

@@ -243,8 +243,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # coloured build output has, and leaves an empty file. That silently
         # loses the death-by-signal evidence, which lives only in the log.
         notify = self.text.split("\n  escalation:", 1)[1].split("\n  evaluate_large:", 1)[0]
-        self.assertIn("gh run view --repo", notify)
-        self.assertNotIn("/logs\"", notify)
+        self.assertIn("large_runner_retry.py", notify)
+        classifier = (REPO_ROOT / "scripts/large_runner_retry.py").read_text()
+        self.assertIn("actions/jobs/{job_id}/logs", classifier)
+        self.assertIn("shutil.copyfileobj(response, stream)", classifier)
 
     def test_notify_closes_the_issue_only_when_the_submitter_must_act(self) -> None:
         # Closing an infrastructure failure as "not planned" reads as a
