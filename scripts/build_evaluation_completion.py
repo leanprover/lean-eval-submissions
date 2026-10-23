@@ -38,6 +38,7 @@ def build(
     benchmark_commit: str,
     toolchain: str,
     evaluator_version: str,
+    allowlist_required: bool = False,
 ) -> dict[str, object]:
     if evaluate_result not in {"success", "failure"}:
         raise ValueError("evaluate_result must be success or failure")
@@ -72,8 +73,11 @@ def build(
     if evaluate_result == "failure":
         outcome: dict[str, object] = {
             "status": "failed",
-            "reason_code": "evaluation_pipeline_failed",
-            "retryable": True,
+            "reason_code": (
+                "large_runner_allowlist_required" if allowlist_required
+                else "evaluation_pipeline_failed"
+            ),
+            "retryable": not allowlist_required,
         }
     else:
         if results is None:
@@ -108,6 +112,7 @@ def main() -> int:
     parser.add_argument("--benchmark-commit", required=True)
     parser.add_argument("--toolchain", required=True)
     parser.add_argument("--evaluator-version", required=True)
+    parser.add_argument("--allowlist-required", default="false", choices=("true", "false", ""))
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args()
     try:
@@ -119,6 +124,7 @@ def main() -> int:
             benchmark_commit=args.benchmark_commit,
             toolchain=args.toolchain,
             evaluator_version=args.evaluator_version,
+            allowlist_required=args.allowlist_required == "true",
         )
     except ValueError as error:
         parser.error(str(error))

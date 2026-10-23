@@ -71,6 +71,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.text = WORKFLOW.read_text(encoding="utf-8")
         cls.lines = cls.text.splitlines()
+        cls.attempt = (REPO_ROOT / ".github/workflows/evaluate-attempt.yml").read_text()
+        cls.all_text = cls.text + "\n" + cls.attempt
 
     def test_workflow_file_exists(self) -> None:
         self.assertTrue(WORKFLOW.is_file(), f"missing {WORKFLOW}")
@@ -81,9 +83,9 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # its own runner, never receive source through a workflow artifact.
         # One local metadata-only validation plus the two independent source
         # fetches. The validation mode performs no source-host request.
-        self.assertEqual(self.text.count("python scripts/fetch_submission.py"), 3)
+        self.assertEqual(self.all_text.count("python scripts/fetch_submission.py"), 3)
         self.assertEqual(self.text.count("--validate-issue-metadata-only"), 1)
-        self.assertEqual(self.text.count("python scripts/evaluate_submission.py"), 1)
+        self.assertEqual(self.all_text.count("python scripts/evaluate_submission.py"), 1)
         # Job headers are the 2-space-indented keys after the top-level
         # `jobs:` line. Slice from there so `on:`/`concurrency:` sub-keys
         # (also 2-indented) are not mistaken for jobs.
@@ -96,7 +98,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertEqual(
             job_headers,
             [
-                "  intake:", "  evaluate:", "  archive_issue:",
+                "  intake:", "  evaluate_standard:", "  escalation:", "  evaluate_large:",
+                "  evaluate:", "  archive_issue:",
                 "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
                 "  evaluation_state:", "  record:", "  result_state:", "  notify:",
@@ -109,17 +112,18 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "the submission source must never be uploaded as an artifact",
         )
         self.assertNotIn("name: submission-audit-ciphertext", self.text)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
+        evaluate = self.attempt.split("\n  evaluate:", 1)[1]
         archive = self.text.split("\n  archive_issue:", 1)[1].split(
             "\n  archive_server:", 1
         )[0]
-        self.assertIn("needs: [intake, archive, archive_state]", evaluate)
-        self.assertIn("needs.archive.result == 'success'", evaluate)
-        self.assertIn("needs.archive_state.result == 'success'", evaluate)
+        standard = self.text.split("\n  evaluate_standard:", 1)[1].split("\n  escalation:", 1)[0]
+        self.assertIn("needs: [intake, archive, archive_state]", standard)
+        self.assertIn("needs.archive.result == 'success'", standard)
+        self.assertIn("needs.archive_state.result == 'success'", standard)
         self.assertIn("python scripts/fetch_submission.py", evaluate)
         self.assertIn("python scripts/evaluate_submission.py", evaluate)
         self.assertIn("EXPECTED_METADATA_SHA256", evaluate)
-        self.assertIn("ref: ${{ needs.archive.outputs.benchmark_commit }}", evaluate)
+        self.assertIn("ref: ${{ inputs.benchmark_commit }}", evaluate)
         self.assertIn("needs: intake", archive)
         self.assertNotIn("needs: evaluate", archive)
         self.assertIn("python scripts/fetch_submission.py", archive)
@@ -143,23 +147,23 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # authenticated remote in .git/config.
         checkout_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
         checkout_shas = set(
-            re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
+            re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.all_text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
-        # 9: intake; two each in archive and evaluate; one trusted evaluation
-        # callback; record's two; and notify's classifier checkout.
+        # 9: intake; escalation; two each in archive and attempt; one trusted
+        # evaluation callback; and record's two.
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 9, "expected 9 checkout steps"
+            self.all_text.count("uses: actions/checkout@"), 9, "expected 9 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
-            self.text.count("persist-credentials: false"),
+            self.all_text.count("persist-credentials: false"),
             2,
             "both evaluate-job checkouts must set persist-credentials: false",
         )
         self.assertIn(
             "persist-credentials: true",
-            self.text,
+            self.all_text,
             "results-store checkout must retain the App token for its push-retry loop",
         )
 
@@ -192,7 +196,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # lean-action still fetches Mathlib's independent cache, but must not
         # attempt a GitHub cache save in the untrusted-execution job.
         self.assertRegex(
-            self.text,
+            self.all_text,
             re.compile(
                 r"^      - uses: leanprover/lean-action@[0-9a-f]{40}\n"
                 r"        with:\n"
@@ -209,7 +213,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # not build the root before the dependency caches are configured,
         # and the trusted root build must restore every downloaded output
         # into the shared package tree before any untrusted Lean runs.
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
+        evaluate = self.attempt.split("\n  evaluate:", 1)[1]
         lean_action = evaluate.index("uses: leanprover/lean-action@")
         build = evaluate.index(
             "name: Build the benchmark root with downloaded dependency caches"
@@ -232,23 +236,11 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # `evaluate` job is never that, and saying so sent submitters to
         # debug proofs that had built fine (issue #1078).
         self.assertNotIn("failed to compile", self.text)
-        self.assertIn("classify_evaluate_failure.py", self.text)
+        self.assertIn("large_runner_retry.py", self.text)
 
-    def test_notify_fetches_the_log_in_a_way_that_survives_escape_sequences(self) -> None:
-        # `gh api .../actions/jobs/<id>/logs` refuses to print a log
-        # containing terminal escape sequences, which every log with Lean's
-        # coloured build output has, and leaves an empty file. That silently
-        # loses the death-by-signal evidence, which lives only in the log.
+    def test_notify_leaves_infrastructure_failures_open(self) -> None:
         notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn("gh run view --repo", notify)
-        self.assertNotIn("/logs\"", notify)
-
-    def test_notify_closes_the_issue_only_when_the_submitter_must_act(self) -> None:
-        # Closing an infrastructure failure as "not planned" reads as a
-        # verdict on the submission and hides the failure from operators.
-        notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn('CLOSE="$BLAMES_SUBMISSION"', notify)
-        self.assertIn('if [ "$CLOSE" = "true" ]; then', notify)
+        self.assertNotIn('gh issue close', notify)
 
     def test_notify_ignores_non_processing_opened_event(self) -> None:
         # Issue Forms can emit both `opened` and `labeled`. If the label is
@@ -256,7 +248,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # jobs intentionally skip; that run must not report an infrastructure
         # failure while the labeled-event run performs the submission.
         notify = self.text.split("\n  notify:", 1)[1]
-        self.assertIn("needs: [intake, evaluate, archive, record]", notify)
+        self.assertIn("needs: [intake, evaluate, archive, record, escalation]", notify)
         self.assertIn("github.event.action == 'labeled'", notify)
         self.assertIn("github.event.label.name == 'submission'", notify)
         self.assertIn("github.event.action == 'opened'", notify)
@@ -282,9 +274,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # An explicit permissions block sets every unlisted scope, including
         # Actions cache writes, to none. Keep the untrusted-execution job at
         # exactly the two scopes it needs.
-        evaluate_block = self.text.split("\n  evaluate:", 1)[1].split(
-            "\n  archive:", 1
-        )[0]
+        evaluate_block = self.attempt.split("\n  evaluate:", 1)[1]
         match = re.search(
             r"^    permissions:\n((?:^      [^\n]+\n?)+)",
             evaluate_block,
@@ -294,7 +284,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         permissions = [
             line.strip() for line in match.group(1).splitlines()
         ]
-        self.assertEqual(permissions, ["contents: read", "issues: write"])
+        self.assertEqual(permissions, ["contents: read"])
 
     def test_api_intake_validates_then_labels_and_evaluates_same_run(self) -> None:
         self.assertIn("types: [opened, labeled]", self.text)
@@ -312,17 +302,17 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             intake_block.index("--add-label submission"),
         )
         self.assertIn("issues: write", intake_block)
-        evaluate_header = self.text.split("\n  evaluate:", 1)[1].split(
-            "\n    # Default:", 1
+        evaluate_header = self.text.split("\n  evaluate_standard:", 1)[1].split(
+            "\n  escalation:", 1
         )[0]
-        self.assertIn("needs: intake", evaluate_header)
+        self.assertIn("needs: [intake, archive, archive_state]", evaluate_header)
         self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
         self.assertIn("github.event.label.name == 'submission'", evaluate_header)
 
     def test_git_state_stripped_from_both_checkouts(self) -> None:
         self.assertIn(
             "rm -rf .git lean-eval/.git",
-            self.text,
+            self.all_text,
             "must strip .git from BOTH the submissions and lean-eval checkouts",
         )
 
@@ -344,17 +334,17 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
 
     def test_probes_run_from_the_lean_eval_checkout(self) -> None:
         self.assertIn(
-            "python lean-eval/scripts/sandbox_engaged_probe.py", self.text
+            "python lean-eval/scripts/sandbox_engaged_probe.py", self.all_text
         )
         self.assertIn(
-            "python lean-eval/scripts/security_probes/env_dump_probe.py", self.text
+            "python lean-eval/scripts/security_probes/env_dump_probe.py", self.all_text
         )
 
     def test_app_token_is_step_scoped(self) -> None:
         # Each independent fetch gets a token only in that fetch step's env,
         # never in a job-level env/secrets block.
         self.assertEqual(
-            self.text.count("APP_INSTALLATION_TOKEN:"),
+            self.all_text.count("APP_INSTALLATION_TOKEN:"),
             2,
             "both app tokens must be confined to their fetch steps",
         )
@@ -412,7 +402,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("scripts/build_evaluation_completion.py", evaluation_callback)
         self.assertIn("/internal/v1/evaluation-completed", evaluation_callback)
         self.assertNotIn("submission-audit-ciphertext", evaluation_callback)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
+        evaluate = self.attempt.split("\n  evaluate:", 1)[1]
         self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
         result_callback = self.text.split("\n  result_state:", 1)[1].split("\n  # Catches", 1)[0]
         self.assertIn("/internal/v1/result-completed", result_callback)
@@ -478,20 +468,20 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         pairs = re.findall(
             r"^\s+client-id: \$\{\{ secrets\.(LEAN_EVAL_\w+)_CLIENT_ID \}\}\n"
             r"\s+private-key: \$\{\{ secrets\.(LEAN_EVAL_\w+)_PRIVATE_KEY \}\}$",
-            self.text,
+            self.all_text,
             re.MULTILINE,
         )
         self.assertEqual(
             pairs,
             [
                 ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
-                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
                 ("LEAN_EVAL_ARCHIVER", "LEAN_EVAL_ARCHIVER"),
                 ("LEAN_EVAL_RECORDER", "LEAN_EVAL_RECORDER"),
+                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
             ],
         )
         self.assertNotRegex(
-            self.text,
+            self.all_text,
             re.compile(r"^\s+app-id:", re.MULTILINE),
         )
 

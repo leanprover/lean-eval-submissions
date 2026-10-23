@@ -1,0 +1,366 @@
+# One fetch/evaluation implementation, called at most twice per submission.
+name: Evaluate submission attempt
+on:
+  workflow_call:
+    inputs:
+      runner_tier:
+        type: string
+        required: true
+      benchmark_commit:
+        type: string
+        required: true
+      toolchain:
+        type: string
+        required: true
+      source_commit:
+        type: string
+        required: true
+      source_metadata_sha256:
+        type: string
+        required: true
+      workflow_commit:
+        type: string
+        required: false
+      callback_environment:
+        type: string
+        required: false
+      archive_state_callback_required:
+        type: string
+        required: false
+      source_repository:
+        type: string
+        required: false
+      problem_id:
+        type: string
+        required: false
+      statement_revision:
+        type: string
+        required: false
+    secrets:
+      LEAN_EVAL_BOT_CLIENT_ID: {required: true}
+      LEAN_EVAL_BOT_PRIVATE_KEY: {required: true}
+    outputs:
+      succeeded:
+        value: ${{ jobs.evaluate.outputs.succeeded }}
+jobs:
+  evaluate:
+    # The caller decides the final outcome after the optional retry. An
+    # exhausted standard attempt must not make a successful retry's run red.
+    continue-on-error: true
+    # Both tiers retain the same sandbox and six-hour budget.
+    runs-on:
+      - ${{ inputs.runner_tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x64-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
+      - namespace-features:container.privileged=true
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    outputs:
+      succeeded: ${{ steps.outcome.outputs.succeeded }}
+    steps:
+      - name: Set evaluation deadline
+        id: deadline
+        # Leave two minutes for artifact upload before GitHub cancels the job.
+        run: echo "epoch=$(($(date +%s) + 358 * 60))" >> "$GITHUB_OUTPUT"
+
+      - name: Assert immutable server workflow ref
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          CALLBACK_REQUIRED: ${{ inputs.archive_state_callback_required }}
+        run: |
+          if [[ ! "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "invalid expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then
+            echo "dispatch tag no longer resolves to the expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_REQUIRED" != "true" ]; then
+            echo "server dispatch did not require the State lifecycle callback" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_ENVIRONMENT" != "staging" ] && [ "$CALLBACK_ENVIRONMENT" != "production" ]; then
+            echo "server dispatch selected an invalid callback environment" >&2
+            exit 1
+          fi
+
+      # This repo (lean-eval-submissions): supplies the pipeline scripts.
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # The benchmark repo: supplies generated/, manifests/, the Lean CLI.
+      # Scored against main HEAD; persist-credentials:false because this
+      # tree shares the runner with the untrusted build.
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          ref: ${{ inputs.benchmark_commit }}
+          path: lean-eval
+          persist-credentials: false
+
+      - name: Resolve benchmark commit
+        id: benchmark
+        env:
+          EXPECTED_BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+          EXPECTED_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: |
+          actual_commit=$(git -C lean-eval rev-parse HEAD)
+          actual_toolchain=$(cat lean-eval/lean-toolchain)
+          if [ "$actual_commit" != "$EXPECTED_BENCHMARK_COMMIT" ]; then
+            echo "benchmark checkout does not match the archived commit" >&2
+            exit 1
+          fi
+          if [ "$actual_toolchain" != "$EXPECTED_TOOLCHAIN" ]; then
+            echo "benchmark toolchain does not match the archived toolchain" >&2
+            exit 1
+          fi
+          echo "sha=$actual_commit" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$actual_toolchain" >> "$GITHUB_OUTPUT"
+
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Extract source owner from issue body
+        id: owner
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          SERVER_SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          if os.environ.get("EVENT_NAME") == "workflow_dispatch":
+              repository = os.environ.get("SERVER_SOURCE_REPOSITORY", "")
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+                  sys.exit("invalid server source repository")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+                  fh.write("kind=github_repo\n")
+                  fh.write(f"owner={repository.split('/', 1)[0]}\n")
+              raise SystemExit(0)
+          body = os.environ.get("ISSUE_BODY", "")
+          m = re.search(
+              r"^###\s+Submission URL\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
+              body,
+              re.MULTILINE | re.DOTALL,
+          )
+          if not m:
+              sys.exit("no Submission URL section in issue body")
+          url = m.group("value").strip()
+          out_path = os.environ["GITHUB_OUTPUT"]
+          with open(out_path, "a") as fh:
+              repo = re.match(r"https://github\.com/([^/]+)/", url)
+              if repo:
+                  fh.write(f"kind=github_repo\n")
+                  fh.write(f"owner={repo.group(1)}\n")
+              elif url.startswith("https://gist.github.com/"):
+                  fh.write(f"kind=gist\n")
+                  fh.write(f"owner=\n")
+              else:
+                  sys.exit(f"unsupported URL in issue body: {url!r}")
+          PY
+
+      - name: Mint lean-eval-bot installation token
+        id: app_token
+        if: steps.owner.outputs.kind == 'github_repo'
+        # actions/create-github-app-token pinned to bcd2ba49 (= refs/tags/v3.2.0 as of 2026-07-30).
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+          owner: ${{ steps.owner.outputs.owner }}
+
+      - name: Clean evaluation scratch dirs
+        # A no-op on the ephemeral hosted runners this workflow targets,
+        # where /tmp starts empty. Kept as defence in depth: on any runner
+        # that persisted /tmp across jobs, stale scratch state would break
+        # fetch's checkout ("untracked working tree files would be
+        # overwritten ... Aborting") and could leak one submission's source
+        # into the next job's build.
+        run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out
+
+      - name: Fetch submission
+        id: fetch
+        env:
+          # Step-scoped: the app token is NOT present in the env of any
+          # later step in this job. This is the load-bearing assumption
+          # that lets fetch + evaluate share a job without leaking
+          # access to private submission repos into the bubblewrap-sandboxed
+          # evaluation. Do not promote this to a job-level env or
+          # secrets block.
+          APP_INSTALLATION_TOKEN: ${{ steps.app_token.outputs.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          SERVER_FLAG=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVER_FLAG+=(--server-dispatch)
+          else
+            SERVER_FLAG+=(--source-commit "$SOURCE_COMMIT")
+          fi
+          python scripts/fetch_submission.py \
+            --event-path "$GITHUB_EVENT_PATH" \
+            "${SERVER_FLAG[@]}" \
+            --output-dir /tmp/fetch-out
+
+      - name: Verify frozen source identity
+        if: steps.fetch.outcome == 'success'
+        env:
+          EXPECTED_METADATA_SHA256: ${{ inputs.source_metadata_sha256 }}
+        run: |
+          actual=$(sha256sum /tmp/fetch-out/metadata.json | cut -d' ' -f1)
+          if [[ ! "$EXPECTED_METADATA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "archive did not provide a valid frozen metadata digest" >&2
+            exit 1
+          fi
+          if [ "$actual" != "$EXPECTED_METADATA_SHA256" ]; then
+            echo "evaluation refetch does not match the source archived before evaluation" >&2
+            exit 1
+          fi
+
+      - name: Free disk space for Mathlib cache
+        # Standard runners ship with ~14GB free; Mathlib unpacked is
+        # several GB and we hold it twice (repo root + per-workspace).
+        # Strip Android, .NET, Haskell, and other preinstalled caches we
+        # do not need. Frees ~30GB.
+        # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Strip git state before running untrusted Lean
+        # Both checkouts: Lake exposes the host read-only, so any
+        # authenticated remote left in a `.git/config` anywhere the
+        # sandbox can stat it is readable by the untrusted Lean elaborator.
+        run: rm -rf .git lean-eval/.git
+
+      # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0, also v1 HEAD as of 2026-05-04).
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: lean-eval
+          use-mathlib-cache: true
+          # The evaluate job deliberately omits actions:write. Disable the
+          # futile GitHub cache save (and its warning) instead of broadening
+          # the token available to the job that runs untrusted Lean.
+          # Mathlib's independent `lake exe cache get` remains enabled above.
+          use-github-cache: false
+          # Built by the next step, after dependency caches are configured.
+          build: false
+          test: false
+          lint: false
+
+      - name: Build the benchmark root with downloaded dependency caches
+        # Trusted phase: runs before the submission source is unpacked or
+        # any untrusted Lean runs.
+        # TauCeti must never be compiled here: the script downloads its
+        # build outputs into the shared package tree (the whole library,
+        # so a submission may import any TauCeti module) and fails on a
+        # cache miss. The Lake cache settings stay inside this step, and
+        # later workspace builds, including comparator's sandboxed one,
+        # find TauCeti up to date on disk without the network. Benchmarks
+        # that pin no TauCeti get a plain `lake build`. See the script.
+        run: python scripts/build_benchmark_root.py lean-eval
+
+      - name: Install bubblewrap for Lake comparator
+        id: bwrap
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes meson ninja-build libcap-dev
+          bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
+          echo "path=$RUNNER_TEMP/lean-eval-bwrap/bwrap" >> "$GITHUB_OUTPUT"
+
+
+      # SECURITY: probes that gate every submission. A regression here
+      # (sandbox not engaged, or env-var leak) means we cannot trust any
+      # downstream comparator verdict — abort before touching the
+      # submission. The probe scripts live in leanprover/lean-eval (which
+      # owns the comparator/sandbox integration); they are run here from
+      # the lean-eval checkout. See leanprover/lean-eval SECURITY.md >
+      # "Validations done at submission time".
+      - name: Probe sandbox is engaged
+        env:
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
+        run: python lean-eval/scripts/sandbox_engaged_probe.py --require-tools
+
+      - name: Probe env-var allowlist
+        env:
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
+        run: python lean-eval/scripts/security_probes/env_dump_probe.py --require-tools
+
+      - name: Extract submission source
+        run: |
+          mkdir -p /tmp/submission-src
+          tar -xzf /tmp/fetch-out/source.tar.gz -C /tmp/submission-src --strip-components=1
+
+      - name: Run evaluate_submission.py
+        # Sharing the benchmark repo's .lake/packages tree across every
+        # per-submission workspace lets each workspace reuse Mathlib
+        # (~3GB unpacked) instead of cloning + decompressing it per
+        # workspace. Required to handle submissions that overlay several
+        # generated workspaces on a single runner without "no space left
+        # on device". Each shared workspace gets a copy of the benchmark's
+        # root lake-manifest.json, which pins every package any workspace
+        # requires, instead of running `lake update` (which could check out
+        # different revisions inside the shared tree).
+        env:
+          PROBLEM_ID: ${{ inputs.problem_id }}
+          STATEMENT_REVISION: ${{ inputs.statement_revision }}
+          COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
+        run: |
+          EVALUATION_ARGS=(
+            --source-dir /tmp/submission-src
+            --generated-root lean-eval/generated
+            --manifest-dir lean-eval/manifests/problems
+            --output-dir /tmp/evaluate-out
+            --repo-root lean-eval
+            --shared-packages lean-eval/.lake/packages
+          )
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EVALUATION_ARGS+=(
+              --problem-id "$PROBLEM_ID"
+              --statement-revision "$STATEMENT_REVISION"
+            )
+          fi
+          python scripts/run_with_resource_report.py \
+            --deadline '${{ steps.deadline.outputs.epoch }}' \
+            --summary /tmp/evaluate-out/summary.json \
+            --report /tmp/evaluate-out/resource-report.json -- \
+            python scripts/evaluate_submission.py "${EVALUATION_ARGS[@]}"
+
+      - name: Copy frozen metadata through to record
+        if: always()
+        run: cp /tmp/fetch-out/metadata.json /tmp/evaluate-out/metadata.json || true
+
+      - name: Upload evaluate results artifact
+        if: always() && steps.fetch.outcome == 'success'
+        # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-results-${{ inputs.runner_tier }}
+          path: /tmp/evaluate-out/*
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Record attempt outcome
+        id: outcome
+        if: always()
+        env:
+          STATUS: ${{ job.status }}
+        run: |
+          if [ "$STATUS" = success ]; then
+            echo "succeeded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "succeeded=false" >> "$GITHUB_OUTPUT"
+          fi

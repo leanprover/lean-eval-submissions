@@ -3024,6 +3024,45 @@ describe("browser OAuth and owner routes in workerd", () => {
     expect(state.events).toHaveLength(0);
   });
 
+  it("explains how to request larger-runner access in owner status", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
+    const base = acceptedView(submissionId);
+    if (base.schema_version !== 2 || base.evaluation.status !== "accepted") throw new Error("expected accepted fixture");
+    state.views.set(submissionId, {
+      ...base,
+      evaluation: {
+        event_id: base.evaluation.event_id,
+        occurred_at: base.evaluation.occurred_at,
+        attempt: base.evaluation.attempt,
+        benchmark_repository: base.evaluation.benchmark_repository,
+        benchmark_commit: base.evaluation.benchmark_commit,
+        toolchain: base.evaluation.toolchain,
+        status: "failed",
+        reason_code: "large_runner_allowlist_required",
+        retryable: false,
+      },
+    });
+    const alice: BrowserSession = {
+      kind: "browser_session", login: "alice", github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000), expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const response = await handleRequest(
+      new Request(`https://submit.test/api/v1/submissions/${submissionId}`, {
+        headers: { authorization: `Bearer ${await signToken(SECRET, alice)}` },
+      }),
+      ENV, LIFECYCLE, { now: () => NOW_MS, state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      evaluation: {
+        status: "failed",
+        reason_code: "large_runner_allowlist_required",
+        message: "Your submission appears to need a larger runner. Please ask Kim Morrison (@kim-em) to add your GitHub username to the larger-runner allowlist, then resubmit. This is not a rejection of your proof.",
+      },
+    });
+  });
+
   it("returns owner status, appends metadata, and rejects the dormant reverse route", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
