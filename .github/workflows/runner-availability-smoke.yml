@@ -1,0 +1,17 @@
+name: Isolated 64 GB runner availability
+on:
+  push:
+    branches: [experiment/runner-64gb-availability]
+permissions:
+  contents: read
+jobs:
+  availability:
+    runs-on:
+      - nscloud-ubuntu-24.04-amd64-32x64-with-features
+      - namespace-features:container.privileged=true
+    timeout-minutes: 5
+    steps:
+      - name: Report provisioned resources
+        run: |
+          nproc
+          free -g
