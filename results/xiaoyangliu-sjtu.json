@@ -146,6 +146,27 @@
         "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-10-24T16:34:56Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a16e93-bf79-76f4-9ff1-c6989187a91d"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_f9c481f36c1618190b46540ea02c2851d8c38ff2790ed0e32bfd29ca803446f9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
