@@ -104,6 +104,27 @@
         "ref": "b2f1c43164ba4b8724266a847bbd1fcb60174653",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-10-24T16:20:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a16e93-d301-75c2-9293-f39b572e573f"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_013f42efaa5f27929e49b87290be01929768b0787bd66dfaf35df9363f6c84ce",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
