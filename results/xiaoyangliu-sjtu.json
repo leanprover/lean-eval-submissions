@@ -167,6 +167,27 @@
         "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-10-25T02:53:11Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a170d3-1c71-787a-8ff3-ac75abaa3c6b"
+      },
+      "problem_id": "hadwiger",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_4a08e43cbf026da81d0a652eec4d624d98a709ffe0314f154c85c1de016ec419",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6d89fbe38f3d56279cf6c72d41ac7a67982c9547",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
