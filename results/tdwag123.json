@@ -82,6 +82,33 @@
         "ref": "9858fc1f71f6c8343928989e41fac179c93b455e",
         "repo": "tdwag123/crap-fractional_expectation_thresholds-26996d76"
       }
+    },
+    {
+      "accepted_at": "2026-10-26T19:47:54Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17995-7b51-7bc9-8c0f-b4aab5320c84"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Local compilation and axiom audits passed; official verification pending. No Aristotle delegation was submitted for this problem.",
+        "web_access": true
+      },
+      "result_id": "r2_04b78fa78c128d74070dae82def6a87e6af17156aff448c3ecc1f7434bd308e5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7772d45786f36e2609db0d16019269a58a95eaa3",
+        "repo": "tdwag123/crap-local_global_apollonian_circle_packings-6d7737e9"
+      }
     }
   ],
   "schema_version": 2,
