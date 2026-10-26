@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-10-26T03:08:53Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17606-7c79-7cc8-8d92-5f1017c1bf65"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "component_models": [
+          "Codex CLI 0.163.0: default model ID not recorded",
+          "Aristotle: backend model undisclosed"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Aristotle assisted; official verification pending.",
+        "wall_time_seconds": 11833,
+        "web_access": true
+      },
+      "result_id": "r2_bc5ea2db9e2402882ea850428362093f73653ef289752d68c624d90195bb413c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d9c7d494004736e4853fb0cd88a7aa370fc8ff8c",
+        "repo": "tdwag123/crap-sunflower-private"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "tdwag123"
+}
