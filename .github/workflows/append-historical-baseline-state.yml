@@ -145,6 +145,7 @@ jobs:
             scripts/inventory_historical_replay.py
             scripts/key_capability_contract.py
             scripts/migrate_archive_envelopes.py
+            scripts/archive_chunks.py
             scripts/prepare_historical_baseline_state_batch.py
             scripts/prepare_historical_private_replay.py
             scripts/prepare_historical_public_authority.py
@@ -187,6 +188,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: ${{ inputs.operation == 'stage' && inputs.expected_audit_head || 'main' }}
           path: audit
           fetch-depth: 0

@@ -117,7 +117,7 @@ not something we actively probe. Submitters who require confidentiality
 should audit the workflow themselves before relying on this.
 
 **Audit retention.** Every successfully fetched submission has its
-compressed source tarball (≤ 100 MB) `age`-encrypted to the recipient
+compressed source tarball (≤ 1 GB by default, or ≤ 10 GB for CFSG) `age`-encrypted to the recipient
 list in `.audit/recipients.txt` and pushed to the private
 `leanprover/lean-eval-audit` repo for indefinite retention. The
 ciphertext is decryptable only by holders of the matching SSH/age
@@ -136,8 +136,11 @@ Server intake uses the same encryption boundary but keys the
 archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
 Before State may receive `archive.completed`, the archiver emits an immutable
 repository/commit/path/ciphertext-digest locator and verifies the encrypted
-bytes at that exact commit. Issue-based intake retains its existing archive
-layout and behavior.
+bytes at that exact commit. New ciphertexts above 30,000,000 bytes use a manifest and 30 MB encrypted
+parts, all committed before the
+sidecar. Verification binds every part to the same immutable commit and checks
+the reassembled ciphertext digest before emitting the locator. Issue intake
+uses the same storage format under its existing archive paths.
 
 The trusted archive job now independently fetches the exact source commit and
 persists the encrypted archive before evaluation starts. The evaluation job

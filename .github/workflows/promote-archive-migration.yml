@@ -86,6 +86,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: ${{ inputs.current_audit_head }}
           path: audit
           fetch-depth: 0
@@ -124,6 +129,7 @@ jobs:
 
       - name: Verify exact patch, ancestry, zero overlap, and rebased result
         env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
           CURRENT_AUDIT_HEAD: ${{ inputs.current_audit_head }}
           EXPECTED_MIGRATION_COUNT: ${{ inputs.expected_migration_count }}
           EXPECTED_PATCH_SHA256: ${{ inputs.expected_patch_sha256 }}
@@ -134,7 +140,15 @@ jobs:
           STAGED_MIGRATION_COMMIT: ${{ inputs.staged_migration_commit }}
         run: |
           set -euo pipefail
-          python audit/scripts/archive_migration_promotion.py prepare \
+          # Partial history may need pre-migration blobs. Read them only while
+          # executing the exact promotion script bound by the previous step.
+          basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
+          unset AUDIT_TOKEN
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          trap 'unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0' EXIT
+          python -I audit/scripts/archive_migration_promotion.py prepare \
             --repository audit \
             --source-commit "$SOURCE_AUDIT_COMMIT" \
             --staged-commit "$STAGED_MIGRATION_COMMIT" \

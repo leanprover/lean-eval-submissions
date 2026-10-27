@@ -133,6 +133,8 @@ def _iter_lakefile_toml(source_dir: pathlib.Path) -> Iterable[pathlib.Path]:
 
 def _read_lakefile_name(path: pathlib.Path) -> str | None:
     try:
+        if path.stat().st_size > 1024 * 1024:
+            return None
         raw = path.read_bytes()
     except OSError as exc:
         print(f"warning: failed to read {path}: {exc}", file=sys.stderr)
@@ -200,7 +202,10 @@ def detect_matches(
         pristine_bytes = _pristine_submission_bytes(generated_root, name)
         if pristine_bytes is not None and not submission_lean.is_symlink():
             try:
-                submitted_bytes = submission_lean.read_bytes()
+                submitted_bytes = (
+                    submission_lean.read_bytes()
+                    if submission_lean.stat().st_size == len(pristine_bytes) else None
+                )
             except OSError:
                 submitted_bytes = None
             if submitted_bytes is not None and submitted_bytes == pristine_bytes:

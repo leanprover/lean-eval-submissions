@@ -470,6 +470,26 @@ def tar_source(source_dir: pathlib.Path, tar_path: pathlib.Path) -> None:
         tf.add(source_dir, arcname=source_dir.name)
 
 
+def source_problem_ids(
+    source_dir: pathlib.Path, generated_root: pathlib.Path | None = None,
+) -> list[str]:
+    """Recognize an actual CFSG attempt using the evaluator's pristine check."""
+    if generated_root is None:
+        return []  # Without a trusted baseline, use the default cap.
+    from evaluate_submission import EvaluateError, detect_matches
+    from submission_limits import CFSG_PROBLEM_ID
+    if not (generated_root / CFSG_PROBLEM_ID / "Submission.lean").is_file():
+        return []
+    try:
+        matches = detect_matches(source_dir, {CFSG_PROBLEM_ID}, generated_root=generated_root)
+    except EvaluateError:
+        return []  # Preserve evaluation's diagnostics for invalid workspace layouts.
+    return sorted(
+        match.problem_id for match in matches
+        if match.skip_reason is None and not (match.source_dir / "Submission.lean").is_symlink()
+    )
+
+
 def submission_repo_identifier(descriptor: SourceDescriptor) -> str:
     if descriptor.kind == "github_repo":
         return f"{descriptor.owner}/{descriptor.name}"
@@ -485,6 +505,7 @@ def fetch_submission(
     app_token: str | None,
     skip_clone: bool = False,
     source_commit: str | None = None,
+    generated_root: pathlib.Path | None = None,
 ) -> dict:
     issue = event_payload.get("issue")
     if not isinstance(issue, dict):
@@ -561,6 +582,7 @@ def fetch_submission(
         "model": fields["model"],
         "submitted_by": submitted_by,
         "issue_number": issue_number,
+        "problem_ids": source_problem_ids(source_dir, generated_root),
     }
     if fields["production_description"] is not None:
         metadata["production_description"] = fields["production_description"]
@@ -576,6 +598,8 @@ def fetch_submission(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    if not skip_clone:
+        shutil.rmtree(source_dir)
     return metadata
 
 
@@ -780,6 +804,8 @@ def fetch_server_submission(
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    if not skip_clone:
+        shutil.rmtree(source_dir)
     return metadata
 
 
@@ -814,6 +840,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip the clone; only parse the URL and emit metadata.",
     )
     parser.add_argument("--source-commit", help="Use this archived commit for issue submissions.")
+    parser.add_argument("--generated-root", type=pathlib.Path,
+                        help="Trusted pristine workspaces for issue-lane size selection.")
     return parser.parse_args(argv)
 
 
@@ -857,6 +885,7 @@ def main(argv: list[str] | None = None) -> int:
                 app_token=app_token,
                 skip_clone=args.dry_run,
                 source_commit=args.source_commit,
+                generated_root=args.generated_root,
             )
     except FetchError as exc:
         print(str(exc), file=sys.stderr)

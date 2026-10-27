@@ -8,6 +8,7 @@ bound to an operator-reviewed digest before a classification is emitted.
 
 from __future__ import annotations
 
+
 import argparse
 import datetime as dt
 import hashlib
@@ -21,6 +22,7 @@ from collections import Counter, defaultdict
 from typing import Any
 
 import migrate_archive_envelopes as archive_migration
+from archive_chunks import archive_size
 from inventory_historical_replay import inventory as replay_inventory
 from results_schema import (
     LOGIN_RE,
@@ -478,12 +480,12 @@ def _load_archives(
         ciphertext_path = audit_root.joinpath(*source_path.split("/"))
         if ciphertext_path.is_symlink() or not ciphertext_path.is_file():
             raise CrosswalkError("archive ciphertext must be one regular file")
+        try:
+            size = archive_size(ciphertext_path, sidecar["sha256_ciphertext"])
+        except (KeyError, ValueError) as error:
+            raise CrosswalkError("archive ciphertext binding is invalid") from error
         archives.append(
-            _validate_sidecar_metadata(
-                sidecar,
-                plan_entry,
-                ciphertext_size=ciphertext_path.stat().st_size,
-            )
+            _validate_sidecar_metadata(sidecar, plan_entry, ciphertext_size=size)
         )
 
     try:

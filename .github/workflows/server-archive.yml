@@ -30,7 +30,7 @@ jobs:
   archive:
     environment: archive-${{ inputs.callback_environment }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
@@ -101,6 +101,17 @@ jobs:
           private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
           owner: ${{ steps.source_owner.outputs.owner }}
 
+      - name: Free disk space before fetching large archives
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Fetch exact source for archive
         id: fetch
         env:
@@ -131,7 +142,11 @@ jobs:
       - name: Enforce source size cap
         id: size_check
         if: steps.fetch.outcome == 'success'
-        run: test "$(stat -c %s /tmp/archive-fetch/source.tar.gz)" -le $((100 * 1000 * 1000))
+        run: |
+          python scripts/submission_limits.py \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Record size-cap status
         id: size_status
