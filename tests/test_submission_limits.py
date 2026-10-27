@@ -5,6 +5,7 @@ from __future__ import annotations
 import pathlib
 import json
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -65,6 +66,9 @@ class SubmissionLimitsTests(unittest.TestCase):
             self.assertEqual(source_problem_ids(source, root / "trusted"), [])
             (workspace / "Submission.lean").write_text('theorem cfsg := actual_proof\n')
             self.assertEqual(source_problem_ids(source, root / "trusted"), [CFSG_PROBLEM_ID])
+            shutil.copytree(workspace, source / "duplicate-cfsg")
+            self.assertEqual(source_problem_ids(source, root / "trusted"), [])
+            shutil.rmtree(source / "duplicate-cfsg")
             self.assertEqual(source_problem_ids(source), [])
             self.assertEqual(source_problem_ids(source, root / "missing-baseline"), [])
             (workspace / "Submission.lean").unlink()

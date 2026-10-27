@@ -304,6 +304,7 @@ jobs:
         run: |
           mkdir -p /tmp/submission-src
           tar -xzf /tmp/fetch-out/source.tar.gz -C /tmp/submission-src --strip-components=1
+          rm /tmp/fetch-out/source.tar.gz
 
       - name: Run evaluate_submission.py
         # Sharing the benchmark repo's .lake/packages tree across every

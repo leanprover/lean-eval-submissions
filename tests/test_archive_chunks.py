@@ -45,6 +45,13 @@ class ArchiveChunksTests(unittest.TestCase):
         self.assertEqual(self.blobs, {ARCHIVE_PATH: SOURCE})
         self.assertEqual(b"".join(chunks.archive_bytes(ARCHIVE_PATH, DIGEST, self.blobs.__getitem__)), SOURCE)
 
+    def test_new_uploads_never_exceed_one_part_but_legacy_raw_files_still_read(self) -> None:
+        with mock.patch.object(chunks, "PART_BYTES", 100):
+            chunks.store_archive(self.source, ARCHIVE_PATH, DIGEST, self.blobs.__setitem__)
+            self.assertEqual(b"".join(chunks.archive_bytes(ARCHIVE_PATH, DIGEST, self.blobs.__getitem__)), SOURCE)
+            self.assertTrue(all(len(data) <= 100 for path, data in self.blobs.items() if path != ARCHIVE_PATH))
+            self.assertEqual(b"".join(chunks.archive_bytes(ARCHIVE_PATH, DIGEST, lambda _: SOURCE)), SOURCE)
+
     def test_large_archive_streams_parts_before_manifest(self) -> None:
         self.store()
         self.assertEqual(list(self.blobs)[-1], ARCHIVE_PATH)

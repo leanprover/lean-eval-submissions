@@ -8,6 +8,8 @@ bound to an operator-reviewed digest before a classification is emitted.
 
 from __future__ import annotations
 
+from archive_chunks import archive_size
+
 import argparse
 import datetime as dt
 import hashlib
@@ -482,7 +484,7 @@ def _load_archives(
             _validate_sidecar_metadata(
                 sidecar,
                 plan_entry,
-                ciphertext_size=ciphertext_path.stat().st_size,
+                ciphertext_size=archive_size(ciphertext_path, sidecar["sha256_ciphertext"]),
             )
         )
 

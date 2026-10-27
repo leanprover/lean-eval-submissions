@@ -18,7 +18,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 
 
-SINGLE_BLOB_MAX_BYTES = 100 * 1024 * 1024
+SINGLE_BLOB_MAX_BYTES = 100 * 1024 * 1024  # Legacy raw archives remain readable.
 PART_BYTES = 50_000_000
 MAX_CIPHERTEXT_BYTES = 10_010_000_000  # 10 GB source plus age framing.
 FORMAT = "lean-eval-chunked-age-v1"
@@ -111,7 +111,7 @@ def store_archive(
     size = source.stat().st_size
     if not 0 < size <= MAX_CIPHERTEXT_BYTES:
         raise ValueError("ciphertext exceeds the archive storage limit")
-    if size <= SINGLE_BLOB_MAX_BYTES:
+    if size <= min(SINGLE_BLOB_MAX_BYTES, PART_BYTES):
         content = source.read_bytes()
         if hashlib.sha256(content).hexdigest() != digest:
             raise ValueError("ciphertext changed before upload")
@@ -163,7 +163,7 @@ def archive_bytes(
     size, stride, parts = manifest["size_bytes"], manifest["part_size_bytes"], manifest["parts"]
     if (
         manifest["format"] != FORMAT or manifest["sha256"] != expected_digest
-        or type(size) is not int or not SINGLE_BLOB_MAX_BYTES < size <= MAX_CIPHERTEXT_BYTES
+        or type(size) is not int or not min(SINGLE_BLOB_MAX_BYTES, PART_BYTES) < size <= MAX_CIPHERTEXT_BYTES
         or type(stride) is not int or not 0 < stride <= PART_BYTES
         or not isinstance(parts, list) or len(parts) != (size + stride - 1) // stride
         or len(parts) > (MAX_CIPHERTEXT_BYTES + PART_BYTES - 1) // PART_BYTES

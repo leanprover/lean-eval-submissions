@@ -476,14 +476,17 @@ def source_problem_ids(
     """Recognize an actual CFSG attempt using the evaluator's pristine check."""
     if generated_root is None:
         return []  # Without a trusted baseline, use the default cap.
-    from evaluate_submission import detect_matches
+    from evaluate_submission import EvaluateError, detect_matches
     from submission_limits import CFSG_PROBLEM_ID
     if not (generated_root / CFSG_PROBLEM_ID / "Submission.lean").is_file():
         return []
+    try:
+        matches = detect_matches(source_dir, {CFSG_PROBLEM_ID}, generated_root=generated_root)
+    except EvaluateError:
+        return []  # Preserve evaluation's diagnostics for invalid workspace layouts.
     return sorted(
-        match.problem_id for match in detect_matches(
-            source_dir, {CFSG_PROBLEM_ID}, generated_root=generated_root,
-        ) if match.skip_reason is None and not (match.source_dir / "Submission.lean").is_symlink()
+        match.problem_id for match in matches
+        if match.skip_reason is None and not (match.source_dir / "Submission.lean").is_symlink()
     )
 
 

@@ -219,7 +219,8 @@ trusted generated baseline. Only a changed CFSG `Submission.lean` receives the
 larger cap; a pristine CFSG workspace in a benchmark fork does not qualify.
 Submitted Lean is never evaluated during this admission check.
 
-Ciphertexts up to 100 MiB remain ordinary age files. Above that size, the canonical
+New ciphertexts up to 50,000,000 bytes remain ordinary age files; existing raw
+archives up to 100 MiB remain readable. Above the new upload threshold, the canonical
 `.tar.age` path contains a `lean-eval-chunked-age-v1` JSON manifest. It records the
 whole ciphertext’s SHA-256 and size, the part size, and ordered part sizes and
 SHA-256 digests. Encrypted parts are 50,000,000 bytes (except the last), under
