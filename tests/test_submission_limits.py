@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pathlib
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,6 +16,17 @@ from submission_limits import CFSG_PROBLEM_ID, check_source_size, source_size_ca
 
 
 class SubmissionLimitsTests(unittest.TestCase):
+    def test_replay_transport_limit_remains_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            sidecar = pathlib.Path(directory) / "sidecar.json"
+            for size, accepted in [(11 * 1024**2, True), (11 * 1024**2 + 1, False), (True, False)]:
+                sidecar.write_text(json.dumps({"size_bytes_ciphertext": size}))
+                result = subprocess.run([
+                    sys.executable, str(pathlib.Path(__file__).resolve().parents[1] / "scripts/submission_limits.py"),
+                    "--replay-sidecar", str(sidecar),
+                ], capture_output=True)
+                self.assertEqual(result.returncode == 0, accepted)
+
     def test_default_and_cfsg_exact_boundaries(self) -> None:
         for metadata, cap in [
             ({}, 1_000_000_000),
@@ -37,16 +50,25 @@ class SubmissionLimitsTests(unittest.TestCase):
         }), 1_000_000_000)
         self.assertEqual(source_size_cap({"problem_id": "CFSG"}), 1_000_000_000)
 
-    def test_legacy_problem_names_come_from_toml_without_executing_lean(self) -> None:
+    def test_legacy_forks_need_a_changed_cfsg_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            (root / "cfsg").mkdir()
-            (root / "bad").mkdir()
-            (root / "lakefile.toml").write_text('name = "two_plus_two"\n')
-            (root / "cfsg/lakefile.toml").write_text(f'name = "{CFSG_PROBLEM_ID}"\n')
-            (root / "bad/lakefile.toml").write_text('name = [invalid\n')
+            source = root / "fork"
+            workspace = source / "generated" / CFSG_PROBLEM_ID
+            pristine = root / "trusted" / CFSG_PROBLEM_ID
+            workspace.mkdir(parents=True)
+            pristine.mkdir(parents=True)
+            (workspace / "lakefile.toml").write_text(f'name = "{CFSG_PROBLEM_ID}"\n')
+            (pristine / "Submission.lean").write_text('theorem cfsg := by sorry\n')
+            (workspace / "Submission.lean").write_text('theorem cfsg := by sorry\n')
             (root / "lakefile.lean").write_text('panic! "must never execute"\n')
-            self.assertEqual(source_problem_ids(root), [CFSG_PROBLEM_ID, "two_plus_two"])
+            self.assertEqual(source_problem_ids(source, root / "trusted"), [])
+            (workspace / "Submission.lean").write_text('theorem cfsg := actual_proof\n')
+            self.assertEqual(source_problem_ids(source, root / "trusted"), [CFSG_PROBLEM_ID])
+            self.assertEqual(source_problem_ids(source), [])
+            self.assertEqual(source_problem_ids(source, root / "missing-baseline"), [])
+            (workspace / "Submission.lean").unlink()
+            self.assertEqual(source_problem_ids(source, root / "trusted"), [])
 
 
 if __name__ == "__main__":

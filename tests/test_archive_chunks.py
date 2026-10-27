@@ -131,6 +131,52 @@ class ArchiveChunksTests(unittest.TestCase):
                 "--archive-path", ARCHIVE_PATH, "--sha256", DIGEST, "--output", str(output),
             ])
         self.assertEqual(output.read_bytes(), SOURCE)
+        with self.limit, self.part, self.assertRaises(SystemExit):
+            archive.main([
+                "restore", "--audit-root", str(repo), "--commit", commit,
+                "--archive-path", ARCHIVE_PATH, "--sha256", DIGEST, "--output", str(output),
+            ])
+        self.assertEqual(output.read_bytes(), SOURCE)
+
+    def test_sparse_partial_clone_fetches_parts_without_retaining_them(self) -> None:
+        self.store()
+        repo = self.root / "origin"
+        repo.mkdir()
+        def git(root, *args):
+            return subprocess.check_output(["git", "-C", str(root), *args], stderr=subprocess.DEVNULL)
+        git(repo, "init", "-q")
+        git(repo, "config", "uploadpack.allowFilter", "true")
+        for path, data in self.blobs.items():
+            target = repo / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        git(repo, "add", ".")
+        git(repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "archive")
+        clone = self.root / "partial"
+        subprocess.run(["git", "clone", "-q", "--filter=blob:none", "--no-checkout", repo.as_uri(), str(clone)], check=True)
+        git(clone, "sparse-checkout", "set", "--no-cone", "/*", "!**/*.tar.age.parts/")
+        git(clone, "checkout", "-q")
+        root = clone / ARCHIVE_PATH
+        self.assertTrue(root.is_file())
+        self.assertFalse(pathlib.Path(str(root) + ".parts").exists())
+        before = sorted(p.relative_to(clone).as_posix() for p in (clone / ".git/objects").rglob("*") if p.is_file())
+        with self.limit, self.part:
+            self.assertEqual(b"".join(chunks.path_archive_bytes(root, DIGEST)), SOURCE)
+        after = sorted(p.relative_to(clone).as_posix() for p in (clone / ".git/objects").rglob("*") if p.is_file())
+        self.assertEqual(before, after)
+
+    def test_corrupt_restore_leaves_no_output_or_temporary_file(self) -> None:
+        self.store()
+        self.blobs[chunks.part_path(ARCHIVE_PATH, DIGEST, 1)] = b"corrupt"
+        output = self.root / "output" / "restore.age"
+        with self.limit, self.part, mock.patch.object(
+            archive, "git_blob", side_effect=lambda root, commit, path: self.blobs[path],
+        ), self.assertRaises(SystemExit):
+            archive.main([
+                "restore", "--audit-root", str(self.root), "--commit", "a" * 40,
+                "--archive-path", ARCHIVE_PATH, "--sha256", DIGEST, "--output", str(output),
+            ])
+        self.assertEqual(list(output.parent.iterdir()), [])
 
 
 if __name__ == "__main__":

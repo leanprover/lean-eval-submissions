@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
 import io
 import json
 import pathlib
@@ -633,6 +634,56 @@ class PushTests(unittest.TestCase):
             self.assertEqual(uploaded_sidecar["benchmark_commit"], "f" * 40)
             self.assertIn("archived_at", uploaded_sidecar)
             self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
+
+    def test_multipart_push_publishes_manifest_then_sidecar_and_retries_idempotently(self) -> None:
+        import archive_chunks
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            ciphertext = self._ciphertext(root)
+            sidecar = self._partial_sidecar(root)
+            stored = {}
+            order = []
+            def request(req, timeout=None):
+                path = req.full_url.split("/contents/", 1)[1]
+                if req.get_method() == "GET":
+                    if path not in stored:
+                        raise self._not_found(req.full_url)
+                    content = stored[path]
+                    return io.BytesIO(json.dumps({
+                        "sha": arch._git_blob_sha(content), "encoding": "base64",
+                        "content": base64.b64encode(content).decode(),
+                    }).encode())
+                stored[path] = base64.b64decode(json.loads(req.data)["content"])
+                order.append(path)
+                return io.BytesIO(b'{"commit":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}')
+            args = ["push", "--ciphertext", str(ciphertext), "--sidecar", str(sidecar)]
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
+                 mock.patch.object(archive_chunks, "SINGLE_BLOB_MAX_BYTES", 16), \
+                 mock.patch.object(archive_chunks, "PART_BYTES", 12), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=request):
+                self.assertEqual(arch.main(args), 0)
+                self.assertTrue(order[-1].endswith(".json"))
+                self.assertTrue(order[-2].endswith(".tar.age"))
+                self.assertTrue(all(".parts/" in path for path in order[:-2]))
+                published = list(order)
+                self.assertEqual(arch.main(args), 0)
+                self.assertEqual(order, published)
+
+    def test_interrupted_put_response_recognizes_committed_content(self) -> None:
+        content = b"exact encrypted part"
+        with mock.patch.object(arch, "_api_get", side_effect=[None, {"sha": arch._git_blob_sha(content)}]), \
+             mock.patch.object(arch.urllib.request, "urlopen", side_effect=http.client.RemoteDisconnected()), \
+             mock.patch.object(arch.time, "sleep") as sleep:
+            arch._put_contents(audit_repo="leanprover/lean-eval-audit", token="token", path="part", content=content, message="part")
+        sleep.assert_not_called()
+
+    def test_get_retries_response_body_reset_and_secondary_rate_limit(self) -> None:
+        limited = urllib.error.HTTPError("https://example.invalid", 403, "limited", {"Retry-After": "2"}, io.BytesIO())
+        with mock.patch.object(arch.urllib.request, "urlopen", side_effect=[
+            http.client.IncompleteRead(b"partial"), limited, io.BytesIO(b'{"ok":true}'),
+        ]), mock.patch.object(arch.time, "sleep") as sleep:
+            self.assertEqual(arch._get_json_response(arch.urllib.request.Request("https://example.invalid")), {"ok": True})
+        self.assertEqual(sleep.call_count, 2)
 
     def test_push_server_submission_emits_state_locator(self) -> None:
         with tempfile.TemporaryDirectory() as td:

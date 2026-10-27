@@ -28,6 +28,7 @@ import argparse
 import base64
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -42,7 +43,7 @@ import urllib.parse
 import urllib.request
 
 from key_capability_contract import ContractError, validate_envelope
-from archive_chunks import SINGLE_BLOB_MAX_BYTES, archive_bytes, store_archive
+from archive_chunks import SINGLE_BLOB_MAX_BYTES, archive_bytes, git_blob, store_archive
 from submission_limits import DEFAULT_SIZE_CAP_BYTES, check_source_size
 
 
@@ -54,6 +55,28 @@ ENVELOPE_SIDECAR_SCHEMA_VERSION = 3
 ARCHIVE_LOCATOR_SCHEMA_VERSION = 1
 DEFAULT_AUDIT_REPO = "leanprover/lean-eval-audit"
 PUSH_RETRY_ATTEMPTS = 5
+
+
+def _get_json_response(request: urllib.request.Request) -> object:
+    """Retry idempotent reads, including response-body timeouts and resets."""
+    for attempt in range(1, PUSH_RETRY_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            retry_after = _retry_after_seconds(error)
+            if attempt == PUSH_RETRY_ATTEMPTS or not (
+                error.code in {429, 500, 502, 503, 504}
+                or error.code == 403 and retry_after is not None
+            ):
+                raise
+            error.close()
+            time.sleep(retry_after if retry_after is not None else min(30, 2 ** attempt))
+        except (OSError, http.client.HTTPException):
+            if attempt == PUSH_RETRY_ATTEMPTS:
+                raise
+            time.sleep(min(30, 2 ** attempt))
+    raise AssertionError("retry loop exhausted")
 
 # Submission refs are full 40-char lowercase hex SHAs (enforced at fetch
 # time, see fetch_submission.py:SHA_RE). The audit-side `push` re-checks
@@ -738,8 +761,7 @@ def _read_archive_blob_at_commit(
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            contents = json.loads(resp.read().decode("utf-8"))
+        contents = _get_json_response(req)
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read().decode("utf-8", errors="replace")
@@ -790,8 +812,7 @@ def _read_archive_blob_at_commit(
         },
     )
     try:
-        with urllib.request.urlopen(blob_req, timeout=60) as resp:
-            blob = json.loads(resp.read().decode("utf-8"))
+        blob = _get_json_response(blob_req)
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read().decode("utf-8", errors="replace")
@@ -1082,8 +1103,7 @@ def _api_get(*, audit_repo: str, token: str, path: str) -> dict | None:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        return _get_json_response(req)
     except urllib.error.HTTPError as exc:
         try:
             if exc.code == 404:
@@ -1110,8 +1130,7 @@ def _latest_path_commit(*, audit_repo: str, token: str, path: str) -> str:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+        payload = _get_json_response(req)
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read().decode("utf-8", errors="replace")
@@ -1235,7 +1254,7 @@ def _put_contents(
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=300) as resp:
                 response = json.loads(resp.read().decode("utf-8"))
             commit = response.get("commit") if isinstance(response, dict) else None
             commit_sha = commit.get("sha") if isinstance(commit, dict) else None
@@ -1266,7 +1285,13 @@ def _put_contents(
                 else:
                     existing_sha = refreshed.get("sha")
                 last_err = exc
-            elif exc.code in (429, 500, 502, 503, 504) and attempt < PUSH_RETRY_ATTEMPTS:
+            elif attempt < PUSH_RETRY_ATTEMPTS and (
+                exc.code in (429, 500, 502, 503, 504)
+                or exc.code == 403 and (
+                    _retry_after_seconds(exc) is not None
+                    or "secondary rate limit" in err_body.lower()
+                )
+            ):
                 last_err = exc
             else:
                 sys.exit(f"Contents API PUT {path} failed ({exc.code}):\n{err_body}")
@@ -1284,6 +1309,17 @@ def _put_contents(
                 time.sleep(min(30.0, 2.0 ** (attempt - 1)) * random.uniform(0.5, 1.5))
                 continue
             sys.exit(f"Contents API PUT {path} transport error: {exc}")
+        except (OSError, http.client.HTTPException) as exc:
+            # A response may have been lost after GitHub committed the PUT.
+            # Re-read before resending to recognize that successful outcome.
+            refreshed = _api_get(audit_repo=audit_repo, token=token, path=path)
+            if refreshed is not None and refreshed.get("sha") == expected_sha:
+                return None
+            existing_sha = refreshed.get("sha") if refreshed else None
+            if attempt == PUSH_RETRY_ATTEMPTS:
+                sys.exit(f"Contents API PUT {path} response was interrupted")
+            last_err = exc
+            time.sleep(min(30, 2 ** attempt))
     sys.exit(f"Contents API PUT {path} failed after {PUSH_RETRY_ATTEMPTS} attempts: {last_err}")
 
 
@@ -1308,11 +1344,7 @@ def _restore(args: argparse.Namespace) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     def read(part: str) -> bytes:
-        result = subprocess.run(
-            ["git", "-C", str(args.audit_root), "show", f"{args.commit}:{part}"],
-            check=True, capture_output=True,
-        )
-        return result.stdout
+        return git_blob(args.audit_root, args.commit, part)
 
     temporary = None
     try:

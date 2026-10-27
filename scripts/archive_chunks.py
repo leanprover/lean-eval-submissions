@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import base64
+import os
 import pathlib
+import shlex
+import subprocess
+import tempfile
 from collections.abc import Callable, Iterator
 
 
@@ -18,6 +23,79 @@ PART_BYTES = 50_000_000
 MAX_CIPHERTEXT_BYTES = 10_010_000_000  # 10 GB source plus age framing.
 FORMAT = "lean-eval-chunked-age-v1"
 MAX_MANIFEST_BYTES = 64 * 1024
+
+# GitHub's published Ed25519 host key (https://api.github.com/meta).
+GITHUB_HOST_KEY = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"
+
+
+def git_blob(root: pathlib.Path, commit: str, path: str) -> bytes:
+    """Read a blob from a partial audit clone without retaining downloaded parts.
+
+    The caller supplies read authority only for this trusted read. Temporary
+    objects prevent a complete inventory from filling the runner with all
+    historical large archives. Existing repository objects remain read-only.
+    """
+    objects = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+        text=True,
+    ).strip()
+    with tempfile.TemporaryDirectory(prefix="archive-read-") as directory:
+        temporary = pathlib.Path(directory)
+        (temporary / "objects").mkdir()
+        environment = os.environ.copy()
+        environment["GIT_OBJECT_DIRECTORY"] = str(temporary / "objects")
+        environment["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = objects
+        token = environment.pop("ARCHIVE_READ_TOKEN", "")
+        key = environment.pop("AUDIT_READ_KEY", "")
+        if token:
+            count = int(environment.get("GIT_CONFIG_COUNT", "0"))
+            settings = [
+                ("http.https://github.com/.extraheader", "AUTHORIZATION: basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()),
+                ("url.https://github.com/.insteadOf", "git@github.com:"),
+            ]
+            for index, (name, value) in enumerate(settings, count):
+                environment[f"GIT_CONFIG_KEY_{index}"] = name
+                environment[f"GIT_CONFIG_VALUE_{index}"] = value
+            environment["GIT_CONFIG_COUNT"] = str(count + len(settings))
+        elif key:
+            identity = temporary / "identity"
+            identity.write_text(key.rstrip() + "\n")
+            identity.chmod(0o600)
+            hosts = temporary / "known_hosts"
+            hosts.write_text(GITHUB_HOST_KEY)
+            environment["GIT_SSH_COMMAND"] = (
+                f"ssh -i {shlex.quote(str(identity))} -o IdentitiesOnly=yes "
+                f"-o UserKnownHostsFile={shlex.quote(str(hosts))} "
+                "-o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519"
+            )
+        result = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "blob", f"{commit}:{path}"],
+            env=environment, capture_output=True, check=False,
+        )
+        if result.returncode:
+            raise ValueError(f"cannot read immutable archive blob {commit}:{path}")
+        return result.stdout
+
+
+def path_archive_bytes(path: pathlib.Path, expected_digest: str) -> Iterator[bytes]:
+    """Read either format from a full or sparse audit checkout."""
+    path = path.absolute()
+    def read(relative: str) -> bytes:
+        target = path.parent / relative
+        if target.is_symlink():
+            raise ValueError("archive data must not be a symlink")
+        if target.is_file():
+            return target.read_bytes()
+        root = pathlib.Path(subprocess.check_output(
+            ["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"], text=True,
+        ).strip())
+        return git_blob(root, "HEAD", target.relative_to(root).as_posix())
+    yield from archive_bytes(path.name, expected_digest, read)
+
+
+def archive_size(path: pathlib.Path, expected_digest: str) -> int:
+    """Verify the entire ciphertext and return its logical size."""
+    return sum(len(data) for data in path_archive_bytes(path, expected_digest))
 
 
 def part_path(archive_path: str, digest: str, index: int) -> str:

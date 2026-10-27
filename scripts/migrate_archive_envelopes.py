@@ -22,7 +22,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Any
+from archive_chunks import archive_size, part_path, path_archive_bytes
 
 from key_capability_contract import (
     AGE_FILE_KEY_MATERIAL_TYPE,
@@ -330,9 +332,11 @@ def _validate_source_sidecar(
     for field in ("size_bytes_ciphertext", "size_bytes_plaintext_tar"):
         if type(sidecar.get(field)) is not int or sidecar[field] < 0:
             raise MigrationError(f"source sidecar {field} is invalid")
-    if sidecar["sha256_ciphertext"] != _sha256(ciphertext_path):
-        raise MigrationError("source sidecar ciphertext digest disagrees with bytes")
-    if sidecar["size_bytes_ciphertext"] != ciphertext_path.stat().st_size:
+    try:
+        size = archive_size(ciphertext_path, sidecar["sha256_ciphertext"])
+    except ValueError as error:
+        raise MigrationError("source sidecar ciphertext digest disagrees with bytes") from error
+    if sidecar["size_bytes_ciphertext"] != size:
         raise MigrationError("source sidecar ciphertext size disagrees with bytes")
     if schema == 2:
         submission_id = sidecar.get("submission_id")
@@ -367,8 +371,10 @@ def build_plan(
             raise MigrationError(f"missing regular ciphertext for {relative_sidecar}")
         if schema == 3:
             envelope = validate_envelope(sidecar.get("key_envelope"))
-            if envelope["archive_ciphertext_sha256"] != _sha256(ciphertext_path):
-                raise MigrationError("retained schema-version-3 envelope digest mismatch")
+            try:
+                archive_size(ciphertext_path, envelope["archive_ciphertext_sha256"])
+            except ValueError as error:
+                raise MigrationError("retained schema-version-3 envelope digest mismatch") from error
             retained.append({
                 "source_path": relative_ciphertext,
                 "submission_id": envelope["submission_id"],
@@ -709,14 +715,33 @@ def migrate_one(
     source_ciphertext = source_root.joinpath(*source_path.split("/"))
     source_sidecar_path = source_ciphertext.with_suffix("").with_suffix(".json")
     source_sidecar = _read_json(source_sidecar_path, "source sidecar")
-    if _sha256(source_ciphertext) != entry["source_ciphertext_sha256"] or _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]:
+    try:
+        archive_size(source_ciphertext, entry["source_ciphertext_sha256"])
+    except ValueError as error:
+        raise MigrationError("source object changed after the migration plan") from error
+    if _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]:
         raise MigrationError("source object changed after the migration plan")
     target_ciphertext = output_root.joinpath(*entry["target_path"].split("/"))
     target_sidecar = target_ciphertext.with_suffix("").with_suffix(".json")
     if target_ciphertext.exists() or target_sidecar.exists():
         raise MigrationError("refusing to overwrite a migrated object")
     target_ciphertext.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    file_key = _extract_file_key(file_key_helper, legacy_identity, source_ciphertext)
+    # File-key migration only reads the detached age header. For a chunked
+    # archive the first verified part contains that header; no full plaintext
+    # or full reconstructed ciphertext is needed on disk.
+    with source_ciphertext.open("rb") as source:
+        chunked = source.read(1) == b"{"
+    if chunked:
+        with tempfile.NamedTemporaryFile() as header:
+            stream = path_archive_bytes(source_ciphertext, entry["source_ciphertext_sha256"])
+            try:
+                header.write(next(stream))
+            finally:
+                stream.close()
+            header.flush()
+            file_key = _extract_file_key(file_key_helper, legacy_identity, pathlib.Path(header.name))
+    else:
+        file_key = _extract_file_key(file_key_helper, legacy_identity, source_ciphertext)
     try:
         envelope = _wrap_file_key(
             adapter_executable,
@@ -736,10 +761,20 @@ def migrate_one(
             "schema_version": 3,
             "submission_id": entry["submission_id"],
             "sha256_ciphertext": entry["source_ciphertext_sha256"],
-            "size_bytes_ciphertext": source_ciphertext.stat().st_size,
+            "size_bytes_ciphertext": source_sidecar["size_bytes_ciphertext"],
             "key_envelope": envelope,
         })
-        shutil.copyfile(source_ciphertext, target_ciphertext)
+        if chunked:
+            for index, data in enumerate(path_archive_bytes(source_ciphertext, entry["source_ciphertext_sha256"])):
+                target_part = target_ciphertext.parent / part_path(
+                    target_ciphertext.name, entry["source_ciphertext_sha256"], index,
+                )
+                target_part.parent.mkdir(parents=True, exist_ok=True)
+                target_part.write_bytes(data)
+                target_part.chmod(0o600)
+            shutil.copyfile(source_ciphertext, target_ciphertext)
+        else:
+            shutil.copyfile(source_ciphertext, target_ciphertext)
         target_ciphertext.chmod(0o600)
         target_sidecar.write_text(
             json.dumps(migrated, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
@@ -803,8 +838,7 @@ def validate_output(
         source_sidecar_path = source_ciphertext.with_suffix("").with_suffix(".json")
         source_sidecar = _read_json(source_sidecar_path, "source sidecar")
         if (
-            _sha256(source_ciphertext) != entry["source_ciphertext_sha256"]
-            or _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]
+            _sha256(source_sidecar_path) != entry["source_sidecar_sha256"]
         ):
             raise MigrationError("source object changed after the migration plan")
         _validate_source_sidecar(
@@ -819,12 +853,15 @@ def validate_output(
         ):
             raise MigrationError("migrated sidecar identity is invalid")
         envelope = validate_envelope(sidecar.get("key_envelope"))
-        digest = _sha256(ciphertext)
+        digest = entry["source_ciphertext_sha256"]
+        try:
+            size = archive_size(ciphertext, digest)
+        except ValueError as error:
+            raise MigrationError("historical archive ciphertext bytes changed") from error
         if envelope["schema_version"] != 2:
             raise MigrationError("migrated sidecar does not use the file-key envelope")
         if (
-            digest != entry["source_ciphertext_sha256"]
-            or ciphertext.stat().st_size != source_ciphertext.stat().st_size
+            size != source_sidecar["size_bytes_ciphertext"]
         ):
             raise MigrationError("historical archive ciphertext bytes changed")
         if not _files_equal(source_ciphertext, ciphertext):

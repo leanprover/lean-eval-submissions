@@ -186,6 +186,22 @@ jobs:
         # into the next job's build.
         run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out
 
+      - name: Free disk space for Mathlib cache
+        # Standard runners ship with ~14GB free; Mathlib unpacked is
+        # several GB and we hold it twice (repo root + per-workspace).
+        # Strip Android, .NET, Haskell, and other preinstalled caches we
+        # do not need. Frees ~30GB.
+        # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Fetch submission
         id: fetch
         env:
@@ -207,7 +223,8 @@ jobs:
           python scripts/fetch_submission.py \
             --event-path "$GITHUB_EVENT_PATH" \
             "${SERVER_FLAG[@]}" \
-            --output-dir /tmp/fetch-out
+            --output-dir /tmp/fetch-out \
+            --generated-root lean-eval/generated
 
       - name: Verify frozen source identity
         if: steps.fetch.outcome == 'success'
@@ -223,22 +240,6 @@ jobs:
             echo "evaluation refetch does not match the source archived before evaluation" >&2
             exit 1
           fi
-
-      - name: Free disk space for Mathlib cache
-        # Standard runners ship with ~14GB free; Mathlib unpacked is
-        # several GB and we hold it twice (repo root + per-workspace).
-        # Strip Android, .NET, Haskell, and other preinstalled caches we
-        # do not need. Frees ~30GB.
-        # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: false
 
       - name: Strip git state before running untrusted Lean
         # Both checkouts: Lake exposes the host read-only, so any

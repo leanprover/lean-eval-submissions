@@ -446,7 +446,8 @@ jobs:
           python scripts/fetch_submission.py \
             --event-path "$GITHUB_EVENT_PATH" \
             "${SERVER_FLAG[@]}" \
-            --output-dir /tmp/archive-fetch
+            --output-dir /tmp/archive-fetch \
+            --generated-root lean-eval/generated
 
       - name: Record archive fetch status
         id: fetch_status

@@ -37,10 +37,19 @@ def check_source_size(source_tar: pathlib.Path, metadata: dict) -> tuple[int, in
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-tar", type=pathlib.Path, required=True)
-    parser.add_argument("--metadata", type=pathlib.Path, required=True)
+    parser.add_argument("--source-tar", type=pathlib.Path)
+    parser.add_argument("--metadata", type=pathlib.Path)
+    parser.add_argument("--replay-sidecar", type=pathlib.Path)
     parser.add_argument("--github-output", type=pathlib.Path)
     args = parser.parse_args()
+    if args.replay_sidecar:
+        from replay_controller import MAX_CIPHERTEXT_BYTES
+        size = json.loads(args.replay_sidecar.read_text()).get("size_bytes_ciphertext")
+        if type(size) is not int or not 0 < size <= MAX_CIPHERTEXT_BYTES:
+            parser.exit(1, "Archive exceeds the separately reviewed replay transport limit; the archive cannot be transferred for replay.\n")
+        return 0
+    if args.source_tar is None or args.metadata is None:
+        parser.error("--source-tar and --metadata are required for submission admission")
     try:
         metadata = json.loads(args.metadata.read_text())
         if not isinstance(metadata, dict):

@@ -214,9 +214,10 @@ The cap applies to the **compressed gzipped tar**, after stripping `.git`:
 1 GB (1,000,000,000 bytes) by default and 10 GB (10,000,000,000 bytes) for
 `classification_finite_simple_groups`. Both workflows and both encryption
 backstops use `scripts/submission_limits.py`. The service uses its exact selected
-problem ID; legacy issue intake discovers workspace names from `lakefile.toml`
-in the frozen checkout without evaluating submitted Lean. An issue bundle that
-contains the CFSG workspace receives the larger cap.
+problem ID; legacy issue intake uses the evaluator’s static workspace matcher against the
+trusted generated baseline. Only a changed CFSG `Submission.lean` receives the
+larger cap; a pristine CFSG workspace in a benchmark fork does not qualify.
+Submitted Lean is never evaluated during this admission check.
 
 Ciphertexts up to 100 MiB remain ordinary age files. Above that size, the canonical
 `.tar.age` path contains a `lean-eval-chunked-age-v1` JSON manifest. It records the
@@ -231,7 +232,9 @@ The State locator and key envelope continue to name the SHA-256 of the complete
 age ciphertext, not the manifest. Before emitting a server completion, the
 archiver resolves the manifest and every part at the same immutable commit,
 checks every part’s size and digest, and checks the reassembled digest. Upload,
-verification, and restoration hold one part in memory at a time. A clone of the
+verification, and restoration hold one part in memory at a time. Workflow audit
+checkouts exclude part directories and fetch selected parts into temporary Git
+object stores, avoiding accumulation of unrelated multi-gigabyte archives. A clone of the
 audit repository therefore still contains all bytes needed for independent
 recovery; no release asset, external object store, or mutable download URL is
 part of the archive identity.
