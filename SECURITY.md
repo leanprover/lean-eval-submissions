@@ -136,8 +136,8 @@ Server intake uses the same encryption boundary but keys the
 archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
 Before State may receive `archive.completed`, the archiver emits an immutable
 repository/commit/path/ciphertext-digest locator and verifies the encrypted
-bytes at that exact commit. Ciphertexts above GitHub’s 100 MiB per-file
-limit use a manifest and 50 MB encrypted parts, all committed before the
+bytes at that exact commit. New ciphertexts above 30,000,000 bytes use a manifest and 30 MB encrypted
+parts, all committed before the
 sidecar. Verification binds every part to the same immutable commit and checks
 the reassembled ciphertext digest before emitting the locator. Issue intake
 uses the same storage format under its existing archive paths.

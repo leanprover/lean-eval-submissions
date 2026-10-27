@@ -15,11 +15,11 @@ import pathlib
 import shlex
 import subprocess
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
 
 SINGLE_BLOB_MAX_BYTES = 100 * 1024 * 1024  # Legacy raw archives remain readable.
-PART_BYTES = 50_000_000
+PART_BYTES = 30_000_000
 MAX_CIPHERTEXT_BYTES = 10_010_000_000  # 10 GB source plus age framing.
 FORMAT = "lean-eval-chunked-age-v1"
 MAX_MANIFEST_BYTES = 64 * 1024
@@ -140,6 +140,8 @@ def archive_bytes(
     archive_path: str,
     expected_digest: str,
     read: Callable[[str], bytes],
+    *,
+    read_parts: Callable[[Iterable[str]], Iterator[bytes]] | None = None,
 ) -> Iterator[bytes]:
     """Yield verified pieces and reject missing, reordered, or altered parts."""
     content = read(archive_path)
@@ -169,7 +171,6 @@ def archive_bytes(
         or len(parts) > (MAX_CIPHERTEXT_BYTES + PART_BYTES - 1) // PART_BYTES
     ):
         raise ValueError("invalid archive manifest identity or bounds")
-    whole = hashlib.sha256()
     for index, part in enumerate(parts):
         expected_size = min(stride, size - index * stride)
         if (
@@ -178,7 +179,11 @@ def archive_bytes(
             or not isinstance(part["sha256"], str) or len(part["sha256"]) != 64
         ):
             raise ValueError("invalid archive part metadata")
-        data = read(part_path(archive_path, expected_digest, index))
+    paths = (part_path(archive_path, expected_digest, index) for index in range(len(parts)))
+    contents = map(read, paths) if read_parts is None else read_parts(paths)
+    whole = hashlib.sha256()
+    for index, (part, data) in enumerate(zip(parts, contents, strict=True)):
+        expected_size = part["size_bytes"]
         if len(data) != expected_size or hashlib.sha256(data).hexdigest() != part["sha256"]:
             raise ValueError(f"archive part {index} size or digest mismatch")
         whole.update(data)

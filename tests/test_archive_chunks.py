@@ -8,6 +8,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -85,8 +86,13 @@ class ArchiveChunksTests(unittest.TestCase):
     def test_server_verifies_every_part_at_the_same_commit(self) -> None:
         self.store()
         commit = "a" * 40
+        second_part_read = threading.Event()
         def read(**kwargs):
             self.assertEqual(kwargs["archive_commit"], commit)
+            if kwargs["archive_path"].endswith("/0000"):
+                self.assertTrue(second_part_read.wait(timeout=2), "parts must prefetch concurrently")
+            if kwargs["archive_path"].endswith("/0001"):
+                second_part_read.set()
             return self.blobs[kwargs["archive_path"]]
         with self.limit, self.part, mock.patch.object(
             archive, "_read_archive_blob_at_commit", side_effect=read,

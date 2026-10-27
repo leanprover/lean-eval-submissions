@@ -148,7 +148,7 @@ jobs:
           export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
           export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
           trap 'unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0' EXIT
-          python audit/scripts/archive_migration_promotion.py prepare \
+          python -I audit/scripts/archive_migration_promotion.py prepare \
             --repository audit \
             --source-commit "$SOURCE_AUDIT_COMMIT" \
             --staged-commit "$STAGED_MIGRATION_COMMIT" \

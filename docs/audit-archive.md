@@ -219,11 +219,11 @@ trusted generated baseline. Only a changed CFSG `Submission.lean` receives the
 larger cap; a pristine CFSG workspace in a benchmark fork does not qualify.
 Submitted Lean is never evaluated during this admission check.
 
-New ciphertexts up to 50,000,000 bytes remain ordinary age files; existing raw
+New ciphertexts up to 30,000,000 bytes remain ordinary age files; existing raw
 archives up to 100 MiB remain readable. Above the new upload threshold, the canonical
 `.tar.age` path contains a `lean-eval-chunked-age-v1` JSON manifest. It records the
 whole ciphertext’s SHA-256 and size, the part size, and ordered part sizes and
-SHA-256 digests. Encrypted parts are 50,000,000 bytes (except the last), under
+SHA-256 digests. Encrypted parts are 30,000,000 bytes (except the last), under
 `<archive-path>.parts/<whole-ciphertext-sha256>/<four-digit-index>`. Thus every Git
 blob remains below GitHub’s per-file limit. The manifest is written after all
 parts, and the provenance sidecar is written last. Interrupted uploads can be
@@ -232,8 +232,9 @@ retried without mixing independently encrypted ciphertexts.
 The State locator and key envelope continue to name the SHA-256 of the complete
 age ciphertext, not the manifest. Before emitting a server completion, the
 archiver resolves the manifest and every part at the same immutable commit,
-checks every part’s size and digest, and checks the reassembled digest. Upload,
-verification, and restoration hold one part in memory at a time. Workflow audit
+checks every part’s size and digest, and checks the reassembled digest. Upload
+and restoration hold one part in memory at a time; server verification prefetches
+a bounded window of four parts and hashes them in manifest order. Workflow audit
 checkouts exclude part directories and fetch selected parts into temporary Git
 object stores, avoiding accumulation of unrelated multi-gigabyte archives. A clone of the
 audit repository therefore still contains all bytes needed for independent

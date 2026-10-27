@@ -41,6 +41,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 
 from key_capability_contract import ContractError, validate_envelope
 from archive_chunks import SINGLE_BLOB_MAX_BYTES, archive_bytes, git_blob, store_archive
@@ -858,13 +860,31 @@ def _verify_ciphertext_at_commit(
     archive_path: str, expected_sha256: str,
 ) -> None:
     """Verify the complete ciphertext, including all immutable multipart blobs."""
+    def read(path: str) -> bytes:
+        return _read_archive_blob_at_commit(
+            audit_repo=audit_repo, token=token, archive_commit=archive_commit,
+            archive_path=path,
+        )
+
+    def read_parts(paths):
+        # Prefetch a bounded window, then consume in manifest order. This
+        # reduces API latency while keeping memory independent of archive size.
+        paths = iter(paths)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            pending = deque()
+            for _ in range(4):
+                path = next(paths, None)
+                if path is not None:
+                    pending.append(executor.submit(read, path))
+            while pending:
+                yield pending.popleft().result()
+                path = next(paths, None)
+                if path is not None:
+                    pending.append(executor.submit(read, path))
+
     try:
         for _ in archive_bytes(
-            archive_path, expected_sha256,
-            lambda path: _read_archive_blob_at_commit(
-                audit_repo=audit_repo, token=token, archive_commit=archive_commit,
-                archive_path=path,
-            ),
+            archive_path, expected_sha256, read, read_parts=read_parts,
         ):
             pass
     except ValueError as error:
