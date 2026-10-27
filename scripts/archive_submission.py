@@ -35,17 +35,19 @@ import random
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from key_capability_contract import ContractError, validate_envelope
+from archive_chunks import SINGLE_BLOB_MAX_BYTES, archive_bytes, store_archive
+from submission_limits import DEFAULT_SIZE_CAP_BYTES, check_source_size
 
 
-# 100 MB (decimal). Matches the workflow. Sits below GitHub's 100 MiB per-file
-# limit with room for the age envelope (~16 bytes per 64 KiB chunk plus header).
-SIZE_CAP_BYTES = 100 * 1000 * 1000
+# Retained for callers importing the default; CFSG has a larger per-problem cap.
+SIZE_CAP_BYTES = DEFAULT_SIZE_CAP_BYTES
 SIDECAR_SCHEMA_VERSION = 1
 SERVER_SIDECAR_SCHEMA_VERSION = 2
 ENVELOPE_SIDECAR_SCHEMA_VERSION = 3
@@ -162,14 +164,11 @@ def _encrypt(args: argparse.Namespace) -> int:
     if not source_tar.is_file():
         sys.exit(f"source tar not found: {source_tar}")
 
-    size_bytes = source_tar.stat().st_size
-    if size_bytes > SIZE_CAP_BYTES:
-        # Workflow checks this first and exits before invoking us; this is
-        # belt-and-braces so a misconfigured caller cannot bypass the cap.
-        sys.exit(
-            f"source tarball is {size_bytes} bytes, over the {SIZE_CAP_BYTES}-byte "
-            f"audit cap. The submission must be rejected."
-        )
+    metadata = _read_json(args.metadata)
+    try:
+        size_bytes, _ = check_source_size(source_tar, metadata)
+    except ValueError as error:
+        sys.exit(str(error))
 
     recipients = args.recipients
     if not recipients.is_file():
@@ -177,7 +176,6 @@ def _encrypt(args: argparse.Namespace) -> int:
     if not any(_recipient_lines(recipients)):
         sys.exit(f"recipients file is empty: {recipients}")
 
-    metadata = _read_json(args.metadata)
     required = ("submission_ref", "submission_repo", "submission_kind",
                 "submission_public", "submitted_by", "model")
     missing = [key for key in required if key not in metadata]
@@ -353,14 +351,11 @@ def _prepare_envelope_sidecar(args: argparse.Namespace) -> int:
         sys.exit(f"source tar not found or not a regular file: {source_tar}")
     if not ciphertext.is_file() or ciphertext.is_symlink():
         sys.exit(f"ciphertext not found or not a regular file: {ciphertext}")
-    source_size = source_tar.stat().st_size
-    if source_size > SIZE_CAP_BYTES:
-        sys.exit(
-            f"source tarball is {source_size} bytes, over the {SIZE_CAP_BYTES}-byte "
-            "audit cap. The submission must be rejected."
-        )
-
     metadata = _read_json(args.metadata)
+    try:
+        source_size, _ = check_source_size(source_tar, metadata)
+    except ValueError as error:
+        sys.exit(str(error))
     required = (
         "submission_id",
         "submission_ref",
@@ -720,15 +715,14 @@ def _write_archive_completion(
     )
 
 
-def _verify_ciphertext_at_commit(
+def _read_archive_blob_at_commit(
     *,
     audit_repo: str,
     token: str,
     archive_commit: str,
     archive_path: str,
-    expected_sha256: str,
-) -> None:
-    """Prove the immutable commit named in State contains the expected bytes."""
+) -> bytes:
+    """Read one bounded regular Git blob at an immutable archive commit."""
     query = urllib.parse.urlencode({"ref": archive_commit})
     contents_url = (
         f"https://api.github.com/repos/{audit_repo}/contents/{archive_path}?{query}"
@@ -776,6 +770,8 @@ def _verify_ciphertext_at_commit(
             "archived ciphertext metadata did not identify a regular Git blob at "
             f"{archive_commit}:{archive_path}"
         )
+    if type(contents.get("size")) is not int or not 0 <= contents["size"] <= SINGLE_BLOB_MAX_BYTES:
+        sys.exit("archived ciphertext Git blob exceeds its size limit")
 
     # Do not depend on Contents-API raw-media content negotiation here. GitHub
     # can return the JSON metadata envelope even when the raw media type is
@@ -833,13 +829,25 @@ def _verify_ciphertext_at_commit(
         or reported_size != len(archived_bytes)
     ):
         sys.exit(f"GitHub returned an invalid size for ciphertext blob {blob_sha}")
-    actual_sha256 = hashlib.sha256(archived_bytes).hexdigest()
-    if actual_sha256 != expected_sha256:
-        sys.exit(
-            "archive commit does not contain the ciphertext recorded by its sidecar: "
-            f"expected {expected_sha256}, got {actual_sha256} at "
-            f"{archive_commit}:{archive_path}"
-        )
+    return archived_bytes
+
+
+def _verify_ciphertext_at_commit(
+    *, audit_repo: str, token: str, archive_commit: str,
+    archive_path: str, expected_sha256: str,
+) -> None:
+    """Verify the complete ciphertext, including all immutable multipart blobs."""
+    try:
+        for _ in archive_bytes(
+            archive_path, expected_sha256,
+            lambda path: _read_archive_blob_at_commit(
+                audit_repo=audit_repo, token=token, archive_commit=archive_commit,
+                archive_path=path,
+            ),
+        ):
+            pass
+    except ValueError as error:
+        sys.exit(f"archive commit does not contain the ciphertext recorded by its sidecar: {error}")
 
 
 def _push(args: argparse.Namespace) -> int:
@@ -924,7 +932,6 @@ def _push(args: argparse.Namespace) -> int:
     sidecar_remote = f"{base_path}.json"
 
     sidecar_bytes = (json.dumps(sidecar, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    ciphertext_bytes = ciphertext.read_bytes()
 
     audit_repo = args.audit_repo
     if not REPO_IDENT_RE.fullmatch(audit_repo):
@@ -1011,13 +1018,16 @@ def _push(args: argparse.Namespace) -> int:
     # The sidecar-first ordering would risk publishing an archive entry
     # whose ciphertext was never uploaded — much worse. (A present sidecar
     # implies a present ciphertext, so the re-eval no-op above is safe.)
-    _put_contents(
-        audit_repo=audit_repo,
-        token=token,
-        path=ciphertext_remote,
-        content=ciphertext_bytes,
-        message=commit_message,
-    )
+    try:
+        store_archive(
+            ciphertext, ciphertext_remote, sidecar["sha256_ciphertext"],
+            lambda path, content: _put_contents(
+                audit_repo=audit_repo, token=token, path=path,
+                content=content, message=commit_message,
+            ),
+        )
+    except ValueError as error:
+        sys.exit(str(error))
     archive_commit = _put_contents(
         audit_repo=audit_repo,
         token=token,
@@ -1282,9 +1292,56 @@ def _put_contents(
 # ---------------------------------------------------------------------------
 
 
+def _restore(args: argparse.Namespace) -> int:
+    """Reassemble either archive format from an immutable local audit clone."""
+    if not SHA40_RE.fullmatch(args.commit):
+        sys.exit("--commit must be a full lowercase commit SHA")
+    path = pathlib.PurePosixPath(args.archive_path)
+    if (
+        path.is_absolute() or ".." in path.parts or ":" in args.archive_path
+        or not args.archive_path.endswith(".tar.age")
+        or not args.archive_path.startswith(("audit/", "archives/"))
+    ):
+        sys.exit("--archive-path is not a canonical audit archive path")
+    if not SHA256_HEX_RE.fullmatch(args.sha256):
+        sys.exit("--sha256 must be the ciphertext digest from the sidecar or State")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    def read(part: str) -> bytes:
+        result = subprocess.run(
+            ["git", "-C", str(args.audit_root), "show", f"{args.commit}:{part}"],
+            check=True, capture_output=True,
+        )
+        return result.stdout
+
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=args.output.parent, delete=False) as output:
+            temporary = pathlib.Path(output.name)
+            for content in archive_bytes(args.archive_path, args.sha256, read):
+                output.write(content)
+        # Publish only fully verified ciphertext, without overwriting a file.
+        os.link(temporary, args.output)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        sys.exit(f"could not restore archive: {error}")
+    finally:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+    print(f"restored verified ciphertext: {args.output}")
+    return 0
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_restore = sub.add_parser("restore", help="Restore verified age ciphertext from an audit clone.")
+    p_restore.add_argument("--audit-root", type=pathlib.Path, required=True)
+    p_restore.add_argument("--commit", required=True)
+    p_restore.add_argument("--archive-path", required=True)
+    p_restore.add_argument("--sha256", required=True)
+    p_restore.add_argument("--output", type=pathlib.Path, required=True)
+    p_restore.set_defaults(func=_restore)
 
     p_enc = sub.add_parser("encrypt", help="Encrypt source.tar.gz; emit ciphertext + partial sidecar.")
     p_enc.add_argument("--source-tar", type=pathlib.Path, required=True)

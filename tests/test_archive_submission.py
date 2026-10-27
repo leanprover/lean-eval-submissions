@@ -235,7 +235,8 @@ class EncryptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             source_tar = tmp / "source.tar.gz"
-            source_tar.write_bytes(b"x" * (arch.SIZE_CAP_BYTES + 1))
+            with source_tar.open("wb") as source:
+                source.truncate(arch.SIZE_CAP_BYTES + 1)
             metadata = _make_metadata(tmp)
             recipients = _make_recipients(tmp)
             with self.assertRaises(SystemExit) as ctx:

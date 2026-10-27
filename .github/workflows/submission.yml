@@ -267,7 +267,7 @@ jobs:
       ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     permissions:
       contents: read
       issues: write
@@ -423,6 +423,17 @@ jobs:
       - name: Clean archive scratch dirs
         run: rm -rf /tmp/archive-fetch /tmp/archive-encrypt
 
+      - name: Free disk space before fetching large archives
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Fetch source for archive
         id: archive_fetch
         env:
@@ -470,13 +481,10 @@ jobs:
         id: size_check
         if: steps.archive_fetch.outcome == 'success'
         run: |
-          SIZE_BYTES=$(stat -c %s /tmp/archive-fetch/source.tar.gz)
-          CAP_BYTES=$((100 * 1000 * 1000))
-          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 100 MB)"
-          if [ "$SIZE_BYTES" -gt "$CAP_BYTES" ]; then
-            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (100 MB) audit cap"
-            exit 1
-          fi
+          python scripts/submission_limits.py \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Record size-cap status
         id: size_status
@@ -496,9 +504,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SIZE_MB=$(( $(stat -c %s /tmp/archive-fetch/source.tar.gz) / 1000000 ))
+          CAP_BYTES="${{ steps.size_check.outputs.cap_bytes }}"
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
-            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_MB} MB, over the 100 MB (100,000,000-byte) audit-archive cap. The source was not archived or evaluated. Trim build artifacts, large fixtures, or unrelated files before resubmitting."
+            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_MB} MB, over the ${CAP_BYTES}-byte audit-archive cap (1 GB by default; 10 GB for CFSG). The source was not archived or evaluated. Trim build artifacts, large fixtures, or unrelated files before resubmitting."
           gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
 
       - name: Install age for audit encryption

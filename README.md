@@ -156,8 +156,10 @@ unwrapping use separate, least-privilege AWS roles. Submitting explicitly agrees
 to this retention and to private fetch, archive, build, and execution before
 State accepts the request.
 
-The compressed source tarball is capped at **100 MB**; submissions
-above the cap are rejected before evaluation. See
+The compressed source tarball is capped at **1 GB** (1,000,000,000 bytes),
+or **10 GB** (10,000,000,000 bytes) for
+`classification_finite_simple_groups`. Submissions above their cap are rejected
+before evaluation. Large encrypted archives use verified Git-blob chunks. See
 [`docs/audit-archive.md`](docs/audit-archive.md) for the design and
 the decryption procedure.
 

@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
@@ -470,6 +471,19 @@ def tar_source(source_dir: pathlib.Path, tar_path: pathlib.Path) -> None:
         tf.add(source_dir, arcname=source_dir.name)
 
 
+def source_problem_ids(source_dir: pathlib.Path) -> list[str]:
+    """Read workspace names without evaluating any submitted configuration."""
+    names = set()
+    for path in source_dir.rglob("lakefile.toml"):
+        try:
+            value = tomllib.loads(path.read_text(encoding="utf-8")).get("name")
+        except (OSError, ValueError):
+            continue  # Invalid workspaces are diagnosed by evaluation.
+        if isinstance(value, str) and PROBLEM_RE.fullmatch(value):
+            names.add(value)
+    return sorted(names)
+
+
 def submission_repo_identifier(descriptor: SourceDescriptor) -> str:
     if descriptor.kind == "github_repo":
         return f"{descriptor.owner}/{descriptor.name}"
@@ -561,6 +575,7 @@ def fetch_submission(
         "model": fields["model"],
         "submitted_by": submitted_by,
         "issue_number": issue_number,
+        "problem_ids": source_problem_ids(source_dir),
     }
     if fields["production_description"] is not None:
         metadata["production_description"] = fields["production_description"]
