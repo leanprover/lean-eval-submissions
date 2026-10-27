@@ -109,6 +109,35 @@
         "ref": "7772d45786f36e2609db0d16019269a58a95eaa3",
         "repo": "tdwag123/crap-local_global_apollonian_circle_packings-6d7737e9"
       }
+    },
+    {
+      "accepted_at": "2026-10-27T05:45:45Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17bbd-5c91-70f0-a82b-21991b83cca1"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)",
+          "Aristotle (backend model undisclosed)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Aristotle assisted; local compilation and axiom audits passed; official verification pending.",
+        "wall_time_seconds": 76183,
+        "web_access": true
+      },
+      "result_id": "r2_468bc9557b6a66f15c8c403bbffc4e338b8715f707a97ee2d207014054fecfb5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "44b924ae4343914ae5571800c0588b5ff7f53cab",
+        "repo": "tdwag123/crap-equiangular_lines_fixed_angle-fced87e3"
+      }
     }
   ],
   "schema_version": 2,
