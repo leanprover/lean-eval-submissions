@@ -545,6 +545,27 @@
         "ref": "61104fcf3639384b35cab6c34d3b4a04fa2c6e6d",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-10-27T12:19:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17d21-1ec9-7628-a1ed-7c6b0150dcf9"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_959cacbaef86a26d2354146e726fd2addf38c4544cf96ec938464f6a50801b6d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "afa570376538dcf278fd80d589c130d60df39f3c",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
