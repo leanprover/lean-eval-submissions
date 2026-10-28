@@ -2348,7 +2348,9 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const ledger = state(env, dependencies);
     if (ledger.readMetadataForOwner === undefined) throw new GitHubStateError(503, "metadata reader unavailable");
     const current = await ledger.readMetadataForOwner(resultMetadataMatch[1], authenticated.login);
-    const metadata = { ...verified.metadataContext?.productionMetadata, ...current?.metadata };
+    const metadata = current?.submissionId
+      ? current.metadata
+      : { ...verified.metadataContext?.productionMetadata, ...current?.metadata };
     const revision = current?.revision ?? "unclaimed";
     return json({ production_metadata: metadata, revision, idempotency_key: newEventId(nowMilliseconds), submission_id: current?.submissionId ?? verified.metadataContext?.submissionId ?? null, claim_required: current === null && verified.metadataContext?.submissionId === null }, 200, { etag: '"' + revision + '"' });
   }

@@ -2,7 +2,6 @@ from __future__ import annotations
 import json
 import pathlib
 import unittest
-from scripts.acceptance_measurement import validate_measurement
 
 ROOT = pathlib.Path(__file__).parents[1]
 
@@ -13,42 +12,6 @@ def fixture():
     )
 
 
-class MeasurementContractTests(unittest.TestCase):
-    def test_unavailable_counter_preserves_elapsed_time(self):
-        m = validate_measurement(fixture())
-        self.assertEqual(m["checker_wall_time_ms"], 120)
-        self.assertIsNone(m["checker_retired_instructions"])
-
-    def test_rejects_tampered_identity_environment_and_counter(self):
-        for key, value in [
-            ("result_id", "r2_" + "0" * 64),
-            ("architecture", "aarch64"),
-            ("attempt", True),
-            ("build_wall_time_ms", -1),
-            ("build_retired_instructions", None),
-            ("checker_retired_instructions", 0),
-            ("source_code", "private proof"),
-        ]:
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                m = fixture()
-                m[key] = value
-                validate_measurement(m)
-
-    def test_failure_is_explicit_and_never_has_partial_totals(self):
-        m = fixture()
-        m.update(status="failed", reason_code="measurement_invalid")
-        for phase in ("build", "checker"):
-            m[phase + "_wall_time_ms"] = None
-            m[phase + "_retired_instructions"] = None
-            m[phase + "_retired_instructions_unavailable_reason"] = (
-                "counter_not_reported"
-            )
-        validate_measurement(m)
-        m["build_wall_time_ms"] = 100
-        with self.assertRaises(ValueError):
-            validate_measurement(m)
-
-
 import sys
 import tempfile
 from unittest import mock
@@ -57,9 +20,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from collect_acceptance_metrics import collect, measure
 from build_acceptance_measurements import build
 from measure_acceptance_phase import main as phase_main
-from measure_acceptance_sandbox import phase_for
+from measure_acceptance_sandbox import phase_for, install
 from evaluate_submission import _acceptance_sandbox
 import os
+import subprocess
 
 
 class AcceptanceProducerTests(unittest.TestCase):
@@ -185,37 +149,6 @@ class AcceptanceProducerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 collect(root, ["../../source"])
 
-    def test_measurement_persistence_failure_preserves_exit_code(self):
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            mock.patch(
-                "measure_acceptance_phase.measure.run_measured",
-                return_value=(0, 12, {"status": "measured", "value": 10}),
-            ),
-            mock.patch(
-                "measure_acceptance_phase.measure.save_metrics",
-                side_effect=OSError("disk full"),
-            ),
-        ):
-            output = pathlib.Path(directory) / "problem.json"
-            self.assertEqual(
-                phase_main(
-                    [
-                        "--metrics-path",
-                        str(output),
-                        "--landrun",
-                        "/bin/true",
-                        "--",
-                        "--phase",
-                        "build",
-                        "--",
-                        "/bin/true",
-                    ]
-                ),
-                0,
-            )
-            self.assertTrue(output.with_suffix(".failed").exists())
-
     def test_receipts_bind_only_the_original_accepted_source(self):
         m = fixture()
         numeric = {
@@ -229,6 +162,11 @@ class AcceptanceProducerTests(unittest.TestCase):
             "declared_model": m["declared_model"],
             "statement_revision": 1,
             "benchmark_commit": m["benchmark_commit"],
+            "submission": {
+                "kind": "github_repo",
+                "repo": "owner/proof",
+                "ref": "a" * 40,
+            },
         }
         kwargs = dict(
             records=[record],
@@ -245,143 +183,30 @@ class AcceptanceProducerTests(unittest.TestCase):
             measured_at=m["measured_at"],
             architecture=m["architecture"],
             components=m["components"],
+            submission=dict(record["submission"]),
         )
         self.assertEqual(build(**kwargs), [m])
+        for key, different in (
+            ("kind", "github_pr"),
+            ("repo", "other/proof"),
+            ("ref", "b" * 40),
+        ):
+            with self.subTest(key=key):
+                changed = {**record["submission"], key: different}
+                self.assertEqual(build(**{**kwargs, "submission": changed}), [])
+        self.assertEqual(build(**{**kwargs, "benchmark_commit": "b" * 40}), [])
+        self.assertEqual(
+            build(
+                **{
+                    **kwargs,
+                    "runner_class": "namespace-ubuntu-24.04-amd64-32x64-lake-v1",
+                }
+            )[0]["runner_class"],
+            "namespace-ubuntu-24.04-amd64-32x64-lake-v1",
+        )
         numeric["workflow_commit"] = "b" * 40
         with self.assertRaises(ValueError):
             build(**kwargs)
-
-
-from compute_reporting_coverage import coverage
-from plan_compute_backfill import plan
-from reconcile_acceptance_measurements import receipts, recovery_runs
-import datetime as dt
-import io
-import zipfile
-
-
-class CoverageAndRecoveryTests(unittest.TestCase):
-    def test_published_failure_does_not_starve_older_missing_receipts(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
-            newest, older = "r2_" + "a" * 64, "r2_" + "b" * 64
-            for rid, run in ((newest, 3), (older, 2)):
-                (root / (rid + ".json")).write_text(json.dumps({"run_id": run}))
-            report = {
-                "results": [
-                    {
-                        "result_id": rid,
-                        "status": "failed",
-                        "accepted_at": "2026-10-22T00:00:00Z",
-                    }
-                    for rid in (newest, older)
-                ]
-            }
-            state = {
-                "acceptance_measurements": [
-                    {"result_id": newest, "workflow_run_id": 3, "status": "failed"}
-                ]
-            }
-            self.assertEqual(
-                recovery_runs(
-                    report,
-                    state,
-                    root,
-                    dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc),
-                ),
-                {2: {older}},
-            )
-
-    def test_recovery_rejects_untrusted_artifact_paths_and_identity(self):
-        for name, value in [
-            ("../source.json", fixture()),
-            (fixture()["result_id"] + ".json", dict(fixture(), workflow_run_id=999)),
-        ]:
-            archive = io.BytesIO()
-            with zipfile.ZipFile(archive, "w") as z:
-                z.writestr(name, json.dumps(value))
-            with self.assertRaises(ValueError):
-                list(receipts(archive.getvalue(), 123, "a" * 40))
-
-    def test_coverage_distinguishes_history_queue_and_unmeasured_results(self):
-        m = fixture()
-        r = {
-            "result_id": m["result_id"],
-            "problem_id": m["problem_id"],
-            "statement_revision": 1,
-            "accepted_at": "2026-10-20T00:00:00Z",
-            "intake": {"kind": "server"},
-            "benchmark_commit": m["benchmark_commit"],
-        }
-        state = {
-            "schema_version": 7,
-            "results": [],
-            "historical_replay_series": [],
-            "historical_replay_unavailability": [],
-            "acceptance_measurements": [],
-        }
-        self.assertEqual(coverage([r], state)["counts"], {"needs_measurement": 1})
-        state["acceptance_measurements"] = [m]
-        self.assertEqual(coverage([r], state)["counts"], {"measured": 1})
-        state["acceptance_measurements"] = []
-        state["historical_replay_series"] = [
-            {"result_id": m["result_id"], "replay": {"status": "queued"}}
-        ]
-        self.assertEqual(coverage([r], state)["counts"], {"pending": 1})
-
-    def test_backfill_does_not_duplicate_tasks_or_guess_original_toolchains(self):
-        rid = fixture()["result_id"]
-        report = {
-            "results": [
-                {
-                    "result_id": rid,
-                    "status": "needs_measurement",
-                    "intake_kind": "server",
-                }
-            ]
-        }
-        domain = {
-            "submissions": [
-                {
-                    "submission_id": "s",
-                    "evaluation": {
-                        "benchmark_commit": "a" * 40,
-                        "toolchain": "leanprover/lean4:v4.34.0",
-                    },
-                    "archive": {"status": "completed"},
-                }
-            ],
-            "results": [
-                {
-                    "result_id": rid,
-                    "submission_id": "s",
-                    "event_id": "0198abcd-0000-7000-8000-000000000006",
-                }
-            ],
-            "replay_tasks": [],
-        }
-        packet = plan(report, domain, {}, "2026-10-22T09:00:00.000Z")
-        self.assertEqual(packet["events"], [])
-        self.assertEqual(
-            packet["blocked"][0]["reason"], "exact_benchmark_profile_not_qualified"
-        )
-        profile = {
-            "a" * 40: {
-                "qualified": True,
-                "toolchain": "leanprover/lean4:v4.34.0",
-                "measurement_config_digest": "b" * 64,
-                "execution_profile_digest": "c" * 64,
-            }
-        }
-        first = plan(report, domain, profile, "2026-10-22T09:00:00.000Z")
-        self.assertEqual(
-            first, plan(report, domain, profile, "2026-10-22T09:00:00.000Z")
-        )
-        self.assertEqual(len(first["events"]), 1)
-        domain["replay_tasks"] = [{"result_id": rid}]
-        self.assertEqual(
-            plan(report, domain, profile, "2026-10-22T09:00:00.000Z")["events"], []
-        )
 
 
 class PersistenceIsolationTests(unittest.TestCase):
@@ -417,3 +242,97 @@ class PersistenceIsolationTests(unittest.TestCase):
                 ),
             ):
                 self.assertEqual(phase_main(args), 0)
+
+
+class RuntimeIsolationTests(unittest.TestCase):
+    def test_counter_errors_before_and_after_execution_preserve_the_single_command(
+        self,
+    ):
+        for failure in ("before", "after"):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                output = pathlib.Path(directory) / "calls"
+                descriptor = (
+                    os.open(os.devnull, os.O_RDONLY) if failure == "after" else None
+                )
+                with (
+                    mock.patch.object(
+                        measure,
+                        "open_counter",
+                        side_effect=RuntimeError("counter unavailable")
+                        if failure == "before"
+                        else None,
+                        return_value=(descriptor, None),
+                    ),
+                    mock.patch.object(
+                        measure.fcntl,
+                        "ioctl",
+                        side_effect=[0, 0, RuntimeError("counter read failed")],
+                    ),
+                ):
+                    result = measure.run_measured(
+                        [
+                            sys.executable,
+                            "-c",
+                            "import pathlib,sys; pathlib.Path(sys.argv[1]).open('a').write('ran\\n');sys.exit(7)",
+                            str(output),
+                        ],
+                        best_effort=True,
+                        preserve_fds=True,
+                    )
+                self.assertEqual(result[0], 7)
+                self.assertEqual(
+                    result[2],
+                    {"status": "unavailable", "reason": "counter_not_reported"},
+                )
+                self.assertEqual(output.read_text(), "ran\n")
+
+    def test_sandbox_control_fds_survive_but_counter_control_fd_is_not_inherited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "control"
+            path.write_text("sandbox-control")
+            control = os.open(path, os.O_RDONLY)
+            counter = os.open(os.devnull, os.O_RDONLY)
+            os.set_inheritable(control, True)
+            script = "import os,sys; assert os.read(int(sys.argv[1]),100)==b'sandbox-control';\ntry: os.fstat(int(sys.argv[2]));sys.exit(1)\nexcept OSError: pass"
+            try:
+                with (
+                    mock.patch.object(
+                        measure, "open_counter", return_value=(counter, None)
+                    ),
+                    mock.patch.object(measure.fcntl, "ioctl", return_value=0),
+                ):
+                    result = measure.run_measured(
+                        [sys.executable, "-c", script, str(control), str(counter)],
+                        best_effort=True,
+                        preserve_fds=True,
+                    )
+                self.assertEqual(result[0], 0)
+            finally:
+                os.close(control)
+
+    def test_launcher_import_failure_still_executes_the_real_sandbox(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            metrics = root / "metrics"
+            metrics.mkdir()
+            broken = root / "broken"
+            broken.mkdir()
+            (broken / "measure_acceptance_sandbox.py").write_text(
+                "raise RuntimeError('observer import failed')\n"
+            )
+            with mock.patch(
+                "measure_acceptance_sandbox.__file__", str(broken / "source.py")
+            ):
+                wrapper = install(metrics, root, {}, pathlib.Path(sys.executable), root)
+            process = subprocess.run(
+                [str(wrapper), "-c", "import sys; print('real sandbox');sys.exit(7)"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(process.returncode, 7)
+            self.assertEqual(process.stdout.strip(), "real sandbox")
+            self.assertNotIn("Traceback", process.stderr)

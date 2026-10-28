@@ -64,6 +64,9 @@ function readProductionMetadata() {
   for (const name of productionFields) {
     const element = document.querySelector("#meta_" + name);
     if (!element) continue;
+    const previous = original[name];
+    const displayed = previous === undefined ? "" : Array.isArray(previous) ? previous.join(", ") : String(previous);
+    if (element.value === displayed) continue;
     const value = element.value.trim();
     if (value === "") { delete metadata[name]; continue; }
     if (["input_tokens", "cached_input_tokens", "output_tokens", "wall_time_seconds", "cost_usd"].includes(name)) {
@@ -417,7 +420,7 @@ releaseOptInForm.addEventListener("submit", async (event) => {
 
 
 export function metadataPage(): Response {
-  return page("Edit production information", "<p>Only the submitter can add or correct this self-reported information. Changes and their dates remain in the public history.</p>", `
+  return page("Edit production information", "<p>Only the submitter can add or correct this self-reported information. Current values and the dates each field changed are public.</p>", `
     <a id="metadata-sign-in" href="/api/v1/oauth/start?return_to=%2Fmetadata%2F">Sign in with GitHub</a>
     <form id="metadata-form">${productionFields()}<button id="metadata-save" disabled>Save production information</button></form>
     <p id="metadata-status" role="status" aria-live="polite">Loading your result…</p>
@@ -468,18 +471,36 @@ document.querySelector("#metadata-form").addEventListener("submit", async event 
   try {
     const metadata = readProductionMetadata();
     if (!Object.keys(metadata).length) throw new Error("Enter at least one field. Existing metadata cannot all be cleared.");
+    // Fetch a fresh server-clock key without replacing the draft in the form.
+    const fresh = await fetch(endpoint + "?results_commit=" + encodeURIComponent(target.results_commit));
+    if (!fresh.ok) throw new Error("Could not refresh ownership. Sign in again; your edits remain in the form.");
+    const latest = await fresh.json();
+    if (latest.revision !== context.revision) throw new Error("This result changed. Reload before saving; your edits remain in the form.");
+    context = latest; etag = fresh.headers.get("etag");
     if (context.claim_required) {
       const claim = await write("/api/v1/results/claims", "POST", { result_id: target.result_id, results_commit: target.results_commit });
       void claim;
       const refreshed = await fetch(endpoint + "?results_commit=" + encodeURIComponent(target.results_commit));
       if (!refreshed.ok) throw new Error("Claim succeeded; reload before saving the metadata.");
-      context = await refreshed.json(); etag = refreshed.headers.get("etag");
+      const claimed = await refreshed.json();
+      const before = context.production_metadata, after = claimed.production_metadata;
+      if (Object.keys(before).length !== Object.keys(after).length || Object.entries(before).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(after[key]))) {
+        throw new Error("This result changed while claiming it. Reload before saving; your edits remain in the form.");
+      }
+      context = claimed; etag = refreshed.headers.get("etag");
     }
     // Legacy backfill is field-wise and cannot remove old entries. New submission
     // amendments replace the full current metadata object, preserving unedited fields.
     const url = context.submission_id ? "/api/v1/submissions/" + context.submission_id + "/metadata" : endpoint;
     if (!context.submission_id && Object.keys(context.production_metadata).some(key => allowed.includes(key) && !(key in metadata))) throw new Error("Existing historical fields cannot be cleared; replace their values instead.");
-    await write(url, "PATCH", { production_metadata: metadata }, etag);
+    const changed = context.submission_id ? metadata : Object.fromEntries(
+      Object.entries(metadata).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(context.production_metadata[key]))
+    );
+    if (!context.submission_id && !Object.keys(changed).length) {
+      status.textContent = "No changes to save.";
+      return;
+    }
+    await write(url, "PATCH", { production_metadata: changed }, etag);
     await load();
     status.textContent = "Saved. The public site will show the update after its next refresh.";
   } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }

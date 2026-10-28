@@ -41,11 +41,15 @@ def install(metrics_dir, workspaces, solutions, sandbox, lean_prefix):
     wrapper.write_text(
         "#!"
         + sys.executable
-        + "\nimport sys\n"
-        + "sys.path.insert(0, "
+        + "\nimport os, sys\n"
+        + "try:\n    sys.path.insert(0, "
         + repr(str(pathlib.Path(__file__).parent))
-        + ")\n"
-        + "from measure_acceptance_sandbox import run\n"
+        + ")\n    from measure_acceptance_sandbox import run\n"
+        + "except Exception:\n    os.execv("
+        + repr(str(sandbox))
+        + ", ["
+        + repr(str(sandbox))
+        + ", *sys.argv[1:]])\n"
         + "raise SystemExit(run(*"
         + repr(configuration)
         + ", sys.argv[1:]))\n"
@@ -55,12 +59,15 @@ def install(metrics_dir, workspaces, solutions, sandbox, lean_prefix):
 
 
 def run(sandbox, metrics_dir, workspaces, solutions, tools, arguments):
-    cwd = pathlib.Path.cwd().resolve()
-    phase = (
-        phase_for(arguments, tools, solutions.get(cwd.name))
-        if (cwd.parent == pathlib.Path(workspaces) and cwd.name in solutions)
-        else None
-    )
+    try:
+        cwd = pathlib.Path.cwd().resolve()
+        phase = (
+            phase_for(arguments, tools, solutions.get(cwd.name))
+            if (cwd.parent == pathlib.Path(workspaces) and cwd.name in solutions)
+            else None
+        )
+    except Exception:
+        phase = None
     if phase is None:
         os.execv(sandbox, [sandbox, *arguments])
     return measure_phase(

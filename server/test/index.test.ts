@@ -76,7 +76,7 @@ describe("Worker routing", () => {
   });
 
   it("reports opt-in independently and keeps the reverse transition disabled", async () => {
-    const contract = "84a67577279884f5ca9b8ab92db990295443d09a";
+    const contract = "9d041099a972c65d430c2c9eb977f762dba92772";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
       {
@@ -150,7 +150,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "84a67577279884f5ca9b8ab92db990295443d09a",
+          "9d041099a972c65d430c2c9eb977f762dba92772",
       },
       LIFECYCLE,
     );
@@ -165,14 +165,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "84a67577279884f5ca9b8ab92db990295443d09a",
+          "9d041099a972c65d430c2c9eb977f762dba92772",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "84a67577279884f5ca9b8ab92db990295443d09a",
+          "9d041099a972c65d430c2c9eb977f762dba92772",
       },
       {
         ...ENV,
@@ -293,13 +293,13 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "e5ca38ef7c2427ee1b06f152b77477b47e119494";
+    const contract = "d7d67f5b609735286355c6be460d85c203aac64c";
     const tree = "2".repeat(40);
     const rootEntries = [
       { path: "README.md", mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      { path: "docs", mode: "040000", type: "tree", sha: "2a438f528b7c80a6e3df4a77d903ca8ddae8fe10" },
-      { path: "schema", mode: "040000", type: "tree", sha: "d9cbe28cbc66b4ae6880f829fc100c77184ef004" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "ce620e408780342464dc4f73ddb87a777043003f" },
+      { path: "docs", mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
+      { path: "schema", mode: "040000", type: "tree", sha: "14c21bdd3333d6cb304e233fae1feacd23eaea6e" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),

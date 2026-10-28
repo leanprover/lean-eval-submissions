@@ -6,6 +6,7 @@ import argparse
 import importlib.machinery
 import importlib.util
 import pathlib
+import os
 import sys
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -28,15 +29,27 @@ def main(argv=None):
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     measure.LANDRUN = args.landrun
     measure.METRICS_PATH = args.metrics_path
-    phase, command = measure.parse_invocation(command)
+    try:
+        phase, command = measure.parse_invocation(command)
+    except Exception:
+        # Parsing is instrumentation only. The caller supplied the real sandbox
+        # command after the canonical phase separator; never run without it.
+        sandbox_command = (
+            command[3:] if len(command) >= 4 and command[2] == "--" else []
+        )
+        if not sandbox_command or sandbox_command[0] != args.landrun:
+            raise
+        os.execv(args.landrun, sandbox_command)
     # Counter failures must not suppress a build. open_counter already converts
     # unsupported/denied PMUs into a reason and leaves wall-clock measurement on.
-    returncode, wall, counter = measure.run_measured(command)
+    returncode, wall, counter = measure.run_measured(
+        command, best_effort=True, preserve_fds=True
+    )
     try:
         measure.save_metrics(
             measure.aggregate(measure.load_metrics(), phase, wall, counter, returncode)
         )
-    except (measure.MeasurementError, OSError):
+    except Exception:
         # Invalidation is best effort too: a read-only or full filesystem must
         # not turn a successfully checked proof into a rejection. Collection
         # also requires every expected invocation, so stale partials are refused.

@@ -54,6 +54,7 @@ def collect(metrics_dir, passed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runner-class", required=True)
     parser.add_argument("--metrics-dir", type=pathlib.Path, required=True)
     parser.add_argument("--results", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
@@ -66,6 +67,7 @@ def main():
                 .isoformat(timespec="milliseconds")
                 .replace("+00:00", "Z"),
                 "architecture": platform.machine(),
+                "runner_class": args.runner_class,
                 "components": json.loads((args.metrics_dir / "setup.json").read_text()),
                 "problems": collect(
                     args.metrics_dir, json.loads(args.results.read_text())["passed"]

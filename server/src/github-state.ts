@@ -152,9 +152,9 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "2a438f528b7c80a6e3df4a77d903ca8ddae8fe10" },
-      schema: { mode: "040000", type: "tree", sha: "d9cbe28cbc66b4ae6880f829fc100c77184ef004" },
-      scripts: { mode: "040000", type: "tree", sha: "ce620e408780342464dc4f73ddb87a777043003f" },
+      docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
+      schema: { mode: "040000", type: "tree", sha: "14c21bdd3333d6cb304e233fae1feacd23eaea6e" },
+      scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
@@ -172,9 +172,9 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
     commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "2a438f528b7c80a6e3df4a77d903ca8ddae8fe10" },
-      schema: { mode: "040000", type: "tree", sha: "d9cbe28cbc66b4ae6880f829fc100c77184ef004" },
-      scripts: { mode: "040000", type: "tree", sha: "ce620e408780342464dc4f73ddb87a777043003f" },
+      docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
+      schema: { mode: "040000", type: "tree", sha: "14c21bdd3333d6cb304e233fae1feacd23eaea6e" },
+      scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {

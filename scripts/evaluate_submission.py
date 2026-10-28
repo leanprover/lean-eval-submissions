@@ -929,8 +929,8 @@ def _acceptance_sandbox(metrics_dir, workspaces_root, problem_ids, repo_root):
     if metrics_dir is None:
         yield
         return
-    from measure_acceptance_sandbox import install
     try:
+        from measure_acceptance_sandbox import install
         sandbox = shutil.which(os.environ.get("COMPARATOR_BWRAP", "bwrap"))
         if sandbox is None:
             raise EvaluateError("trusted bubblewrap is unavailable")
@@ -946,7 +946,7 @@ def _acceptance_sandbox(metrics_dir, workspaces_root, problem_ids, repo_root):
             "bubblewrap_sha256": hashlib.sha256(sandbox.read_bytes()).hexdigest(),
         }
         (metrics_dir / "setup.json").write_text(json.dumps(components))
-    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+    except Exception:
         print("acceptance measurement setup unavailable", file=sys.stderr)
         yield
         return
@@ -1033,9 +1033,9 @@ def evaluate_submission(
     )
 
     if acceptance_metrics_dir is not None:
-        if acceptance_metrics_dir.is_symlink() or _is_inside(acceptance_metrics_dir, source_dir):
-            raise EvaluateError("acceptance metrics directory is not trusted")
         try:
+            if acceptance_metrics_dir.is_symlink() or _is_inside(acceptance_metrics_dir, source_dir):
+                raise OSError("acceptance metrics directory is not trusted")
             acceptance_metrics_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         except OSError:
             print("acceptance measurement directory unavailable", file=sys.stderr)

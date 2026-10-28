@@ -25,6 +25,7 @@ def build(
     architecture,
     submission=None,
     components=None,
+    runner_class="namespace-ubuntu-24.04-amd64-16x32-lake-v1",
 ):
     receipts = []
     expected_numeric = {"status", "reason_code"} | {
@@ -78,7 +79,7 @@ def build(
             "workflow_run_id": workflow_run_id,
             "attempt": attempt,
             "measured_at": measured_at,
-            "runner_class": "namespace-ubuntu-24.04-amd64-16x32-lake-v1",
+            "runner_class": runner_class,
             "architecture": architecture,
             "cache_state": "solution-cold-dependencies-cached",
             "components": components,
@@ -124,6 +125,7 @@ def main():
         attempt=args.attempt,
         measured_at=metrics["measured_at"],
         architecture=metrics["architecture"],
+        runner_class=metrics["runner_class"],
         components=metrics["components"],
         submission={
             "kind": metadata["submission_kind"],

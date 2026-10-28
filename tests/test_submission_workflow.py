@@ -168,7 +168,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
 
     def test_idempotent_lifecycle_callbacks_survive_bounded_state_throttling(self) -> None:
-        self.assertEqual(self.text.count("curl --fail-with-body"), 5)
+        callbacks = self.text.split("\n  measurement_state:", 1)[0]
+        self.assertEqual(callbacks.count("curl --fail-with-body"), 4)
         for option in (
             "--connect-timeout 10",
             "--max-time 30",
@@ -177,7 +178,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "--retry-max-time 900",
             "--retry-connrefused",
         ):
-            self.assertEqual(self.text.count(option), 5)
+            self.assertEqual(callbacks.count(option), 4)
         self.assertNotIn("--retry-all-errors", self.text)
         self.assertEqual(self.text.count('--output "$response_file"'), 4)
         self.assertNotIn('cat "$response_file"', self.text)
@@ -191,6 +192,17 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
                 f"\n  {following_marker}", 1
             )[0]
             self.assertIn("timeout-minutes: 20", section)
+
+    def test_optional_measurements_cannot_block_credit_or_trigger_large_runner_escalation(self) -> None:
+        measurement = self.text.split("\n  measurement_state:", 1)[1]
+        self.assertIn("continue-on-error: true", measurement)
+        self.assertIn("needs: [record, result_state]", measurement)
+        self.assertIn("timeout-minutes: 5", measurement)
+        self.assertNotIn("--retry 15", measurement)
+        collect = self.attempt.split("      - name: Collect source-free acceptance measurements", 1)[1].split("      - name: Copy frozen metadata", 1)[0]
+        self.assertIn("continue-on-error: true", collect)
+        self.assertIn("inputs.runner_tier", collect)
+        self.assertIn("32x64", collect)
 
     def test_evaluate_disables_unwritable_github_cache(self) -> None:
         # lean-action still fetches Mathlib's independent cache, but must not

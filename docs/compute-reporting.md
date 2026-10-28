@@ -36,16 +36,20 @@ strict source-free receipts for 90 days.
 `POST /api/v1/results/<result_id>/measurements` accepts only the lifecycle
 callback token used in source-free jobs. It verifies the immutable accepted
 record on the environment's protected Results branch and appends a deterministic
-`result.measurement_recorded` event. This uses the existing callback credential
-boundary; it does not introduce OIDC or credentials into the evaluator. Schema
-version 7 of the public State projection carries measurements and dated metadata
-updates. Projection versions 1–6 retain their existing public schema bytes and
+`result.measurement_recorded` event. The new source-free reporting job uses the lifecycle callback credential for
+both server and issue-form runs, after their Results record is accepted. The
+existing protected-ref environment policy applies; the evaluator never receives
+this credential. Schema
+version 7 of the public State projection carries measurements and per-field origins
+for current metadata. Removed and superseded text is not republished. Projection versions 1–6 retain their existing public schema bytes and
 omit the new cached-input field.
 
 The measurement series includes the toolchain Git commit (which locks the bundled
 comparator, exporter and checkers), the exact bubblewrap binary SHA256, architecture,
-runner class and cache policy. `namespace-ubuntu-24.04-amd64-16x32-lake-v1` identifies
-the current acceptance runner and phase adapter; bump it when those semantics change. The exact
+runner class and cache policy. Standard attempts use
+`namespace-ubuntu-24.04-amd64-16x32-lake-v1`; larger-runner retries use
+`namespace-ubuntu-24.04-amd64-32x64-lake-v1`. Bump the corresponding class when
+its runner or phase semantics change. The exact
 workflow commit and run/attempt are retained as evidence. Wall time is visibly
 marked **very noisy**. Instruction counts also depend on architecture and setup.
 A failed measurement does not change proof acceptance or its immutable credit.
@@ -61,35 +65,25 @@ they never overwrite a newer owner update. Browser idempotency keys are issued
 using the server's clock. The existing restrictions on retracted, pending-repair
 and publication-conflicting legacy mutations still apply.
 
-## Recovery and historical coverage
+## Receipt retries and historical coverage
 
-`reconcile-acceptance-measurements.yml` retries retained recorder receipts every
-six hours. It executes no downloaded code, validates ZIP entries and receipt
-identity, and posts only to the fixed production endpoint. A failed callback job
-can also be rerun directly. Missing or expired artifacts are explicitly reported
-for historical backfill; they are not treated as measurements.
+The source-free `measurement_state` job runs after credit has been recorded. It
+is best effort, with short bounded retries, and cannot make an otherwise
+successful submission workflow fail. Reduced receipts remain in the
+`acceptance-measurements` artifact for 90 days. An operator can rerun that job to
+retry publication; event IDs make reposting the same receipt idempotent.
 
-Produce a complete public coverage report with:
+Measurement collection runs inside the reusable evaluation attempt. A successful
+larger-runner retry reports its own runner tier; no failed standard attempt is
+reported as the accepted build. Instrumentation setup/import/counter/persistence
+failures fall back to the real sandbox or report unavailable statistics. Existing
+sandbox file descriptors and child exit status are preserved.
 
-```sh
-python scripts/compute_reporting_coverage.py \
-  --results-root /path/to/lean-eval-submissions \
-  --public-state /path/to/public-state-v7.json \
-  --output /tmp/compute-coverage.json
-```
-
-Existing historical queue tasks and terminal measurements are reused. Finish
-legacy issue coverage with the existing historical inventory/final-delta planners
-and public/private controllers. For server results predating instrumentation,
-`plan_compute_backfill.py` creates a create-only event packet from that coverage
-report, State's privately materialized `domain.json`, and a reviewed profile map
-keyed by the **original benchmark commit**. A map entry contains `toolchain`,
-`qualified: true`, `execution_profile_digest`, and `measurement_config_digest`.
-Do not use fixture profiles: the original toolchain and exact executor image must
-already have passed the existing qualification procedure. Missing qualification
-is recorded as blocked; the planner never substitutes a newer benchmark.
-Validate the proposed events with State before appending them. It does not append,
-decrypt, dispatch, enable ordinary replay, or alter the historical replay gates.
+Historical coverage and replay planning are separate operator tools in
+[Submissions #2169](https://github.com/leanprover/lean-eval-submissions/pull/2169). They reuse
+the existing replay controllers and require exact original benchmark/toolchain
+profiles. They do not run on a schedule, hold a callback credential, qualify
+profiles, dispatch proofs, or enable replay gates as part of this feature.
 
 ## Rollout order
 
