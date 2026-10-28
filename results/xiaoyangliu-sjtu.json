@@ -104,6 +104,468 @@
         "ref": "b2f1c43164ba4b8724266a847bbd1fcb60174653",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-10-24T16:20:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a16e93-d301-75c2-9293-f39b572e573f"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_013f42efaa5f27929e49b87290be01929768b0787bd66dfaf35df9363f6c84ce",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-24T16:28:57Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a16e93-abf1-773e-8b83-2884805ace8e"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_f3eeac0b42d7fba8df0158d127f78efe017b5132c65a0d7bc40efc5e48d6c0f2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-24T16:34:56Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a16e93-bf79-76f4-9ff1-c6989187a91d"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_f9c481f36c1618190b46540ea02c2851d8c38ff2790ed0e32bfd29ca803446f9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f49aa4824f7e151afafec65e75dcb02dcd537190",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-25T02:53:11Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a170d3-1c71-787a-8ff3-ac75abaa3c6b"
+      },
+      "problem_id": "hadwiger",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_4a08e43cbf026da81d0a652eec4d624d98a709ffe0314f154c85c1de016ec419",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6d89fbe38f3d56279cf6c72d41ac7a67982c9547",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-25T05:56:11Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17182-82c9-7036-8696-5049f9fe9743"
+      },
+      "problem_id": "klartag_packing",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_b7ed47a6575ce9cd679d21debe3624c7fc3c318c13e5fcd4ccbd0a6f0de964be",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "79c86412ff1766e03a1f96d2c5aba077b4678d96",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-25T06:05:44Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17182-d4d1-7522-aef1-86d80649cb0c"
+      },
+      "problem_id": "duffin_schaeffer",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_98d15e408d1072447bd54cb669be688a96e5d63e61486009a1b99c9742cdde9f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "79c86412ff1766e03a1f96d2c5aba077b4678d96",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T09:14:45Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17757-7619-7e1c-9da0-26cbfca0d71e"
+      },
+      "problem_id": "annals_enumerating_number_fields",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_0697fd5074033fe913eaa838debe176ae6611d64565fd3c053434f641694d85b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "474460de67dc9fafe69ea46daebc704ae7fe1cb0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T09:21:06Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17757-9171-7023-b22b-9578ff1c242a"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_a232b81e19f3572270495a2b9004858297611c3476fd272a7811733407071d61",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "474460de67dc9fafe69ea46daebc704ae7fe1cb0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T09:21:53Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17757-a4f9-76b7-bdd1-bb9c1de6ff3d"
+      },
+      "problem_id": "annals_pseudorandom_grassmann",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_376ccfd846bd73783a25fbe9feb8aaf26e6ea545b7510e092ac76cc13cfa618c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "474460de67dc9fafe69ea46daebc704ae7fe1cb0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T09:26:06Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17757-6291-7612-b1ce-3fa892c7c963"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_eb33ed1dde0fb75b9f860ec73a96842cf77ed484120aa912356e8a26f5bfb4a5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "474460de67dc9fafe69ea46daebc704ae7fe1cb0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T10:30:56Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1779c-33c1-7b37-9ce3-163d294a1854"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_a44ed485efab8aef781b30a9731a54518f242a749376eca7f141d2f2c0744dea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "956f7e8d14ddfe99c1a8097b0ae20777608ca8ab",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T10:31:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1779b-d9e9-7fbe-b77b-3d7feb2a5f22"
+      },
+      "problem_id": "annals_zagier_hoffman_positive_char",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_230a2a1eadaba6a10756b912a0633f618578242b90df6f1a62203a12f0b725f2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "956f7e8d14ddfe99c1a8097b0ae20777608ca8ab",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T10:39:05Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1779c-cc19-73d4-9b20-1de707da4114"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_8b4b1a6861c5a16a2cc5cae26919660f75a0d9ccf0792caa4aa90ae85084ff94",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "956f7e8d14ddfe99c1a8097b0ae20777608ca8ab",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T12:01:31Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a177ef-a321-7e60-a029-9ef413a8c6b7"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_7111720c9de302d144f2ddffb888510372caab45dfc9d6c65615e5846f2b800a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9b5768c282ecdf042c79aa913c2b3f05879e2b86",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T13:21:13Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17839-94d1-7c30-b1d6-37164f4c514e"
+      },
+      "problem_id": "szemeredi",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_eee863a6fda5c091fef77c701033f37c8f653a1eb0d3be15ee5fa77b70c3aaf5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9b5768c282ecdf042c79aa913c2b3f05879e2b86",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T13:44:46Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1784e-8819-7fbc-be08-aab65a60f301"
+      },
+      "problem_id": "annals_supremum_of_selector_processes",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_83495f9a098b8f16a84452d91d7806dee2e2e8ab5e75f1879efbdc26da06ee5a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "45deef2c62d5bf157b716e8670bb7b2417dcf9a4",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T02:13:08Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17af6-47b9-70b1-967b-36d4c537e0cd"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_ade45651981afd7cac3eb0f5ff05cfa0fb4a86eaa22cf014fe273bec1e7d4107",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8ca2b00a3539b1e05a60f71d8c26aa8cd07dd6f0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T03:20:10Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17b3c-2e41-7c15-9f10-2a56ee4e032f"
+      },
+      "problem_id": "vinogradov_mean_value",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_615a39cec90fa67d4a7b93cc8566b01a45cc962dadd536f97c9f82f38826dbe3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8ca2b00a3539b1e05a60f71d8c26aa8cd07dd6f0",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T06:12:23Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17bd2-20f9-7399-9bd9-71d414888816"
+      },
+      "problem_id": "annals_good_lt_codes",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_b19e7495a12ccfc6ab646a848de32730f1b5cdba82d23065f43de3b4f040b616",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d61045e385a8183549c4406ed23b01f872929f55",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T06:28:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17be2-c2c9-78d7-b2ee-a9b8adf32a46"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_9efaebf52ed89463a47bbcc13c90e0c03542075fe9d3a8dc560f330756d1d835",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fc458ef601d629208bd4af1ff92cde2e94605a59",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T08:53:55Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17c5d-c6f9-7a7d-bf58-c725df0534f8"
+      },
+      "problem_id": "annals_reverse_minkowski",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_b411c2187d3ae2ec5daf0be43740268df739fad9eeff1d1497f1a5858be20182",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "61104fcf3639384b35cab6c34d3b4a04fa2c6e6d",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T12:19:36Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17d21-1ec9-7628-a1ed-7c6b0150dcf9"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_959cacbaef86a26d2354146e726fd2addf38c4544cf96ec938464f6a50801b6d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "afa570376538dcf278fd80d589c130d60df39f3c",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,

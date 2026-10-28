@@ -515,6 +515,27 @@ class GuardPathEscapeTests(unittest.TestCase):
 
 
 class FetchSubmissionEndToEndTests(unittest.TestCase):
+    def test_retry_uses_archived_commit_without_resolving_moving_refs(self) -> None:
+        sha = "a" * 40
+        for url in (
+            "https://github.com/alice/my-proofs/tree/main",
+            "https://gist.github.com/alice/abc123",
+        ):
+            with self.subTest(url=url), tempfile.TemporaryDirectory() as directory:
+                body = SAMPLE_BODY.replace(
+                    "https://github.com/alice/my-proofs/commit/8e1b9cf5e1d3c2b1a0f9e8d7c6b5a4938271605f", url,
+                )
+                event = {"issue": {"number": 42, "user": {"login": "alice"}, "body": body}}
+                with patch("fetch_submission.resolve_repo_visibility", return_value=True), patch(
+                    "fetch_submission.subprocess.run", side_effect=AssertionError("ref re-resolved")
+                ):
+                    metadata = fs.fetch_submission(
+                        event_payload=event, output_dir=pathlib.Path(directory),
+                        app_token=None, skip_clone=True, source_commit=sha,
+                    )
+                self.assertEqual(metadata["submission_ref"], sha)
+                self.assertEqual(metadata["source_url"], url)
+
     def test_dry_run_emits_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)

@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
+      - '.github/workflows/evaluate-attempt.yml'
       - '.github/workflows/promotion-canary.yml'
       - '.github/workflows/server-archive.yml'
       - '.github/workflows/set-staging-intake.yml'
@@ -30,6 +31,7 @@ on:
     paths:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
+      - '.github/workflows/evaluate-attempt.yml'
       - '.github/workflows/promotion-canary.yml'
       - '.github/workflows/server-archive.yml'
       - '.github/workflows/set-staging-intake.yml'

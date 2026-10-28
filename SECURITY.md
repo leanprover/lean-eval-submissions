@@ -83,6 +83,11 @@ properties of `submission.yml`'s structure that we do not actively probe:
 - **fetch and evaluate share one job**, and private source must never be
   uploaded as an artifact or cross a runner boundary. Do not split these jobs.
   (`tests/test_submission_workflow.py` asserts they stay merged.)
+- Larger-runner retries independently refetch the same frozen source on the
+  new runner and verify the archive's metadata digest again. Only source-free
+  result/diagnostic artifacts cross attempts. A trusted job checks the issue
+  author or Worker-verified submitter against the allowlist on protected main;
+  the runner executing submitted Lean cannot authorize its own escalation.
 - `APP_INSTALLATION_TOKEN` is scoped to the env of the single
   `Fetch submission` step.
 - `fetch_submission.py` strips `.git/` from the cloned source before
@@ -96,7 +101,7 @@ properties of `submission.yml`'s structure that we do not actively probe:
   left visible there can be read by submitted code.
 
 `tests/test_submission_workflow.py` is the structural guard for the
-first, third, and fourth bullets — a workflow refactor that regresses
+co-located fetch/evaluation, token scope, tarball hygiene, and checkout bullets — a workflow refactor that regresses
 them fails CI.
 
 The pinned `actions/create-github-app-token` v3.2.0 writes the token to
@@ -112,7 +117,7 @@ not something we actively probe. Submitters who require confidentiality
 should audit the workflow themselves before relying on this.
 
 **Audit retention.** Every successfully fetched submission has its
-compressed source tarball (≤ 100 MB) `age`-encrypted to the recipient
+compressed source tarball (≤ 1 GB by default, or ≤ 10 GB for CFSG) `age`-encrypted to the recipient
 list in `.audit/recipients.txt` and pushed to the private
 `leanprover/lean-eval-audit` repo for indefinite retention. The
 ciphertext is decryptable only by holders of the matching SSH/age
@@ -131,8 +136,11 @@ Server intake uses the same encryption boundary but keys the
 archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
 Before State may receive `archive.completed`, the archiver emits an immutable
 repository/commit/path/ciphertext-digest locator and verifies the encrypted
-bytes at that exact commit. Issue-based intake retains its existing archive
-layout and behavior.
+bytes at that exact commit. New ciphertexts above 30,000,000 bytes use a manifest and 30 MB encrypted
+parts, all committed before the
+sidecar. Verification binds every part to the same immutable commit and checks
+the reassembled ciphertext digest before emitting the locator. Issue intake
+uses the same storage format under its existing archive paths.
 
 The trusted archive job now independently fetches the exact source commit and
 persists the encrypted archive before evaluation starts. The evaluation job
@@ -145,7 +153,7 @@ wrapped identity, or KMS/DynamoDB/Lambda authority.
 
 ## 3. The two-checkout evaluation workflow
 
-`submission.yml`'s `evaluate` job is the only place untrusted submitter
+`evaluate-attempt.yml`'s `evaluate` job is the only place untrusted submitter
 Lean is elaborated, and it is elaborated only inside comparator's bubblewrap
 sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
 "where untrusted code runs" table). The job:
@@ -170,6 +178,13 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
    re-runs them as a per-submission pre-flight gate.
 8. Runs `evaluate_submission.py`, which overlays the submission onto a
    pristine `generated/<id>/` workspace and invokes comparator.
+
+The evaluation steps live in `evaluate-attempt.yml`, shared by the standard
+and optional larger attempt. The `evaluate` job in `submission.yml` selects
+the final attempt before State completion and recording. Each attempt has
+contents-read permission only, no lifecycle or recording credentials, and
+never receives plaintext source from the preceding attempt. See
+[`docs/larger-runners.md`](docs/larger-runners.md) for escalation policy.
 
 When Lean Pool is present, workspace setup shares its pinned source through
 read-only symlinks and creates a private `.lake` directory under the

@@ -115,6 +115,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: ${{ inputs.audit_commit }}
           path: audit
           fetch-depth: 1
@@ -124,6 +129,7 @@ jobs:
       - name: Freeze and verify the complete inventory
         id: inventory
         env:
+          AUDIT_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
           AUDIT_COMMIT: ${{ inputs.audit_commit }}
           EXPECTED_DIGEST: ${{ inputs.expected_inventory_digest }}
           EXPECTED_COUNT: ${{ inputs.expected_migration_count }}
@@ -319,6 +325,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: ${{ inputs.audit_commit }}
           path: audit
           fetch-depth: 1

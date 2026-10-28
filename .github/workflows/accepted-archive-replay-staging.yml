@@ -95,11 +95,21 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: ${{ steps.plan.outputs.archive_commit }}
           path: audit
           fetch-depth: 1
           persist-credentials: false
           ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - name: Reject archives above the reviewed replay transport limit
+        run: |
+          archive_path=$(jq -r .archive_path "$RUNNER_TEMP/replay-plan.json")
+          python scripts/submission_limits.py --replay-sidecar "audit/${archive_path%.tar.age}.json"
 
       - name: Bind the exact ciphertext and split it into upload parts
         run: |
@@ -111,7 +121,10 @@ jobs:
           test -f "audit/$archive_path"
           sidecar_path="${archive_path%.tar.age}.json"
           test -f "audit/$sidecar_path"
-          cp "audit/$archive_path" "$RUNNER_TEMP/archive.tar.age"
+          expected_sha256=$(jq -r .sha256_ciphertext "audit/$sidecar_path")
+          python scripts/archive_submission.py restore --audit-root audit \
+            --commit "$archive_commit" --archive-path "$archive_path" \
+            --sha256 "$expected_sha256" --output "$RUNNER_TEMP/archive.tar.age"
           cp "audit/$sidecar_path" "$RUNNER_TEMP/archive-sidecar.json"
           rm -rf audit
           # Mint the nonce before the upload so the parts bind to it, and split

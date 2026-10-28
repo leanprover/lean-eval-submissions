@@ -124,6 +124,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
+          # Retain historical blobs below the 11 MiB replay ceiling.
+          filter: blob:limit=12m
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
           ref: main
           path: audit
           fetch-depth: 0

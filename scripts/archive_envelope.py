@@ -78,7 +78,7 @@ def _run_age(command: list[str], *, label: str) -> subprocess.CompletedProcess[s
             check=False,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=1800 if label == "age encryption" else 120,
             env=_tool_environment(),
         )
     except (OSError, subprocess.TimeoutExpired, UnicodeError) as error:

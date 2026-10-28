@@ -1,0 +1,145 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-10-26T03:08:53Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17606-7c79-7cc8-8d92-5f1017c1bf65"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "component_models": [
+          "Codex CLI 0.163.0: default model ID not recorded",
+          "Aristotle: backend model undisclosed"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Aristotle assisted; official verification pending.",
+        "wall_time_seconds": 11833,
+        "web_access": true
+      },
+      "result_id": "r2_bc5ea2db9e2402882ea850428362093f73653ef289752d68c624d90195bb413c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d9c7d494004736e4853fb0cd88a7aa370fc8ff8c",
+        "repo": "tdwag123/crap-sunflower-private"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T07:32:00Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a176f8-cfa1-7356-95de-eb23fe28d878"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Codex produced and integrated the proof. An Aristotle task was submitted, but no returned result was used. Local compilation and axiom audits passed; official verification pending.",
+        "web_access": true
+      },
+      "result_id": "r2_f4d343555e85d3766aab16e31536961e557439a7993501626647baf4e55e66e4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b8501d7f6ef5747af92d8e4481a663b78ddebb89",
+        "repo": "tdwag123/crap-unit_conjecture-71a59513"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T08:01:15Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17710-d029-78f2-800f-0670dc8e95bb"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Local compilation and axiom audits passed; official verification pending. No Aristotle delegation was submitted for this problem. Supporting finite-probability code was reused from the earlier CRAP sunflower campaign.",
+        "web_access": true
+      },
+      "result_id": "r2_5ff3d2ebc54f720cb8519dc06fda37fb0c319ee880c9cce51b0322a16af751f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9858fc1f71f6c8343928989e41fac179c93b455e",
+        "repo": "tdwag123/crap-fractional_expectation_thresholds-26996d76"
+      }
+    },
+    {
+      "accepted_at": "2026-10-26T19:47:54Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17995-7b51-7bc9-8c0f-b4aab5320c84"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Local compilation and axiom audits passed; official verification pending. No Aristotle delegation was submitted for this problem.",
+        "web_access": true
+      },
+      "result_id": "r2_04b78fa78c128d74070dae82def6a87e6af17156aff448c3ecc1f7434bd308e5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7772d45786f36e2609db0d16019269a58a95eaa3",
+        "repo": "tdwag123/crap-local_global_apollonian_circle_packings-6d7737e9"
+      }
+    },
+    {
+      "accepted_at": "2026-10-27T05:45:45Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "CRAP: Can't Reasonably Articulate Proofs",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a17bbd-5c91-70f0-a82b-21991b83cca1"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {
+        "component_models": [
+          "gpt-6.1-sol (high reasoning)",
+          "Aristotle (backend model undisclosed)"
+        ],
+        "credit_identity": "tdwag123",
+        "harness": "CRAP: Can't Reasonably Articulate Proofs",
+        "notes": "Aristotle assisted; local compilation and axiom audits passed; official verification pending.",
+        "wall_time_seconds": 76183,
+        "web_access": true
+      },
+      "result_id": "r2_468bc9557b6a66f15c8c403bbffc4e338b8715f707a97ee2d207014054fecfb5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "44b924ae4343914ae5571800c0588b5ff7f53cab",
+        "repo": "tdwag123/crap-equiangular_lines_fixed_angle-fced87e3"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "tdwag123"
+}

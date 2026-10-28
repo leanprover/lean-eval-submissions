@@ -1998,7 +1998,13 @@ function statusFor(view: SubmissionView): Record<string, unknown> {
     production_metadata: view.production_metadata,
     publication_choice: view.publication_choice,
     archive: view.archive,
-    evaluation: view.evaluation,
+    evaluation: view.evaluation.status === "failed"
+      && view.evaluation.reason_code === "large_runner_allowlist_required"
+      ? {
+        ...view.evaluation,
+        message: "Your submission appears to need a larger runner. Please ask Kim Morrison (@kim-em) to add your GitHub username to the larger-runner allowlist, then resubmit. This is not a rejection of your proof.",
+      }
+      : view.evaluation,
     result_id: view.result_id,
     result_disposition: view.schema_version === 3 ? view.result_disposition : null,
     dispatch: view.dispatch,

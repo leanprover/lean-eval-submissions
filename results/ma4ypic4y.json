@@ -2002,6 +2002,50 @@
         "ref": "adcac3c75d37a47518a81d04e335d20ce651f041",
         "repo": "ma4ypic4y/lean-eval-top1"
       }
+    },
+    {
+      "accepted_at": "2026-10-23T14:19:49Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2165,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_3d_smooth",
+      "production_metadata": {
+        "production_description": "Contributor credits: @ma4ypic4y and @haskiindahouse.\n\nProblem: poincare_3d_smooth, statement revision 1. Leaderboard system: max gp (GPT-6). The submitting owner's corrected production-model attribution is gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified claim about the historical runtime. The archive's original README and PROVENANCE.json attribute campaign work to Claude Opus 5.5 and remain intact for provenance.\n\nDeclared reuse: this package adapts the public Apache-2.0 formalization at https://github.com/qinz1yang/differential-geometry, commit 777299070a5529e96345e0033979706fd00c7e62. Its original authors retain credit; the original licenses and notices are bundled in Submission/DG/License.lean. The campaign pruned the import closure, repaired compatibility with Lean 4.35.0-rc3 and pinned Mathlib, adjusted proof elaboration for the CI budget, and assembled the benchmark root theorem. It does not claim original authorship of the full formalization.\n\nThis corrects the earlier #1961 and #1973 packages, whose hosted evaluation exceeded the six-hour limit. The new source commit 809a21c8a3c68b60cc1b3aea2c8cb89b7fa2db57 has 2,902 submitted Lean files instead of 11,362; the exact submitted metadata commit is 78defe1cc91e988a8b7e3753369869931c85bde3. A full source-only official `lake test` against current benchmark 208b6b22d396f28771dba56414b19f47cae5f2a7 (revision 1, toolchain Lake comparator under bubblewrap 0.12.0) exited 0 and was accepted by NanoDa and the Lean default kernel, with no forbidden axioms or sorry. Receipt SHA256: eb02a70bf482821a818c7d143557379ddcf414f4b2b39d56b63818f0c277ec84. It ran for 14,359.5 seconds on 16 CPUs. All 2,902 source hashes, the official protected files and dependency pins were checked against the exact GitHub archive and current evaluator overlay. This local PASS is not a claim of hosted acceptance.\n\nExact source visibility: Private, with no current publication plan. Both publication dates are blank.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_6d74a5d6b083cc40a5b0c7bdac75952fb43b42fcd27717e134fc6a4f2b10f8ed",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "78defe1cc91e988a8b7e3753369869931c85bde3",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
+    },
+    {
+      "accepted_at": "2026-10-23T20:29:12Z",
+      "benchmark_commit": "208b6b22d396f28771dba56414b19f47cae5f2a7",
+      "declared_model": "max gp (GPT-6)",
+      "intake": {
+        "issue_number": 2166,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_3d_topological",
+      "production_metadata": {
+        "production_description": "Contributor credits: @ma4ypic4y and @haskiindahouse.\n\nProblem: `poincare_3d_topological`, statement revision 1. Leaderboard system: max gp (GPT-6). The submitting owner's corrected production-model attribution is gpt 6.1 sol (gpt-6.1-sol). This is an owner-declared correction, not an independently verified claim about the historical runtime. The archive's original README.md and PROVENANCE.json attribute campaign work to Claude Opus 5.5 and remain intact for provenance.\n\nDeclared reuse: the package incorporates and adapts licensed differential-geometry formalization from https://github.com/qinz1yang/differential-geometry at commit `777299070a5529e96345e0033979706fd00c7e62`. The original authors retain credit; Apache-2.0 license text, 466 source notices and the provenance record are retained. The campaign assembled a proof through its smoothing, extinction and reconstruction lanes and applied it to the exact benchmark theorem. We do not claim original authorship of the reused library.\n\nEarlier submissions #1962 and #1974 used an older, much larger source snapshot and the hosted `evaluate` job was cancelled at the six-hour limit; neither produced a recorded result. This is a changed source package, not a retry of that snapshot: source commit `40796f8ff26bc1134dadc1d7ca3921dc5ae807a5` has 2,993 submitted Lean files; this exact metadata commit is `5401fa55b5acc57ee8735f4e06bb1215a2802289`. The current benchmark source-only `lake test` at `208b6b22d396f28771dba56414b19f47cae5f2a7` ran the official Lake comparator under bubblewrap 0.12.0, exited 0 after 13,385.6 seconds on 16 CPUs, and was accepted by NanoDa and the Lean default kernel with no forbidden axioms or submitted `sorry`. Receipt SHA256: `4995ba3ed6d2b5f05c0507c626afeb7539478bbce55a735ca8fa617cefee8359`. All 2,993 source hashes and the official protected files were checked against the exact GitHub archive and verifier workspace. This local PASS is not a claim of hosted acceptance.\n\nExact source visibility: Private, with no current publication plan. Both publication dates are blank.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_4397ca64967f87d7ec3338eafff5360330ba4eebcfa5b343413beb63c5ac1cf6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5401fa55b5acc57ee8735f4e06bb1215a2802289",
+        "repo": "ma4ypic4y/lean-eval-top1"
+      }
     }
   ],
   "schema_version": 2,

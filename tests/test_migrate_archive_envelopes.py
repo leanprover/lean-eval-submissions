@@ -15,6 +15,7 @@ ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import migrate_archive_envelopes as migration
+import archive_chunks
 from key_capability_contract import archive_file_key_id, archive_key_id
 
 SOURCE_COMMIT = "a" * 40
@@ -144,6 +145,31 @@ def named_workflow_steps(workflow: str) -> dict[str, str]:
 
 
 class ArchiveEnvelopeMigrationTests(unittest.TestCase):
+    def test_inventory_verifies_chunked_archives_using_logical_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "input.age"
+            content = b"age-encryption.org/v1\n" + b"x" * 200
+            source.write_bytes(content)
+            write_pair(root, "audit/2026/05/example-1-bbbbbbbb.tar.age", sidecar(1, b"legacy"), b"legacy")
+            submission_id = "0198abcd-0000-7000-8000-000000000003"
+            relative = f"archives/01/{submission_id}.tar.age"
+            def put(path, data):
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            with mock.patch.object(archive_chunks, "SINGLE_BLOB_MAX_BYTES", 80), \
+                 mock.patch.object(archive_chunks, "PART_BYTES", 64):
+                archive_chunks.store_archive(source, relative, digest(content), put)
+                put(relative.removesuffix(".tar.age") + ".json", json.dumps(sidecar(3, content, submission_id=submission_id)).encode())
+                plan = migration.build_plan(root, SOURCE_COMMIT)
+                self.assertEqual(plan["retained_count"], 1)
+                self.assertEqual(plan["retained"][0]["ciphertext_sha256"], digest(content))
+                part = root / archive_chunks.part_path(relative, digest(content), 1)
+                part.write_bytes(b"corrupt")
+                with self.assertRaisesRegex(migration.MigrationError, "digest mismatch"):
+                    migration.build_plan(root, SOURCE_COMMIT)
+
     def fixture(self, root: pathlib.Path) -> tuple[str, str]:
         schema2_id = "0198abcd-0000-7000-8000-000000000002"
         schema3_id = "0198abcd-0000-7000-8000-000000000003"

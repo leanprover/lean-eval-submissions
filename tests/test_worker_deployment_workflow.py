@@ -300,7 +300,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     pending.append(callee)
         self.assertEqual(
             deployed_dependencies,
-            {"promotion-canary.yml", "server-archive.yml", "submission.yml"},
+            {"promotion-canary.yml", "server-archive.yml", "submission.yml", "evaluate-attempt.yml"},
         )
         # These manual workflows are not dispatched by the Worker, but their
         # deployed_commit preconditions bind them to the live staging runtime.

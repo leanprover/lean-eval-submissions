@@ -59,8 +59,8 @@ preserves the submitter's `solution_publication_status` and optional
 Three ordered pieces live inside the existing `submission.yml`:
 
 1. **Trusted archive job.** It independently fetches the requested source and
-   the current benchmark, freezes their exact identities, enforces the 100 MB
-   compressed-source cap, encrypts the source, and pushes the ciphertext and
+   the current benchmark, freezes their exact identities, enforces the 1 GB
+   compressed-source cap (10 GB for CFSG), encrypts the source, and pushes the ciphertext and
    provenance sidecar directly to `lean-eval-audit`. It mints the narrowly
    scoped archiver App token only after encryption. It runs no submitted code
    and uploads no source or ciphertext transport artifact.
@@ -210,28 +210,53 @@ mkdir /tmp/source && tar -xzf /tmp/source.tar.gz -C /tmp/source
 
 ## Size cap
 
-The 100 MB (100,000,000-byte) cap is on the **compressed gzipped tar**
-of the post-`.git`-strip source tree, which is what the workflow
-uploads and what `du -h` will show for a typical generated workspace
-plus a modest Submission/ directory (well under 1 MiB for current
-submissions). The cap exists because the archive is permanent and
-public-repo-shaped (one file per submission, committed forever).
+The cap applies to the **compressed gzipped tar**, after stripping `.git`:
+1 GB (1,000,000,000 bytes) by default and 10 GB (10,000,000,000 bytes) for
+`classification_finite_simple_groups`. Both workflows and both encryption
+backstops use `scripts/submission_limits.py`. The service uses its exact selected
+problem ID; legacy issue intake uses the evaluator’s static workspace matcher against the
+trusted generated baseline. Only a changed CFSG `Submission.lean` receives the
+larger cap; a pristine CFSG workspace in a benchmark fork does not qualify.
+Submitted Lean is never evaluated during this admission check.
 
-The cap is the ceiling of this archive design, not a number chosen
-for headroom. The ciphertext is written to `lean-eval-audit` as a
-single Git blob through the Contents API (`archive_submission.py
-push`), and GitHub refuses individual files over 100 MiB
-(104,857,600 bytes). The blob is the age ciphertext, not the tar, and
-age adds a header plus 16 bytes per 64 KiB chunk (about 26 KiB at
-this size), so the cap is set in decimal megabytes to keep the
-largest permitted ciphertext under the limit. Raising the cap further
-means the archive can no longer be one content-addressed Git object
-at an immutable commit; it would have to move to Git LFS, release
-assets, or object storage, each of which weakens the "clone the repo
-and verify the blob" property the sidecar and locator depend on. The
-cap was 10 MiB until 2026-09; it was raised because no submission
-shape needed the tighter bound and the wider one costs nothing at
-the archive level.
+New ciphertexts up to 30,000,000 bytes remain ordinary age files; existing raw
+archives up to 100 MiB remain readable. Above the new upload threshold, the canonical
+`.tar.age` path contains a `lean-eval-chunked-age-v1` JSON manifest. It records the
+whole ciphertext’s SHA-256 and size, the part size, and ordered part sizes and
+SHA-256 digests. Encrypted parts are 30,000,000 bytes (except the last), under
+`<archive-path>.parts/<whole-ciphertext-sha256>/<four-digit-index>`. Thus every Git
+blob remains below GitHub’s per-file limit. The manifest is written after all
+parts, and the provenance sidecar is written last. Interrupted uploads can be
+retried without mixing independently encrypted ciphertexts.
+
+The State locator and key envelope continue to name the SHA-256 of the complete
+age ciphertext, not the manifest. Before emitting a server completion, the
+archiver resolves the manifest and every part at the same immutable commit,
+checks every part’s size and digest, and checks the reassembled digest. Upload
+and restoration hold one part in memory at a time; server verification prefetches
+a bounded window of four parts and hashes them in manifest order. Workflow audit
+checkouts exclude part directories and fetch selected parts into temporary Git
+object stores, avoiding accumulation of unrelated multi-gigabyte archives. A clone of the
+audit repository therefore still contains all bytes needed for independent
+recovery; no release asset, external object store, or mutable download URL is
+part of the archive identity.
+
+Use the restore command for either storage format before decrypting:
+
+```bash
+python scripts/archive_submission.py restore \
+  --audit-root /path/to/lean-eval-audit \
+  --commit <full-archive-commit> \
+  --archive-path archives/01/<submission-uuid>.tar.age \
+  --sha256 <ciphertext-digest-from-sidecar-or-State> \
+  --output /tmp/source.tar.gz.age
+```
+
+The output appears only after the entire archive passes verification. Decrypt
+that output with the appropriate age identity using the procedure above (or the
+per-submission key-envelope procedure for service archives). Archive jobs have
+90 minutes and free disk space before cloning to accommodate large sources,
+encryption, and multipart persistence. Evaluation retains its existing budget.
 
 The cap is checked after the source has already been cloned, so it
 bounds what enters the archive, not the cost of fetching. It is not
