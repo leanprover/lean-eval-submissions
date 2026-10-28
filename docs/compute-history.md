@@ -34,10 +34,13 @@ python scripts/plan_compute_backfill.py \
 ```
 
 Each profile entry supplies `toolchain`, `qualified: true`,
-`execution_profile_digest` and `measurement_config_digest`. This map records
-qualification already established through the existing replay procedure; it
-cannot qualify an image. Missing or mismatched exact toolchain profiles are
-reported as blocked. Existing replay tasks are not duplicated, and the same
+`execution_profile_digest` and `measurement_config_digest`. The planner trusts
+this reviewed map: it matches its benchmark key and toolchain to State, but does
+not inspect profile artifacts or independently verify their qualification. The
+`qualified` flag is an operator assertion, not qualification evidence. The map
+must name profiles already qualified by the existing replay procedure for the
+nanoda lane supported by `replay_orchestrator.py`. Missing or mismatched map
+entries are reported as blocked. Existing replay tasks are not duplicated, and the same
 frozen inputs and timestamp produce the same event identities.
 
 Validate the proposed events with State before appending through the existing

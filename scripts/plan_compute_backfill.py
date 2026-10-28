@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Plan missing server replay events without writing State or accessing source."""
+"""Plan missing server replay events using a trusted operator-supplied profile map.
+
+The map asserts prior nanoda profile qualification; this tool does not verify
+profile artifacts, write State, or access submission source.
+"""
 
 from __future__ import annotations
 import argparse
