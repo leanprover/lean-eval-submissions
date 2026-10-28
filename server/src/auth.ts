@@ -385,6 +385,7 @@ export async function lifecycleEventId(
     | "evaluation.rejected"
     | "evaluation.failed"
     | "submission.result_identity_conflicted"
+    | "result.measurement_recorded"
     | "result.recorded"
     | "release.scheduled",
   subjectId: string,

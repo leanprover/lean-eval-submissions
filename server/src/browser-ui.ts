@@ -23,6 +23,65 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+
+const PRODUCTION_FIELDS = ["input_tokens", "cached_input_tokens", "output_tokens", "wall_time_seconds", "cost_usd", "billing_mode", "component_models", "harness", "human_involvement", "web_access", "prompt", "notes"] as const;
+function productionFields(): string {
+  return `
+<fieldset><legend>How this proof was produced (optional, self-reported)</legend>
+<p>Figures should cover this problem, including unsuccessful attempts. Leave unknown values blank. Put totals shared across several problems in notes, rather than these numeric fields. Cached input is part of total input. For subscriptions, estimate the API-equivalent cost, not the subscription price; explain pricing and accounting assumptions in notes.</p>
+<label>Total input tokens <input id="meta_input_tokens" name="meta_input_tokens" type="number" min="0" max="9007199254740991" step="1"></label>
+<label>Cached input tokens (included in total input) <input id="meta_cached_input_tokens" name="meta_cached_input_tokens" type="number" min="0" max="9007199254740991" step="1"></label>
+<label>Output tokens <input id="meta_output_tokens" name="meta_output_tokens" type="number" min="0" max="9007199254740991" step="1"></label>
+<label>Time producing this proof (seconds) <input id="meta_wall_time_seconds" name="meta_wall_time_seconds" type="number" min="0" max="31536000" step="any"></label>
+<label>Estimated API-equivalent cost (USD) <input id="meta_cost_usd" name="meta_cost_usd" type="number" min="0" max="1000000" step="any"></label>
+<label>How you paid <select id="meta_billing_mode" name="meta_billing_mode"><option value="">Not reported</option><option value="api">API</option><option value="subscription">Subscription</option><option value="unknown">Unknown</option></select></label>
+<label>Models and versions (comma separated) <input id="meta_component_models" name="meta_component_models" type="text" maxlength="4112"></label>
+<label>Harness or orchestrator <input id="meta_harness" name="meta_harness" type="text" maxlength="1024"></label>
+<label>Human involvement <input id="meta_human_involvement" name="meta_human_involvement" type="text" maxlength="1024"></label>
+<label>Web access during production <select id="meta_web_access" name="meta_web_access"><option value="">Not reported</option><option value="true">Yes</option><option value="false">No</option></select></label>
+<label>Prompt or link to prompts <input id="meta_prompt" name="meta_prompt" type="text" maxlength="8192"></label>
+<label>Production notes and accounting assumptions <input id="meta_notes" name="meta_notes" type="text" maxlength="4096"></label>
+</fieldset><input id="production_metadata" name="production_metadata" type="hidden" value="{}">
+`;
+}
+
+const PRODUCTION_SCRIPT = `
+const productionFields = ["input_tokens", "cached_input_tokens", "output_tokens", "wall_time_seconds", "cost_usd", "billing_mode", "component_models", "harness", "human_involvement", "web_access", "prompt", "notes"];
+let productionBase = {};
+function showProductionMetadata(value) {
+  productionBase = value;
+  for (const name of productionFields) {
+    const element = document.querySelector("#meta_" + name);
+    if (!element) continue;
+    const item = value[name];
+    element.value = item === undefined ? "" : Array.isArray(item) ? item.join(", ") : String(item);
+  }
+}
+function readProductionMetadata() {
+  const hidden = document.querySelector("#production_metadata");
+  const original = hidden ? JSON.parse(hidden.value || "{}") : productionBase;
+  const metadata = { ...original };
+  for (const name of productionFields) {
+    const element = document.querySelector("#meta_" + name);
+    if (!element) continue;
+    const previous = original[name];
+    const displayed = previous === undefined ? "" : Array.isArray(previous) ? previous.join(", ") : String(previous);
+    if (element.value === displayed) continue;
+    const value = element.value.trim();
+    if (value === "") { delete metadata[name]; continue; }
+    if (["input_tokens", "cached_input_tokens", "output_tokens", "wall_time_seconds", "cost_usd"].includes(name)) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || (name.endsWith("tokens") && !Number.isSafeInteger(number))) throw new Error("Enter a valid nonnegative number for " + name);
+      metadata[name] = number;
+    } else if (name === "web_access") metadata[name] = value === "true";
+    else if (name === "component_models") metadata[name] = value.split(",").map(x => x.trim()).filter(Boolean);
+    else metadata[name] = value;
+  }
+  if ((metadata.cached_input_tokens ?? 0) > (metadata.input_tokens ?? Number.MAX_SAFE_INTEGER)) throw new Error("Cached input cannot exceed total input tokens.");
+  return metadata;
+}
+`;
+
 const BROWSER_FIELD_NAMES = [
   "problem_id",
   "declared_model",
@@ -30,6 +89,7 @@ const BROWSER_FIELD_NAMES = [
   "source_commit",
   "publication_choice",
   "production_metadata",
+  ...PRODUCTION_FIELDS.map(name => "meta_" + name),
 ] as const;
 
 const PAGE_STYLE = `
@@ -111,7 +171,7 @@ export function browserPage(
         </select>
         <small>Scheduled release is the recommended default because it lets the community inspect and reuse accepted solutions. Choosing it confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Public repositories must use scheduled release. Keep accepted source private only for a private repository and a specific reason not to publish it; the public result will show the solution as withheld, and you may irreversibly schedule release later.</small>
       </label>
-      <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
+      ${productionFields()}
       <section class="prerequisite" aria-labelledby="submission-terms">
         <h2 id="submission-terms">Submission terms</h2>
         <ul>
@@ -169,7 +229,7 @@ export function releasePage(
 }
 
 export function browserScript(): Response {
-  const script = `"use strict";
+  const script = PRODUCTION_SCRIPT + `"use strict";
 const form = document.querySelector("#submission-form");
 const result = document.querySelector("#result");
 const authStatus = document.querySelector("#auth-status");
@@ -196,6 +256,8 @@ for (const name of fieldNames) {
   const value = query.get(name);
   if (element && value !== null) element.value = value;
 }
+const prefilled = document.querySelector("#production_metadata");
+if (!saved && prefilled && prefilled.value !== "{}") showProductionMetadata(JSON.parse(prefilled.value));
 if (query.get("oauth") === "success") {
   sessionStorage.setItem(authExpiryKey, String(Date.now() + 55 * 60 * 1000));
   const cleanUrl = new URL(location.href);
@@ -230,7 +292,7 @@ form.addEventListener("submit", async (event) => {
   const values = currentValues();
   sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(values));
   try {
-    const metadata = JSON.parse(values.production_metadata);
+    const metadata = readProductionMetadata();
     const grantResponse = await fetch("/api/v1/browser/submission-grants", { method: "POST" });
     if (grantResponse.status === 401) {
       sessionStorage.removeItem(authExpiryKey);
@@ -353,5 +415,98 @@ releaseOptInForm.addEventListener("submit", async (event) => {
     releaseOptInStatus.textContent = error instanceof Error ? error.message : "Release scheduling failed";
   }
 });`;
+  return new Response(script, { headers: SCRIPT_HEADERS });
+}
+
+
+export function metadataPage(): Response {
+  return page("Edit production information", "<p>Only the submitter can add or correct this self-reported information. Current values and the dates each field changed are public.</p>", `
+    <a id="metadata-sign-in" href="/api/v1/oauth/start?return_to=%2Fmetadata%2F">Sign in with GitHub</a>
+    <form id="metadata-form">${productionFields()}<button id="metadata-save" disabled>Save production information</button></form>
+    <p id="metadata-status" role="status" aria-live="polite">Loading your result…</p>
+  `, "/metadata.js");
+}
+
+export function metadataScript(): Response {
+  const script = PRODUCTION_SCRIPT + `
+const query = new URLSearchParams(location.search);
+const savedTarget = sessionStorage.getItem("lean-eval-metadata-target");
+const target = query.has("result_id") ? { result_id: query.get("result_id"), results_commit: query.get("results_commit") } : savedTarget ? JSON.parse(savedTarget) : {};
+sessionStorage.setItem("lean-eval-metadata-target", JSON.stringify(target));
+const status = document.querySelector("#metadata-status");
+const save = document.querySelector("#metadata-save");
+let context;
+let etag;
+const endpoint = "/api/v1/results/" + encodeURIComponent(target.result_id || "") + "/metadata";
+const allowed = [...productionFields, "credit_identity"];
+async function load() {
+  save.disabled = true;
+  const response = await fetch(endpoint + "?results_commit=" + encodeURIComponent(target.results_commit || ""));
+  if (response.status === 401) { status.textContent = "Sign in with the GitHub account that submitted this proof."; return; }
+  if (!response.ok) throw new Error("Could not load the result (" + response.status + "). Check the account and result link.");
+  context = await response.json(); etag = response.headers.get("etag");
+  const metadata = Object.fromEntries(Object.entries(context.production_metadata).filter(([key]) => allowed.includes(key)));
+  document.querySelector("#production_metadata").value = JSON.stringify(metadata);
+  showProductionMetadata(metadata);
+  const pending = sessionStorage.getItem("lean-eval-pending-metadata");
+  if (pending) {
+    const draft = JSON.parse(pending);
+    if (draft.result_id === target.result_id && draft.revision === context.revision) showProductionMetadata(draft.metadata);
+    sessionStorage.removeItem("lean-eval-pending-metadata");
+  }
+  status.textContent = "Ready to edit. Blank fields are unknown; existing unrelated information is preserved.";
+  save.disabled = false;
+}
+document.querySelector("#metadata-sign-in").addEventListener("click", () => {
+  if (context) sessionStorage.setItem("lean-eval-pending-metadata", JSON.stringify({ result_id: target.result_id, revision: context.revision, metadata: readProductionMetadata() }));
+});
+async function write(url, method, payload, revision) {
+  const response = await fetch(url, { method, headers: { "content-type": "application/json", "idempotency-key": context.idempotency_key, ...(revision ? { "if-match": revision } : {}) }, body: JSON.stringify(payload) });
+  if (response.status === 409 || response.status === 412) throw new Error("This result changed. Reload before saving; your edits have not been applied.");
+  if (!response.ok) throw new Error("Could not save (" + response.status + "). Your edits remain in the form.");
+  return response.json();
+}
+document.querySelector("#metadata-form").addEventListener("submit", async event => {
+  event.preventDefault(); if (!context) return; save.disabled = true;
+  try {
+    const metadata = readProductionMetadata();
+    if (!Object.keys(metadata).length) throw new Error("Enter at least one field. Existing metadata cannot all be cleared.");
+    // Fetch a fresh server-clock key without replacing the draft in the form.
+    const fresh = await fetch(endpoint + "?results_commit=" + encodeURIComponent(target.results_commit));
+    if (!fresh.ok) throw new Error("Could not refresh ownership. Sign in again; your edits remain in the form.");
+    const latest = await fresh.json();
+    if (latest.revision !== context.revision) throw new Error("This result changed. Reload before saving; your edits remain in the form.");
+    context = latest; etag = fresh.headers.get("etag");
+    if (context.claim_required) {
+      const claim = await write("/api/v1/results/claims", "POST", { result_id: target.result_id, results_commit: target.results_commit });
+      void claim;
+      const refreshed = await fetch(endpoint + "?results_commit=" + encodeURIComponent(target.results_commit));
+      if (!refreshed.ok) throw new Error("Claim succeeded; reload before saving the metadata.");
+      const claimed = await refreshed.json();
+      const before = context.production_metadata, after = claimed.production_metadata;
+      if (Object.keys(before).length !== Object.keys(after).length || Object.entries(before).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(after[key]))) {
+        throw new Error("This result changed while claiming it. Reload before saving; your edits remain in the form.");
+      }
+      context = claimed; etag = refreshed.headers.get("etag");
+    }
+    // Legacy backfill is field-wise and cannot remove old entries. New submission
+    // amendments replace the full current metadata object, preserving unedited fields.
+    const url = context.submission_id ? "/api/v1/submissions/" + context.submission_id + "/metadata" : endpoint;
+    if (!context.submission_id && Object.keys(context.production_metadata).some(key => allowed.includes(key) && !(key in metadata))) throw new Error("Existing historical fields cannot be cleared; replace their values instead.");
+    const changed = context.submission_id ? metadata : Object.fromEntries(
+      Object.entries(metadata).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(context.production_metadata[key]))
+    );
+    if (!context.submission_id && !Object.keys(changed).length) {
+      status.textContent = "No changes to save.";
+      return;
+    }
+    await write(url, "PATCH", { production_metadata: changed }, etag);
+    await load();
+    status.textContent = "Saved. The public site will show the update after its next refresh.";
+  } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
+  finally { save.disabled = false; }
+});
+load().catch(error => { status.textContent = error instanceof Error ? error.message : String(error); });
+`;
   return new Response(script, { headers: SCRIPT_HEADERS });
 }

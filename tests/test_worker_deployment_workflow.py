@@ -73,7 +73,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )
 
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
-        expected = "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00"
+        expected = "d7d67f5b609735286355c6be460d85c203aac64c"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
         self.assertGreaterEqual(DEPLOY.count(expected), 2)
         self.assertEqual(
@@ -878,7 +878,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("github.token", state_gate)
 
     def test_runtime_and_historical_finalizer_bind_distinct_state_views(self) -> None:
-        state_commit = "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00"
+        state_commit = "d7d67f5b609735286355c6be460d85c203aac64c"
         historical_state_commit = "0c943edde8a247b8670e10339b80fc65be6c0f33"
         runtime_schema = QUALIFICATION["state_event_schema_sha256"]
         complete_ledger_schema = (
@@ -1112,9 +1112,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 expected_contract = (
-                    "0999e6bcaee386b1fa9aa55da096b5f7a9161615"
+                    "9d041099a972c65d430c2c9eb977f762dba92772"
                     if environment == "staging"
-                    else "5aa983fbc33be91a39d1ab38cfbdf5315fb14b00"
+                    else "d7d67f5b609735286355c6be460d85c203aac64c"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],

@@ -28,6 +28,7 @@ export type ProductionMetadata = Readonly<{
   web_access?: boolean;
   wall_time_seconds?: number;
   input_tokens?: number;
+  cached_input_tokens?: number;
   output_tokens?: number;
   cost_usd?: number;
   billing_mode?: "api" | "subscription" | "unknown";
@@ -229,6 +230,7 @@ export function decodeProductionMetadata(value: unknown): ProductionMetadata {
     "harness",
     "human_involvement",
     "input_tokens",
+    "cached_input_tokens",
     "notes",
     "output_tokens",
     "prompt",
@@ -285,6 +287,8 @@ export function decodeProductionMetadata(value: unknown): ProductionMetadata {
   if (data.web_access !== undefined) result.web_access = data.web_access;
   if (wallTime !== undefined) result.wall_time_seconds = wallTime;
   if (data.input_tokens !== undefined) result.input_tokens = safeNatural(data.input_tokens, "input_tokens");
+  if (data.cached_input_tokens !== undefined) result.cached_input_tokens = safeNatural(data.cached_input_tokens, "cached_input_tokens");
+  if ((result.cached_input_tokens ?? 0) > (result.input_tokens ?? Number.MAX_SAFE_INTEGER)) throw new ApiDecodeError("cached input exceeds total input");
   if (data.output_tokens !== undefined) result.output_tokens = safeNatural(data.output_tokens, "output_tokens");
   if (cost !== undefined) result.cost_usd = cost;
   if (data.billing_mode !== undefined) {
