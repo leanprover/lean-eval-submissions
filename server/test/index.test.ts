@@ -76,7 +76,7 @@ describe("Worker routing", () => {
   });
 
   it("reports opt-in independently and keeps the reverse transition disabled", async () => {
-    const contract = "9d041099a972c65d430c2c9eb977f762dba92772";
+    const contract = "eaf7d925e89ac20f398a8c450182618697bdacb0";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
       {
@@ -150,7 +150,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "9d041099a972c65d430c2c9eb977f762dba92772",
+          "eaf7d925e89ac20f398a8c450182618697bdacb0",
       },
       LIFECYCLE,
     );
@@ -165,14 +165,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "9d041099a972c65d430c2c9eb977f762dba92772",
+          "eaf7d925e89ac20f398a8c450182618697bdacb0",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "9d041099a972c65d430c2c9eb977f762dba92772",
+          "eaf7d925e89ac20f398a8c450182618697bdacb0",
       },
       {
         ...ENV,
@@ -293,7 +293,7 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "d7d67f5b609735286355c6be460d85c203aac64c";
+    const contract = "5b8e2d9e65434bc75d1b6774ba57f2d3fbbefe90";
     const tree = "2".repeat(40);
     const rootEntries = [
       { path: "README.md", mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
