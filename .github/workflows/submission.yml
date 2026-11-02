@@ -964,6 +964,7 @@ jobs:
       issues: write
     outputs:
       result_receipt_ready: ${{ steps.result_receipt.outputs.ready }}
+      measurements_ready: ${{ steps.measurement_receipts.outputs.ready }}
     steps:
       # Two checkouts of this repo. `code/` is read-only and pinned to
       # this workflow's own SHA: it supplies scripts/update_leaderboard.py
@@ -1137,6 +1138,35 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Bind acceptance measurements to recorded Results
+        id: measurement_receipts
+        continue-on-error: true
+        env:
+          BENCHMARK_COMMIT: ${{ needs.evaluate.outputs.benchmark_commit }}
+          TOOLCHAIN: ${{ needs.evaluate.outputs.toolchain }}
+        run: |
+          python code/scripts/build_acceptance_measurements.py \
+            --metadata /tmp/submission-results/metadata.json \
+            --results /tmp/submission-results/results.json \
+            --metrics /tmp/submission-results/build-measurements.json \
+            --results-root results-store \
+            --benchmark-commit "$BENCHMARK_COMMIT" \
+            --results-commit "$(git -C results-store rev-parse HEAD)" \
+            --toolchain "$TOOLCHAIN" --workflow-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --output /tmp/acceptance-receipts
+          if compgen -G '/tmp/acceptance-receipts/r2_*.json' > /dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        continue-on-error: true
+        with:
+          name: acceptance-measurements
+          path: /tmp/acceptance-receipts/*.json
+          if-no-files-found: ignore
+          retention-days: 90
 
       - name: Detect accepted server result
         id: accepted_result
@@ -1402,3 +1432,41 @@ jobs:
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
             --body "$BODY"
+
+  measurement_state:
+    continue-on-error: true
+    needs: [record, result_state]
+    if: >-
+      always() && needs.record.result == 'success' && needs.record.outputs.measurements_ready == 'true' &&
+      (github.event_name == 'issues' || needs.result_state.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: cloudflare-${{ github.event_name == 'workflow_dispatch' && inputs.callback_environment || 'production' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: acceptance-measurements
+          path: /tmp/acceptance-receipts
+      - name: Publish acceptance measurements
+        env:
+          CALLBACK_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.callback_environment || 'production' }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+        run: |
+          set -euo pipefail
+          case "$CALLBACK_ENVIRONMENT" in
+            staging) endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev" ;;
+            production) endpoint="https://lean-eval-submission-server.lean-eval.workers.dev" ;;
+            *) exit 1 ;;
+          esac
+          shopt -s nullglob
+          for receipt in /tmp/acceptance-receipts/r2_*.json; do
+            result_id=$(basename "$receipt" .json)
+            curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 \
+              --retry 2 --retry-delay 5 --retry-max-time 60 --retry-connrefused \
+              --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
+              --header "Content-Type: application/json" --data-binary "@$receipt" \
+              "$endpoint/api/v1/results/$result_id/measurements"
+          done

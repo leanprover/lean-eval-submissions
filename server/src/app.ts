@@ -42,7 +42,8 @@ import {
   type OAuthState,
   type SubmissionGrant,
 } from "./auth";
-import { browserPage, browserScript, releasePage, releaseScript } from "./browser-ui";
+import { decodeAcceptanceMeasurement, verifyMeasurementIdentity } from "./acceptance-measurement";
+import { browserPage, browserScript, releasePage, releaseScript, metadataPage, metadataScript } from "./browser-ui";
 import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
@@ -249,6 +250,7 @@ export type StateAccess = Readonly<{
     | { created: false; status: "limited"; activeSubmissionIds: readonly string[] }
   >;
   readSubmission(submissionId: string): Promise<SubmissionView | null>;
+  readMetadataForOwner?(resultId: string, ownerLogin: string): Promise<{ metadata: Record<string, unknown>; revision: string; submissionId: string | null } | null>;
   appendSubmissionMutation(
     event: WritableStateEvent,
     expectedMutationEventId: string,
@@ -584,7 +586,7 @@ async function readiness(
         response.state_contract_commit = PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
         response.state_contract_verified = true;
         response.state_event_schema_sha256 =
-          "501d5521f831e412471d296535f7ce390fe4afa19b814b74699156430a2adac8";
+          "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e";
       }
       return json(response);
     }
@@ -1751,6 +1753,27 @@ async function evaluationCompleted(
   }, outcome.created ? 201 : 200);
 }
 
+async function measurementCompleted(request: Request, env: RuntimeEnv, dependencies: ApiDependencies, requestedId: string): Promise<Response> {
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
+  if (!env.LIFECYCLE_CALLBACK_TOKEN) return json({ error: "callback_unavailable" }, 503);
+  if (!supplied || !(await equalToken(supplied, env.LIFECYCLE_CALLBACK_TOKEN))) return json({ error: "authentication_failed" }, 401);
+  const measurement = decodeAcceptanceMeasurement(await readJson(request));
+  if (measurement.result_id !== requestedId) throw new ApiDecodeError("measurement result disagrees with route");
+  await verifyMeasurementIdentity(measurement);
+  const verified = await provider(env, dependencies).verifyLegacyResult(measurement.owner_login, measurement.results_commit, requestedId, true);
+  if (verified.metadataContext?.benchmarkCommit !== measurement.benchmark_commit || verified.baseResult.declared_model !== measurement.declared_model || verified.baseResult.problem_id !== measurement.problem_id || verified.baseResult.statement_revision !== measurement.statement_revision) throw new ApiDecodeError("measurement disagrees with accepted result");
+  const identityBytes = new TextEncoder().encode([requestedId, measurement.series, measurement.workflow_run_id, measurement.attempt].join(":"));
+  const identityDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", identityBytes))].map(b => b.toString(16).padStart(2, "0")).join("");
+  const eventId = await lifecycleEventId("result.measurement_recorded", "r2_" + identityDigest, measurement.measured_at);
+  const ledger = state(env, dependencies);
+  await ledger.assertResultOwnerContract();
+  const outcome = await ledger.appendEvent({
+    schema_version: 1, event_id: eventId, event_type: "result.measurement_recorded", occurred_at: measurement.measured_at,
+    subject_id: requestedId, causation_event_id: null, actor: { kind: "system" }, payload: { measurement },
+  });
+  return json({ status: outcome.created ? "recorded" : "already_recorded", result_id: requestedId }, outcome.created ? 201 : 200);
+}
+
 async function resultCompleted(
   request: Request,
   env: RuntimeEnv,
@@ -2035,7 +2058,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const signed = await signToken(configuredSecret(env), makeOAuthState(now));
     const authorize = new URL("https://github.com/login/oauth/authorize");
     authorize.search = new URLSearchParams({ client_id: env.GITHUB_OAUTH_CLIENT_ID, redirect_uri: callback.toString(), scope: "read:user", state: signed }).toString();
-    const returnPath = url.searchParams.get("return_to") === "/release/"
+    const returnPath = url.searchParams.get("return_to") === "/metadata/" ? "/metadata/?oauth=success" : url.searchParams.get("return_to") === "/release/"
       ? "/release/?oauth=success"
       : env.BROWSER_SUCCESS_URL ?? "/";
     const headers = new Headers({ "cache-control": "no-store", location: authorize.toString() });
@@ -2065,7 +2088,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const token = await signToken(configuredSecret(env), browserSession);
     const returnPath = cookie(request, OAUTH_RETURN_COOKIE);
     const destination = new URL(
-      returnPath === "/release/?oauth=success" ? returnPath : env.BROWSER_SUCCESS_URL ?? "/",
+      returnPath === "/release/?oauth=success" || returnPath === "/metadata/?oauth=success" ? returnPath : env.BROWSER_SUCCESS_URL ?? "/",
       url.origin,
     );
     if (destination.origin !== url.origin) throw new AuthError("browser success URL must be same-origin");
@@ -2318,6 +2341,19 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     }, outcome.created ? 201 : 200);
   }
   const resultMetadataMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/metadata$/.exec(url.pathname);
+  if (request.method === "GET" && resultMetadataMatch?.[1]) {
+    requireResultOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const verified = await provider(env, dependencies).verifyLegacyResult(authenticated.login, url.searchParams.get("results_commit") ?? "", resultMetadataMatch[1], true);
+    const ledger = state(env, dependencies);
+    if (ledger.readMetadataForOwner === undefined) throw new GitHubStateError(503, "metadata reader unavailable");
+    const current = await ledger.readMetadataForOwner(resultMetadataMatch[1], authenticated.login);
+    const metadata = current?.submissionId
+      ? current.metadata
+      : { ...verified.metadataContext?.productionMetadata, ...current?.metadata };
+    const revision = current?.revision ?? "unclaimed";
+    return json({ production_metadata: metadata, revision, idempotency_key: newEventId(nowMilliseconds), submission_id: current?.submissionId ?? verified.metadataContext?.submissionId ?? null, claim_required: current === null && verified.metadataContext?.submissionId === null }, 200, { etag: '"' + revision + '"' });
+  }
   if (request.method === "PATCH" && resultMetadataMatch?.[1]) {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
@@ -2333,6 +2369,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       resultId: resultMetadataMatch[1],
       ownerLogin: authenticated.login,
       productionMetadata: metadata,
+      ...(request.headers.has("if-match") ? { expectedMutationEventId: (request.headers.get("if-match") ?? "").replaceAll('"', "") } : {}),
     });
     return json({
       result_id: outcome.resultId,
@@ -2489,9 +2526,10 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const ledger = state(env, dependencies);
     const current = await ledger.readSubmission(match[1]);
     if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
-    if (request.method === "GET" && !match[2]) return json(statusFor(current));
+    if (request.method === "GET" && !match[2]) return json(statusFor(current), 200, { etag: '"' + current.mutation_event_id + '"' });
     const eventId = idempotencyEventId(request, nowMilliseconds);
     if (request.method === "PATCH" && match[2] === "metadata") {
+      if (request.headers.has("if-match") && request.headers.get("if-match") !== '"' + current.mutation_event_id + '"') return json({ error: "metadata_changed_reload_required" }, 412);
       const metadata = decodeMetadataAmendment(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.metadata_amended",
@@ -2642,6 +2680,13 @@ export async function handleRequest(
   }
   if (request.method === "GET" && url.pathname === "/release.js") {
     return releaseScript();
+  }
+  if (request.method === "GET" && url.pathname === "/metadata/") return metadataPage();
+  if (request.method === "GET" && url.pathname === "/metadata.js") return metadataScript();
+  const measurementMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/measurements$/.exec(url.pathname);
+  if (request.method === "POST" && measurementMatch?.[1]) {
+    try { return await measurementCompleted(request, env, dependencies, measurementMatch[1]); }
+    catch (error) { return errorResponse(error); }
   }
   if (request.method === "GET" && url.pathname === "/healthz") {
     return json({

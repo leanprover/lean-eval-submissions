@@ -53,6 +53,8 @@ QUALIFICATION_FIELDS = set(QUALIFICATION_FIXED) | {
     "lifecycle_callback_contract_sha256",
 }
 CALLBACK_CONTRACT_FILES = [
+    "schemas/acceptance-measurement-v1.schema.json",
+    "server/src/acceptance-measurement.ts",
     "server/src/api-contract.ts",
     "server/src/app.ts",
     "server/src/auth.ts",

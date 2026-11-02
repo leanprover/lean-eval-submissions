@@ -1,3 +1,4 @@
+import { decodeAcceptanceMeasurement, type AcceptanceMeasurement } from "./acceptance-measurement";
 import { decodeProductionMetadata } from "./api-contract";
 
 const UUID_V7 =
@@ -276,7 +277,13 @@ export type ModelIdentityDecisionEvent = Readonly<{
 }>;
 
 /** State events the public submission Worker is authorized to append. */
+export type ResultMeasurementRecordedEvent = EventEnvelope & Readonly<{
+  event_type: "result.measurement_recorded"; subject_id: string; actor: Readonly<{ kind: "system" }>;
+  payload: Readonly<{ measurement: AcceptanceMeasurement }>;
+}>;
+
 export type WritableStateEvent =
+  | ResultMeasurementRecordedEvent
   | SystemInitializedEvent
   | SubmissionReceivedEvent
   | AuthenticationNonceConsumedEvent
@@ -860,7 +867,14 @@ export function validateStateEvent(value: unknown): asserts value is StateEvent 
   if (typeof event.occurred_at !== "string" || !isCanonicalUtcTimestamp(event.occurred_at)) {
     throw new TypeError("State event timestamp must be canonical UTC ISO 8601 milliseconds");
   }
-  if (event.event_type === "system.initialized") {
+  if (event.event_type === "result.measurement_recorded") {
+    const actor = object(event.actor, "measurement actor");
+    exactFields(actor, ["kind"], "measurement actor");
+    const payload = object(event.payload, "measurement payload");
+    exactFields(payload, ["measurement"], "measurement payload");
+    const measurement = decodeAcceptanceMeasurement(payload.measurement);
+    if (actor.kind !== "system" || event.causation_event_id !== null || event.subject_id !== measurement.result_id) throw new TypeError("invalid measurement authority");
+  } else if (event.event_type === "system.initialized") {
     validateSystemEvent(event);
   } else if (event.event_type === "submission.received") {
     validateSubmissionEvent(event);

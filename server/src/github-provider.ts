@@ -752,6 +752,7 @@ export class GitHubProvider {
     ownerLogin: string,
     resultsCommit: string,
     requestedResultId: string,
+    includeMetadata = false,
   ): Promise<VerifiedLegacyResult> {
     if (!this.#resultFetcher || !this.#resultsProtectedBranch) {
       throw new GitHubProviderError(503, "result verification authority is not configured");
@@ -984,6 +985,7 @@ export class GitHubProvider {
     return {
       resultId: recomputedResultId,
       ownerLogin,
+      ...(includeMetadata ? { metadataContext: { productionMetadata: production, benchmarkCommit: record.benchmark_commit, submissionId: intake.kind === "server" ? intake.submission_id as string : null } } : {}),
       baseResult: {
         declared_model: record.declared_model,
         problem_id: record.problem_id,

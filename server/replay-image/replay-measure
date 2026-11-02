@@ -80,20 +80,35 @@ def open_counter() -> tuple[int | None, str | None]:
     return descriptor, None
 
 
-def run_measured(command: list[str]) -> tuple[int, int, dict[str, Any]]:
-    descriptor, reason = open_counter()
+def run_measured(command: list[str], *, best_effort: bool = False, preserve_fds: bool = False) -> tuple[int, int, dict[str, Any]]:
+    descriptor, reason = None, "counter_not_reported"
+    try:
+        descriptor, reason = open_counter()
+    except Exception:
+        if not best_effort:
+            raise
     # PERF_EVENT_IOC_* uses the `_IO('$', n)` encoding on Linux.
     if descriptor is not None:
         try:
+            if preserve_fds:
+                # Preserve comparator-owned sandbox FDs, never the observer's
+                # perf control FD: untrusted code must not reset its counter.
+                os.set_inheritable(descriptor, False)
             fcntl.ioctl(descriptor, 0x2403, 0)  # reset
             fcntl.ioctl(descriptor, 0x2400, 0)  # enable
-        except OSError as error:
-            os.close(descriptor)
+        except Exception as error:
+            if not best_effort and not isinstance(error, OSError):
+                raise
+            try:
+                os.close(descriptor)
+            except OSError:
+                if not best_effort:
+                    raise
             descriptor = None
-            reason = unavailable_reason(error.errno)
+            reason = unavailable_reason(error.errno) if isinstance(error, OSError) else "counter_not_reported"
     started = time.monotonic_ns()
     try:
-        result = subprocess.run(command, check=False)
+        result = subprocess.run(command, check=False, close_fds=False) if preserve_fds else subprocess.run(command, check=False)
     except OSError as error:
         raise MeasurementError("measurement could not start landrun") from error
     finally:
@@ -105,10 +120,16 @@ def run_measured(command: list[str]) -> tuple[int, int, dict[str, Any]]:
             raw = os.read(descriptor, 8)
             if len(raw) == 8:
                 value = struct.unpack("=Q", raw)[0]
-        except OSError as error:
-            reason = unavailable_reason(error.errno)
+        except Exception as error:
+            if not best_effort and not isinstance(error, OSError):
+                raise
+            reason = unavailable_reason(error.errno) if isinstance(error, OSError) else "counter_not_reported"
         finally:
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            except OSError:
+                if not best_effort:
+                    raise
     counter: dict[str, Any]
     if value is not None:
         counter = {"status": "measured", "value": value}
