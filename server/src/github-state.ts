@@ -153,7 +153,7 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
       docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
-      schema: { mode: "040000", type: "tree", sha: "160a31c5a93490eae6e5dbb4b54d1b0bcf8fb3d6" },
+      schema: { mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
       scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
     },
   },
@@ -162,7 +162,7 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
       docs: { mode: "040000", type: "tree", sha: "6a13b8b4feee94d923c87bfa72bcef9e4bd91d67" },
-      schema: { mode: "040000", type: "tree", sha: "f0dd7cb2a760ae4010e05c62c3e6f02d55333030" },
+      schema: { mode: "040000", type: "tree", sha: "080f0c42ded00155b76ada937e3312d8591ee86f" },
       scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
     },
   },
@@ -173,7 +173,7 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
       docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
-      schema: { mode: "040000", type: "tree", sha: "160a31c5a93490eae6e5dbb4b54d1b0bcf8fb3d6" },
+      schema: { mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
       scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
     },
   },
@@ -182,7 +182,7 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
     rootEntries: {
       "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
       docs: { mode: "040000", type: "tree", sha: "6a13b8b4feee94d923c87bfa72bcef9e4bd91d67" },
-      schema: { mode: "040000", type: "tree", sha: "f0dd7cb2a760ae4010e05c62c3e6f02d55333030" },
+      schema: { mode: "040000", type: "tree", sha: "080f0c42ded00155b76ada937e3312d8591ee86f" },
       scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
     },
   },

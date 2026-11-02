@@ -10,7 +10,7 @@ import { validateStateEvent, type WritableStateEvent } from "../src/state-event"
 
 const secret = "test-secret-with-at-least-thirty-two-bytes";
 const now = Date.parse("2026-10-22T08:00:00.000Z");
-const env: RuntimeEnv = { AUTH_TOKEN_SECRET: secret, DEPLOYMENT_ENVIRONMENT: "staging", DEPLOYED_COMMIT: "a".repeat(40), INTAKE_ENABLED: "false", INTAKE_ENABLEMENT_MODE: "durable", STATE_REPOSITORY: "leanprover/lean-eval-state-staging", LIFECYCLE_CALLBACK_TOKEN: secret, LEGACY_RESULT_OWNER_API_ENABLED: "true", RESULT_OWNER_STATE_CONTRACT_COMMIT: "803dba1245354335ff7675a4af76fd278f59b5dd", API_RATE_LIMITER: { limit: () => Promise.resolve({ success: true }) } };
+const env: RuntimeEnv = { AUTH_TOKEN_SECRET: secret, DEPLOYMENT_ENVIRONMENT: "staging", DEPLOYED_COMMIT: "a".repeat(40), INTAKE_ENABLED: "false", INTAKE_ENABLEMENT_MODE: "durable", STATE_REPOSITORY: "leanprover/lean-eval-state-staging", LIFECYCLE_CALLBACK_TOKEN: secret, LEGACY_RESULT_OWNER_API_ENABLED: "true", RESULT_OWNER_STATE_CONTRACT_COMMIT: "f410468baefe0eb1e91ec131ded313f0ffad45f0", API_RATE_LIMITER: { limit: () => Promise.resolve({ success: true }) } };
 const lifecycle = { waitUntil: () => undefined };
 function provider() {
   const instance = new GitHubProvider();
@@ -43,7 +43,7 @@ describe("compute reporting", () => {
       const created = !events.has(event.event_id); events.set(event.event_id, event);
       return Promise.resolve({ created });
     });
-    const state = { appendEvent, assertResultOwnerContract: () => Promise.resolve("d510abf410b04981142b5cbb21f23edc4d74ba20") } as unknown as StateAccess;
+    const state = { appendEvent, assertResultOwnerContract: () => Promise.resolve("e2dd6314f04df175966ff105709b855053949d97") } as unknown as StateAccess;
     const p = provider();
     for (const status of [201, 200]) {
       const response = await handleRequest(new Request("https://submit.test/api/v1/results/" + fixture.result_id + "/measurements", { method: "POST", headers: { authorization: "Bearer " + secret, "content-type": "application/json" }, body: JSON.stringify(fixture) }), env, lifecycle, { provider: p.instance, state });

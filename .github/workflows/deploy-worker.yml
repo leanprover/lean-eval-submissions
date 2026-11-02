@@ -624,7 +624,7 @@ jobs:
             commit=$(python ../scripts/validate_cloudflare_rollback.py \
               production-state-readiness --response "$proof" \
               --http-status "$http_status" \
-              --expected-contract d510abf410b04981142b5cbb21f23edc4d74ba20 \
+              --expected-contract e2dd6314f04df175966ff105709b855053949d97 \
               --expected-schema c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e) \
               || classification=$?
             if [ "$classification" -eq 0 ]; then break; fi
@@ -763,7 +763,7 @@ jobs:
             --response-output "$plan_dir/intake-lease-smoke-response.json" \
             --state-proof-output "$plan_dir/post-smoke-state-proof.json" \
             --expected-expires-at "$INTAKE_LEASE_EXPIRES_AT" \
-            --expected-contract d510abf410b04981142b5cbb21f23edc4d74ba20 \
+            --expected-contract e2dd6314f04df175966ff105709b855053949d97 \
             --expected-schema c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e
           state_commit=$(jq -er '
             select(.status == "lease_smoke_consumed" or .status == "lease_smoke_already_consumed") |
