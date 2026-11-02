@@ -3289,7 +3289,7 @@ describe("browser OAuth and owner routes in workerd", () => {
 
 describe("authenticated model identity producer routes", () => {
   const modelId = `mi1_${"1".repeat(64)}`;
-  const contract = "eaf7d925e89ac20f398a8c450182618697bdacb0";
+  const contract = "803dba1245354335ff7675a4af76fd278f59b5dd";
   const ownerEnv: RuntimeEnv = {
     ...ENV,
     INTAKE_ENABLED: "false",
@@ -3454,7 +3454,7 @@ describe("authenticated legacy result owner routes", () => {
     ...ENV,
     INTAKE_ENABLED: "false",
     LEGACY_RESULT_OWNER_API_ENABLED: "true",
-    RESULT_OWNER_STATE_CONTRACT_COMMIT: "eaf7d925e89ac20f398a8c450182618697bdacb0",
+    RESULT_OWNER_STATE_CONTRACT_COMMIT: "803dba1245354335ff7675a4af76fd278f59b5dd",
   };
 
   async function ownerAuthorization(login = "alice"): Promise<string> {
