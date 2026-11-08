@@ -3,7 +3,8 @@
 Every submission starts on Namespace with 16 CPUs and 32 GB RAM. A resource
 failure during evaluation can trigger **one** fresh attempt with 32 CPUs and
 64 GB RAM. Both attempts use the same archived source identity, benchmark
-commit, toolchain, sandbox, and six-hour job budget. The final attempt alone
+commit, toolchain, and sandbox. The standard attempt has a six-hour job budget;
+the larger attempt has a 24-hour job budget. The final attempt alone
 supplies the State completion and leaderboard result. Both attempts retain
 their source-free diagnostics for seven days.
 
@@ -12,13 +13,22 @@ archived commit, so a later push cannot change or invalidate the larger attempt.
 Completed standard evaluations bypass escalation and do not depend on policy
 lookups or notification delivery.
 
-Evaluation has a controlled deadline two minutes before GitHub's hard job
-timeout. This leaves time to upload the resource report and turns an elapsed
-time limit into a normal retryable failure instead of a workflow cancellation.
+Evaluation has a controlled deadline two minutes before the standard attempt's
+hard job timeout, or 30 minutes before the larger attempt's timeout. These
+budgets include setup time. This leaves time to upload the resource report and
+turns an elapsed time limit into a normal retryable failure instead of a workflow
+cancellation.
+
+Namespace's workspace entitlement must permit 24-hour instances before using
+the full larger-attempt budget. Its published Business and Enterprise plans
+support up to 24 hours; Developer and Team plans have shorter instance limits.
+See [Namespace's plan comparison](https://namespace.so/pricing). The reserve
+also keeps result uploads before the instance lifetime limit and GitHub's
+24-hour `GITHUB_TOKEN` expiry.
 
 The larger attempt requires the authenticated submitter's GitHub username in
 [`configuration/large-runner-allowlist.json`](../configuration/large-runner-allowlist.json).
-The initial list is empty. Add a username as a JSON string in that array and
+Add a username as a JSON string in that array and
 merge to protected `main`; the next retry decision reads that policy directly,
 without requiring a Worker redeployment. Matching is case insensitive and uses
 the issue author or the Worker-verified `submitted_by`, never the source repo

@@ -47,11 +47,12 @@ jobs:
     # The caller decides the final outcome after the optional retry. An
     # exhausted standard attempt must not make a successful retry's run red.
     continue-on-error: true
-    # Both tiers retain the same sandbox and six-hour budget.
+    # A full-day large attempt requires Namespace's 24-hour instance entitlement.
+    # Keep the standard attempt at six hours.
     runs-on:
       - ${{ inputs.runner_tier == 'large' && 'nscloud-ubuntu-24.04-amd64-32x64-with-features' || 'nscloud-ubuntu-24.04-amd64-16x32-with-features' }}
       - namespace-features:container.privileged=true
-    timeout-minutes: 360
+    timeout-minutes: ${{ inputs.runner_tier == 'large' && 1440 || 360 }}
     permissions:
       contents: read
     outputs:
@@ -59,8 +60,11 @@ jobs:
     steps:
       - name: Set evaluation deadline
         id: deadline
-        # Leave two minutes for artifact upload before GitHub cancels the job.
-        run: echo "epoch=$(($(date +%s) + 358 * 60))" >> "$GITHUB_OUTPUT"
+        # Count setup in the budget and leave time to upload source-free results.
+        # The large attempt must finish before Namespace's 24-hour instance limit.
+        env:
+          EVALUATION_MINUTES: ${{ inputs.runner_tier == 'large' && 1410 || 358 }}
+        run: echo "epoch=$(($(date +%s) + EVALUATION_MINUTES * 60))" >> "$GITHUB_OUTPUT"
 
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'

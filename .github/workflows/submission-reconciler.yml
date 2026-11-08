@@ -7,8 +7,8 @@
 #   - runner died before the `if: failure()` step ran in `fetch`
 #   - the `notify` job itself failed
 #
-# 7h threshold > evaluate's 6h GitHub-runner job limit, so legitimate
-# long runs are not closed prematurely.
+# The reconciler skips queued/running workflows even past the 7h threshold,
+# including submissions that escalate to a 24h larger-runner attempt.
 name: Submission reconciler
 
 on:
