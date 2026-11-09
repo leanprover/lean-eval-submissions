@@ -3,6 +3,12 @@ name: Weil public source diagnostic
 # Branch-only operator run of public source. No State, Results, or release writes.
 on:
   workflow_dispatch:
+    inputs:
+      runner_target:
+        description: Runner for this pinned public-source attempt
+        type: choice
+        default: namespace
+        options: [namespace, christian]
 
 permissions:
   contents: read
@@ -13,9 +19,7 @@ concurrency:
 
 jobs:
   evaluate:
-    runs-on:
-      - nscloud-ubuntu-24.04-amd64-32x64-with-features
-      - namespace-features:container.privileged=true
+    runs-on: ${{ fromJSON(inputs.runner_target == 'christian' && '["self-hosted","Linux","X64","lean-eval-weil"]' || '["nscloud-ubuntu-24.04-amd64-32x64-with-features","namespace-features:container.privileged=true"]') }}
     timeout-minutes: 1440
     env:
       SOURCE_REPOSITORY: formal-arithmetic-geometry/weil-conjectures
@@ -84,6 +88,7 @@ jobs:
           PY
 
       - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        if: inputs.runner_target != 'christian'
         with:
           tool-cache: false
           android: true
@@ -104,6 +109,12 @@ jobs:
           build: false
           test: false
           lint: false
+
+      - name: Build trusted Mathlib tactic absent from its published cache
+        # TauCeti's cache-only restore depends on this uncached Mathlib module.
+        # Build only this pinned Mathlib target, before restoring TauCeti.
+        working-directory: lean-eval
+        run: lake build Mathlib.Tactic.CategoryTheory.BicategoryCoherence
 
       - name: Build the benchmark root with downloaded dependency caches
         run: python scripts/build_benchmark_root.py lean-eval
