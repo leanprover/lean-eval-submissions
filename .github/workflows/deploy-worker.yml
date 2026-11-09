@@ -687,7 +687,10 @@ jobs:
             fi
             arguments+=(--var "$name:$value")
           done
-          timeout --signal=TERM --kill-after=10s 150s npx wrangler deploy \
+          lease_deploy_output="$RUNNER_TEMP/lean-eval-production-finalization/lease-deploy.jsonl"
+          rm -f "$lease_deploy_output"
+          WRANGLER_OUTPUT_FILE_PATH="$lease_deploy_output" \
+            timeout --signal=TERM --kill-after=10s 150s npx wrangler deploy \
             --env production --var "DEPLOYED_COMMIT:$GITHUB_SHA" \
             --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF" "${arguments[@]}"
 
@@ -704,10 +707,11 @@ jobs:
         run: |
           set -euo pipefail
           plan_dir="$RUNNER_TEMP/lean-eval-production-finalization"
-          timeout 60s npx wrangler deployments status --config wrangler.jsonc \
-            --env production --json > "$plan_dir/final-status.json"
-          deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
-            active-version --status "$plan_dir/final-status.json")
+          deployed_version=$(python ../scripts/wait_cloudflare_deployment.py \
+            --wrangler ./node_modules/.bin/wrangler --config wrangler.jsonc \
+            --environment production --worker-name lean-eval-submission-server \
+            --deploy-output "$plan_dir/lease-deploy.jsonl" \
+            --status-output "$plan_dir/final-status.json")
           ../scripts/read_cloudflare_worker_version \
             ./node_modules/.bin/wrangler wrangler.jsonc production \
             "$deployed_version" "$plan_dir/final-version.json"

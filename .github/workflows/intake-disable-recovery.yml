@@ -317,7 +317,10 @@ jobs:
           python ../scripts/validate_cloudflare_rollback.py status \
             --status "$RUNNER_TEMP/launch-disable-recovery/pre-mutation-status.json" \
             --target-version "$EXPECTED_ACTIVE_VERSION"
-          timeout --signal=TERM --kill-after=10s 150s \
+          recovery_deploy_output="$RUNNER_TEMP/launch-disable-recovery/deploy.jsonl"
+          rm -f "$recovery_deploy_output"
+          WRANGLER_OUTPUT_FILE_PATH="$recovery_deploy_output" \
+            timeout --signal=TERM --kill-after=10s 150s \
             "$target/node_modules/.bin/wrangler" deploy \
             --config "$target/wrangler.jsonc" --env production \
             --var "DEPLOYED_COMMIT:$TARGET_COMMIT" \
@@ -345,10 +348,12 @@ jobs:
         run: |
           set -euo pipefail
           target="$RUNNER_TEMP/intake-disable-recovery/server"
-          "$target/node_modules/.bin/wrangler" deployments status \
-            --config "$target/wrangler.jsonc" --env production --json > "$RUNNER_TEMP/recovery-status.json"
-          version=$(python ../scripts/validate_cloudflare_rollback.py active-version \
-            --status "$RUNNER_TEMP/recovery-status.json")
+          version=$(python ../scripts/wait_cloudflare_deployment.py \
+            --wrangler "$target/node_modules/.bin/wrangler" \
+            --config "$target/wrangler.jsonc" \
+            --environment production --worker-name lean-eval-submission-server \
+            --deploy-output "$RUNNER_TEMP/launch-disable-recovery/deploy.jsonl" \
+            --status-output "$RUNNER_TEMP/recovery-status.json")
           "$target/node_modules/.bin/wrangler" versions view "$version" \
             --config "$target/wrangler.jsonc" --env production --json > "$RUNNER_TEMP/recovery-version.json"
           python ../scripts/validate_cloudflare_rollback.py component \
