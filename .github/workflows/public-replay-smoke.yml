@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: weil-public-source-diagnostic
+  group: weil-public-source-diagnostic-${{ inputs.runner_target }}
   cancel-in-progress: false
 
 jobs:
