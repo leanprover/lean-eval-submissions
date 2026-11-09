@@ -203,6 +203,11 @@ problem manifests. It does not fall back to anonymous requests, whose shared
 IP-based GitHub quota can block otherwise valid submissions. Before deploying
 this path, ensure the Source Reader App's `leanprover` installation includes
 `lean-eval`; no new App permission or Worker secret is needed.
+Select only the intended repositories rather than granting the Source Reader
+access to every organization repository. The staging promotion canary exercises
+the same benchmark catalog lookup before writing synthetic State. Missing
+benchmark installation or token access is a retryable service error, not a
+missing contributor source.
 
 Server intake obtains independent repository-scoped tokens from the Source
 Reader and legacy workflow reader. Before State acceptance or workflow

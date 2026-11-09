@@ -142,9 +142,10 @@ from the configured protected environment branch, re-fetches and hashes the exac
 selects one canonical immutable record, and binds the base and corrected
 benchmark manifests at that record's benchmark commit. A separate read-only
 broker authority first proves that benchmark commit is an ancestor of protected
-`leanprover/lean-eval` `main`. This constant-repository authority uses only
-strictly allowlisted public anonymous reads and does not expand either GitHub
-App installation or permission set. Both manifests must
+`leanprover/lean-eval` `main`. This constant-repository authority authenticates
+strictly allowlisted reads with a read-only Source Reader App token scoped to
+`lean-eval`. That repository must be selected in the App installation; no new
+App permission is required. Both manifests must
 name the requested tuple and have the same problem group.
 
 The State writer then independently checks the pending request, causal order,

@@ -2340,11 +2340,35 @@ describe("automatic staging promotion canary in workerd", () => {
     });
   }
 
-  function canaryProvider(source: ReturnType<typeof vi.fn<typeof fetch>>): GitHubProvider {
+  function canaryProvider(
+    source: ReturnType<typeof vi.fn<typeof fetch>>,
+    benchmark: typeof fetch = intakeBenchmarkFetch,
+  ): GitHubProvider {
     return new GitHubProvider(
-      undefined, undefined, source, undefined, undefined, undefined, undefined, source,
+      undefined, undefined, source, undefined, undefined, undefined, benchmark, source,
     );
   }
+
+  it("blocks promotion before State writes when the benchmark catalog is unavailable", async () => {
+    const state = new MemoryState();
+    const source = canarySource();
+    const benchmark = vi.fn<typeof fetch>(() => Promise.resolve(
+      Response.json({ error: "broker_unavailable" }, { status: 503 }),
+    ));
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const response = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: canaryProvider(source, benchmark), state, dispatch,
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: "provider_unavailable", stage: "promotion_canary_benchmark_connectivity",
+    });
+    expect(benchmark).toHaveBeenCalledOnce();
+    expect(source).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(state.views).toHaveLength(0);
+    expect(state.outbox).toHaveLength(0);
+  });
 
   it("defers exact synthetic intake to the actual scheduled handler and is idempotent", async () => {
     const state = new MemoryState();

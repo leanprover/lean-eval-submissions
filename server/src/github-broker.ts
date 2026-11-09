@@ -498,7 +498,9 @@ async function installationToken(
     signal: AbortSignal.timeout(5000),
   });
   if (!installationResponse.ok) {
-    throw new BrokerError(installationResponse.status, `GitHub App installation lookup failed: ${await boundedError(installationResponse)}`);
+    // The fixed benchmark repository is service configuration, not user input.
+    const status = authority === "benchmark" ? 503 : installationResponse.status;
+    throw new BrokerError(status, `GitHub App installation lookup failed: ${await boundedError(installationResponse)}`);
   }
   const installation = object(await installationResponse.json<unknown>(), "GitHub App installation");
   if (!Number.isSafeInteger(installation.id) || Number(installation.id) < 1) {
@@ -515,7 +517,8 @@ async function installationToken(
     signal: AbortSignal.timeout(5000),
   });
   if (!tokenResponse.ok) {
-    throw new BrokerError(tokenResponse.status, `GitHub App token exchange failed: ${await boundedError(tokenResponse)}`);
+    const status = authority === "benchmark" ? 503 : tokenResponse.status;
+    throw new BrokerError(status, `GitHub App token exchange failed: ${await boundedError(tokenResponse)}`);
   }
   const tokenData = object(await tokenResponse.json<unknown>(), "GitHub App token");
   if (

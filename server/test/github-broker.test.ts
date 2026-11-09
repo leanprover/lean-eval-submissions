@@ -1,7 +1,9 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { githubBrokerFetch } from "../src/github-broker-client";
-import { handleBrokerRequest, type BrokerRuntimeEnv } from "../src/github-broker";
+import type { BrokerRuntimeEnv } from "../src/github-broker";
+
+let handleBrokerRequest: typeof import("../src/github-broker").handleBrokerRequest;
 
 const NOW = 1_800_000_000_000;
 const COMMIT = "a".repeat(40);
@@ -109,6 +111,12 @@ beforeAll(async () => {
   if (!(exported instanceof ArrayBuffer)) throw new TypeError("RSA private key export was not binary");
   privateKey = `-----BEGIN PRIVATE KEY-----\n${base64(exported)}\n-----END PRIVATE KEY-----`;
   rsaPrivateKey = `-----BEGIN RSA PRIVATE KEY-----\n${base64(extractPkcs1(exported))}\n-----END RSA PRIVATE KEY-----`;
+});
+
+beforeEach(async () => {
+  // Each test gets a fresh production module, including its credential cache.
+  vi.resetModules();
+  ({ handleBrokerRequest } = await import("../src/github-broker"));
 });
 
 describe("GitHub App broker", () => {
@@ -677,6 +685,30 @@ describe("GitHub App broker", () => {
     );
     expect(response.status).toBe(403);
     expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("reports benchmark installation and token-exchange failures as service unavailability", async () => {
+    for (const failingPhase of ["installation", "access_tokens"]) {
+      for (const status of [401, 403, 404]) {
+        const upstream = vi.fn<typeof fetch>((input) => {
+          const url = inputUrl(input);
+          if (url.endsWith(`/${failingPhase}`)) {
+            return Promise.resolve(Response.json({ message: "not available" }, { status }));
+          }
+          if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 795 }));
+          return Promise.reject(new Error(`unexpected GitHub call: ${url}`));
+        });
+        const response = await handleBrokerRequest(
+          brokerRequest("benchmark", "https://api.github.com/repos/leanprover/lean-eval/branches/main"),
+          environment(),
+          upstream,
+          NOW,
+        );
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ error: "broker_unavailable" });
+        expect(upstream).toHaveBeenCalledTimes(failingPhase === "installation" ? 1 : 2);
+      }
+    }
   });
 
   it("accepts the live identical compare shape for Results and benchmark reads", async () => {
