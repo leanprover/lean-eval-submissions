@@ -2370,6 +2370,38 @@ describe("automatic staging promotion canary in workerd", () => {
     expect(state.outbox).toHaveLength(0);
   });
 
+  it("verifies archived canary catalog access without opening that problem to ordinary intake", async () => {
+    const state = new MemoryState();
+    const source = canarySource();
+    const benchmark = vi.fn<typeof fetch>((input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/contents/manifests/problems/two_plus_two.toml?")) {
+        const manifest = [
+          'id = "two_plus_two"', 'group = "formalization-evaluation"',
+          'status = "archived"', 'visible = false', 'statement_revision = 1', '',
+        ].join("\n");
+        return Promise.resolve(Response.json({
+          type: "file", path: "manifests/problems/two_plus_two.toml",
+          encoding: "base64", content: btoa(manifest),
+          size: new TextEncoder().encode(manifest).byteLength,
+        }));
+      }
+      return intakeBenchmarkFetch(input, init);
+    });
+    const github = canaryProvider(source, benchmark);
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const response = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: github, state, dispatch,
+    });
+    expect(response.status).toBe(202);
+    expect(benchmark).toHaveBeenCalledTimes(2);
+    expect(state.views).toHaveLength(1);
+    expect(state.outbox).toHaveLength(1);
+    await expect(github.resolveIntakeProblem("two_plus_two")).rejects.toMatchObject({
+      status: 409, message: "GitHub provider 409: problem_not_open_for_submission",
+    });
+  });
+
   it("defers exact synthetic intake to the actual scheduled handler and is idempotent", async () => {
     const state = new MemoryState();
     const source = canarySource();

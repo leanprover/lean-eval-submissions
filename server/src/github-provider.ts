@@ -998,7 +998,7 @@ export class GitHubProvider {
     };
   }
 
-  async resolveIntakeProblem(problemId: string): Promise<IntakeProblem> {
+  async #readBenchmarkProblem(problemId: string): Promise<IntakeProblem & Readonly<{ visible: boolean; status: string }>> {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(problemId)) {
       throw new GitHubProviderError(409, "problem_id is not canonical");
     }
@@ -1041,11 +1041,10 @@ export class GitHubProvider {
     const status = manifestField(text, "status");
     const visible = manifestBoolean(text, "visible");
     const revision = manifestRevision(text);
-    const accepted = visible && (
-      (group === "formalization-evaluation" && status === "active") ||
-      (group === "software-verification" && (status === "draft" || status === "active"))
-    );
-    if (manifestId !== problemId || !accepted) {
+    if (manifestId !== problemId) {
+      throw new GitHubProviderError(409, "benchmark manifest id did not match the requested problem");
+    }
+    if (group !== "formalization-evaluation" && group !== "software-verification") {
       throw new GitHubProviderError(409, "problem_not_open_for_submission");
     }
     return {
@@ -1053,7 +1052,23 @@ export class GitHubProvider {
       problemGroup: group,
       statementRevision: revision,
       benchmarkCommit,
+      visible,
+      status,
     };
+  }
+
+  async verifyBenchmarkAccess(problemId: string): Promise<void> {
+    await this.#readBenchmarkProblem(problemId);
+  }
+
+  async resolveIntakeProblem(problemId: string): Promise<IntakeProblem> {
+    const { visible, status, ...problem } = await this.#readBenchmarkProblem(problemId);
+    const accepted = visible && (
+      (problem.problemGroup === "formalization-evaluation" && status === "active") ||
+      (problem.problemGroup === "software-verification" && (status === "draft" || status === "active"))
+    );
+    if (!accepted) throw new GitHubProviderError(409, "problem_not_open_for_submission");
+    return problem;
   }
 
   async verifyProblemRepairComparator(
