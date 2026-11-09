@@ -1382,7 +1382,7 @@ async function promotionCanary(
   // creating any synthetic State. Its historical fixture tuple stays fixed.
   await submissionStage(
     "promotion_canary_benchmark_connectivity",
-    () => github.resolveIntakeProblem(material.input.problem_id),
+    () => github.verifyBenchmarkAccess(material.input.problem_id),
   );
   const repository = await submissionStage(
     "promotion_canary_github_connectivity",
