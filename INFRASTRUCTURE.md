@@ -182,7 +182,7 @@ a fresh value through a reviewed, packet-bound credential change.
 
 | App | App ID / key | Authority | Installation |
 | --- | --- | --- | --- |
-| Lean Eval Source Reader (`lean-eval-source-reader`) | `4666604` / `4176146` | Metadata read, Contents read | Installed only on contributor repositories that opt in |
+| Lean Eval Source Reader (`lean-eval-source-reader`) | `4666604` / `4176146` | Metadata read, Contents read | Contributor repositories that opt in; `leanprover/lean-eval` must also be selected before deploying authenticated benchmark verification |
 | Legacy workflow source reader (`lean-eval-bot`) | `3346375` / `Iv23liLATwL7VxAK37uX` | Metadata read, Contents read | Installed only on contributor repositories that opt in |
 | Lean Eval Workflow Dispatcher (`lean-eval-workflow-dispatcher`) | `4666633` / `4176163` | Metadata read, Contents read, Actions read/write | `155329316`, selected repository exactly `leanprover/lean-eval-submissions` |
 
@@ -195,6 +195,19 @@ repository secrets `LEAN_EVAL_BOT_CLIENT_ID` and
 `LEGACY_SOURCE_APP_ID` and `LEGACY_SOURCE_APP_PRIVATE_KEY` broker secrets over
 stdin before deploying that broker. Values are neither emitted nor persisted
 in workflow artifacts.
+
+Benchmark verification uses a separate Source Reader installation token scoped
+only to `leanprover/lean-eval`, with Contents and Metadata read permission.
+The broker still allows only protected `main`, ancestry comparisons, and pinned
+problem manifests. It does not fall back to anonymous requests, whose shared
+IP-based GitHub quota can block otherwise valid submissions. Before deploying
+this path, ensure the Source Reader App's `leanprover` installation includes
+`lean-eval`; no new App permission or Worker secret is needed.
+Select only the intended repositories rather than granting the Source Reader
+access to every organization repository. The staging promotion canary exercises
+the same benchmark catalog lookup before writing synthetic State. Missing
+benchmark installation or token access is a retryable service error, not a
+missing contributor source.
 
 Server intake obtains independent repository-scoped tokens from the Source
 Reader and legacy workflow reader. Before State acceptance or workflow

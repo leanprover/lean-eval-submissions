@@ -475,14 +475,6 @@ function githubHeaders(token: string): Headers {
   });
 }
 
-function anonymousGitHubHeaders(): Headers {
-  return new Headers({
-    accept: "application/vnd.github+json",
-    "user-agent": "lean-eval-github-broker",
-    "x-github-api-version": "2022-11-28",
-  });
-}
-
 async function boundedError(response: Response): Promise<string> {
   const text = await response.text();
   return text.slice(0, MAX_GITHUB_ERROR_BYTES);
@@ -506,7 +498,9 @@ async function installationToken(
     signal: AbortSignal.timeout(5000),
   });
   if (!installationResponse.ok) {
-    throw new BrokerError(installationResponse.status, `GitHub App installation lookup failed: ${await boundedError(installationResponse)}`);
+    // The fixed benchmark repository is service configuration, not user input.
+    const status = authority === "benchmark" ? 503 : installationResponse.status;
+    throw new BrokerError(status, `GitHub App installation lookup failed: ${await boundedError(installationResponse)}`);
   }
   const installation = object(await installationResponse.json<unknown>(), "GitHub App installation");
   if (!Number.isSafeInteger(installation.id) || Number(installation.id) < 1) {
@@ -523,7 +517,8 @@ async function installationToken(
     signal: AbortSignal.timeout(5000),
   });
   if (!tokenResponse.ok) {
-    throw new BrokerError(tokenResponse.status, `GitHub App token exchange failed: ${await boundedError(tokenResponse)}`);
+    const status = authority === "benchmark" ? 503 : tokenResponse.status;
+    throw new BrokerError(status, `GitHub App token exchange failed: ${await boundedError(tokenResponse)}`);
   }
   const tokenData = object(await tokenResponse.json<unknown>(), "GitHub App token");
   if (
@@ -703,9 +698,9 @@ async function proxy(
       : brokerRequest.authority === "results"
         ? assertResultsRequest(brokerRequest, url, env)
         : assertBenchmarkRequest(brokerRequest, url);
-  const headers = brokerRequest.authority === "benchmark"
-    ? anonymousGitHubHeaders()
-    : githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));
+  // Benchmark reads use the read-only Source Reader App, scoped to lean-eval.
+  // Anonymous requests share a small IP-based quota across Cloudflare traffic.
+  const headers = githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));
   if (brokerRequest.body !== null) headers.set("content-type", "application/json");
   const response = await fetcher(url, {
     method: brokerRequest.method,

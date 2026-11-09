@@ -1377,9 +1377,16 @@ async function promotionCanary(
     runAttempt: canaryRequest.controller_run_attempt,
   } satisfies PromotionCanaryIdentity;
   const material = await promotionCanaryMaterial(identity);
+  const github = provider(env, dependencies);
+  // Exercise the same authenticated catalog path as ordinary intake before
+  // creating any synthetic State. Its historical fixture tuple stays fixed.
+  await submissionStage(
+    "promotion_canary_benchmark_connectivity",
+    () => github.resolveIntakeProblem(material.input.problem_id),
+  );
   const repository = await submissionStage(
     "promotion_canary_github_connectivity",
-    () => provider(env, dependencies).submissionRepository(
+    () => github.submissionRepository(
       PROMOTION_CANARY_REPOSITORY,
       PROMOTION_CANARY_SOURCE_COMMIT,
     ),
