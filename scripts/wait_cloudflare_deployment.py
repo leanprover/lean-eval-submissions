@@ -48,7 +48,7 @@ def wait_for_deployment(
                     wrangler, "deployments", "status", "--config", str(config),
                     "--env", environment, "--json",
                 ],
-                capture_output=True, text=True, check=True, timeout=30,
+                capture_output=True, text=True, check=True, timeout=10,
             )
             status = json.loads(result.stdout)
             if not isinstance(status, dict):
