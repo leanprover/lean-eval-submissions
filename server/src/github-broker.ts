@@ -475,14 +475,6 @@ function githubHeaders(token: string): Headers {
   });
 }
 
-function anonymousGitHubHeaders(): Headers {
-  return new Headers({
-    accept: "application/vnd.github+json",
-    "user-agent": "lean-eval-github-broker",
-    "x-github-api-version": "2022-11-28",
-  });
-}
-
 async function boundedError(response: Response): Promise<string> {
   const text = await response.text();
   return text.slice(0, MAX_GITHUB_ERROR_BYTES);
@@ -703,9 +695,9 @@ async function proxy(
       : brokerRequest.authority === "results"
         ? assertResultsRequest(brokerRequest, url, env)
         : assertBenchmarkRequest(brokerRequest, url);
-  const headers = brokerRequest.authority === "benchmark"
-    ? anonymousGitHubHeaders()
-    : githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));
+  // Benchmark reads use the read-only Source Reader App, scoped to lean-eval.
+  // Anonymous requests share a small IP-based quota across Cloudflare traffic.
+  const headers = githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));
   if (brokerRequest.body !== null) headers.set("content-type", "application/json");
   const response = await fetcher(url, {
     method: brokerRequest.method,

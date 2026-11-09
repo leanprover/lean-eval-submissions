@@ -567,10 +567,30 @@ describe("GitHub App broker", () => {
     expect(rejected.status).toBe(403);
   });
 
-  it("allows only ancestry-bound public benchmark reads without an App installation", async () => {
+  it("authenticates allowlisted benchmark reads with a repository-scoped read-only Source Reader token", async () => {
+    const calls: string[] = [];
     const upstream = vi.fn<typeof fetch>((input, init) => {
       const url = inputUrl(input);
-      expect(new Headers(init?.headers).get("authorization")).toBeNull();
+      calls.push(url);
+      expect(init?.redirect).toBe("manual");
+      if (url.endsWith("/repos/leanprover/lean-eval/installation")) {
+        const jwt = (new Headers(init?.headers).get("authorization") ?? "").replace(/^Bearer /, "");
+        const payload = jwt.split(".")[1];
+        if (payload === undefined) throw new TypeError("JWT payload was missing");
+        expect(JSON.parse(atob(payload.replaceAll("-", "+").replaceAll("_", "/")))).toMatchObject({ iss: "4666604" });
+        return Promise.resolve(Response.json({ id: 794 }));
+      }
+      if (url.endsWith("/app/installations/794/access_tokens")) {
+        expect(JSON.parse(bodyText(init?.body))).toEqual({
+          repositories: ["lean-eval"],
+          permissions: { contents: "read", metadata: "read" },
+        });
+        return Promise.resolve(Response.json({
+          token: "ghs_benchmark-read-only-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer ghs_benchmark-read-only-token");
       if (url.endsWith("/branches/main")) {
         return Promise.resolve(Response.json({
           name: "main",
@@ -628,9 +648,35 @@ describe("GitHub App broker", () => {
       NOW,
     );
     expect(rejected.status).toBe(403);
-    expect(upstream.mock.calls.every(([input]) =>
-      !inputUrl(input).includes("/installation") &&
-      !inputUrl(input).includes("/access_tokens"))).toBe(true);
+    expect(calls.filter((url) => url.endsWith("/installation"))).toHaveLength(1);
+    expect(calls.filter((url) => url.endsWith("/access_tokens"))).toHaveLength(1);
+    expect(calls).toHaveLength(5);
+  });
+
+  it("fails closed when benchmark authentication is unavailable, without an anonymous fallback", async () => {
+    const upstream = vi.fn<typeof fetch>();
+    const missingCredentials = { ...environment() };
+    delete missingCredentials.SOURCE_APP_PRIVATE_KEY;
+    const response = await handleBrokerRequest(
+      brokerRequest("benchmark", "https://api.github.com/repos/leanprover/lean-eval/branches/main"),
+      missingCredentials,
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(503);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("rejects benchmark reads outside lean-eval before obtaining any credential", async () => {
+    const upstream = vi.fn<typeof fetch>();
+    const response = await handleBrokerRequest(
+      brokerRequest("benchmark", "https://api.github.com/repos/alice/proofs/branches/main"),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it("accepts the live identical compare shape for Results and benchmark reads", async () => {
