@@ -123,7 +123,7 @@ jobs:
         id: bwrap
         run: |
           sudo apt-get update
-          sudo apt-get install --yes meson ninja-build libcap-dev
+          sudo apt-get install --yes build-essential pkg-config meson ninja-build libcap-dev apparmor
           bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap"
           echo "path=$RUNNER_TEMP/lean-eval-bwrap/bwrap" >> "$GITHUB_OUTPUT"
 

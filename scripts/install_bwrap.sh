@@ -35,8 +35,8 @@ tar -xJf "$work/bubblewrap.tar.xz" -C "$work"
 (
   cd "$work/bubblewrap-${BWRAP_VERSION}"
   meson setup build -Dselinux=disabled -Dman=disabled -Dbash_completion=disabled \
-    -Dzsh_completion=disabled -Dtests=false >/dev/null
-  ninja -C build >/dev/null
+    -Dzsh_completion=disabled -Dtests=false
+  ninja -C build
 )
 install -m 0755 "$work/bubblewrap-${BWRAP_VERSION}/build/bwrap" "$PREFIX/bwrap"
 
