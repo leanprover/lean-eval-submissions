@@ -20,7 +20,7 @@ concurrency:
 jobs:
   evaluate:
     runs-on: ${{ fromJSON(inputs.runner_target == 'christian' && '["self-hosted","Linux","X64","lean-eval-weil"]' || '["nscloud-ubuntu-24.04-amd64-32x64-with-features","namespace-features:container.privileged=true"]') }}
-    timeout-minutes: 1440
+    timeout-minutes: ${{ inputs.runner_target == 'christian' && 2160 || 1440 }}
     env:
       SOURCE_REPOSITORY: formal-arithmetic-geometry/weil-conjectures
       SOURCE_COMMIT: 68900a4574c3b86ccb7c9a3a6b88b6fe7a61162e
@@ -29,7 +29,10 @@ jobs:
     steps:
       - name: Set evaluation deadline
         id: deadline
-        run: echo "epoch=$(($(date +%s) + 1410 * 60))" >> "$GITHUB_OUTPUT"
+        env:
+          JOB_MINUTES: ${{ inputs.runner_target == 'christian' && 2160 || 1440 }}
+        # Reserve 30 minutes to record and upload the result after evaluation.
+        run: echo "epoch=$(($(date +%s) + (JOB_MINUTES - 30) * 60))" >> "$GITHUB_OUTPUT"
 
       - name: Inspect allocated resources
         run: |
