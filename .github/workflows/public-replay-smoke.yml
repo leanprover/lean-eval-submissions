@@ -9,6 +9,10 @@ on:
         type: choice
         default: namespace
         options: [namespace, christian]
+      archive_verified_source:
+        description: Archive the already verified Weil source for operator publication
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,6 +23,7 @@ concurrency:
 
 jobs:
   evaluate:
+    if: ${{ !inputs.archive_verified_source }}
     runs-on: ${{ fromJSON(inputs.runner_target == 'christian' && '["self-hosted","Linux","X64","lean-eval-weil"]' || '["nscloud-ubuntu-24.04-amd64-32x64-with-features","namespace-features:container.privileged=true"]') }}
     timeout-minutes: ${{ inputs.runner_target == 'christian' && 2160 || 1440 }}
     env:
@@ -166,3 +171,70 @@ jobs:
           path: /tmp/weil-evaluate-out/*.json
           if-no-files-found: error
           retention-days: 7
+
+  archive_verified_source:
+    if: inputs.archive_verified_source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Fetch the immutable public source and prepare operator metadata
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/weil-archive"
+          curl --fail --location --silent --show-error --proto '=https' \
+            --retry 3 --max-time 600 --max-filesize 1073741824 \
+            https://codeload.github.com/formal-arithmetic-geometry/weil-conjectures/tar.gz/68900a4574c3b86ccb7c9a3a6b88b6fe7a61162e \
+            --output "$RUNNER_TEMP/weil-archive/source.tar.gz"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          metadata = {
+              'submission_ref': '68900a4574c3b86ccb7c9a3a6b88b6fe7a61162e',
+              'submission_repo': 'formal-arithmetic-geometry/weil-conjectures',
+              'submission_kind': 'github_repo',
+              'submission_public': True,
+              'submitted_by': 'littlebin530',
+              'issue_number': 2179,
+              'model': 'Claude Opus 5.5 and earlier Claude Opus models (human-orchestrated)',
+          }
+          path = Path(os.environ['RUNNER_TEMP']) / 'weil-archive' / 'metadata.json'
+          path.write_text(json.dumps(metadata) + '\n')
+          PY
+
+      - name: Encrypt the source with the production audit recipients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          python scripts/archive_submission.py encrypt \
+            --source-tar "$RUNNER_TEMP/weil-archive/source.tar.gz" \
+            --metadata "$RUNNER_TEMP/weil-archive/metadata.json" \
+            --recipients .audit/recipients.txt \
+            --output-dir "$RUNNER_TEMP/weil-archive/encrypted"
+
+      - name: Mint the audit-repository-only archiver token
+        id: archiver_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Persist the encrypted archive before publishing the verified result
+        env:
+          ARCHIVER_TOKEN: ${{ steps.archiver_token.outputs.token }}
+        run: |
+          python scripts/archive_submission.py push \
+            --ciphertext "$RUNNER_TEMP/weil-archive/encrypted/source.tar.gz.age" \
+            --sidecar "$RUNNER_TEMP/weil-archive/encrypted/sidecar.partial.json" \
+            --benchmark-commit 85a88c37f80170d9f08651dc63ce6b81a8a48cb9 \
+            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
