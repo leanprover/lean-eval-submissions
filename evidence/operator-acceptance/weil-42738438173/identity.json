@@ -1,0 +1,8 @@
+{
+  "source_repository": "formal-arithmetic-geometry/weil-conjectures",
+  "source_commit": "68900a4574c3b86ccb7c9a3a6b88b6fe7a61162e",
+  "benchmark_commit": "85a88c37f80170d9f08651dc63ce6b81a8a48cb9",
+  "expected_toolchain": "leanprover/lean4:v4.35.0-rc3",
+  "workflow_commit": "03b9a92ef697fd7abade80a6ec5c9364eb0ea0bc",
+  "diagnostic_only": true
+}

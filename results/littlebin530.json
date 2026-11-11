@@ -10,7 +10,7 @@
       },
       "problem_id": "weil_conjectures",
       "production_metadata": {
-        "production_description": "Most proof code was written by Claude Code agents using Claude Opus 5.5 and earlier Claude Opus models, orchestrated and supervised by the project authors. The human authors supplied the statements, definitions, blueprint, proof architecture and review of definitions. Operator-recovered attribution from formalization.yaml and README at formal-arithmetic-geometry/weil-conjectures@c8676a0e623ea4c3c62570f1aea5f2061c969db1. Verified from public source on christian-weil."
+        "production_description": "Most proof code was written by Claude Code agents using Claude Opus 5.5 and earlier Claude Opus models, orchestrated and supervised by the project authors. The human authors supplied the statements, definitions, blueprint, proof architecture and review of definitions. Operator-recovered attribution from formalization.yaml and README at formal-arithmetic-geometry/weil-conjectures@c8676a0e623ea4c3c62570f1aea5f2061c969db1."
       },
       "result_id": "r2_11cb47525b68eb8a1ed10d0b8092b99908b892ee2dd7dd21718828edb9ccdb9e",
       "statement_revision": 1,

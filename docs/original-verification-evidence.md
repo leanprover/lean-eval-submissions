@@ -19,3 +19,13 @@ accepted result, and checker logs; they must not rewrite the original result.
 The initial backfill covers the September 8 Yamaguchi submissions for Martinet
 and Shafarevich, and the September 13 withdrawn Klartag launch canary. Their
 original run IDs are 34192301049, 34192355619, and 34760378084 respectively.
+
+The November 10 Weil acceptance is a maintainer-authorized recovery under
+issue #2179. Run `42738438173`, attempt 1, evaluated the exact public source
+on the submitter project team's self-hosted `christian-weil` runner using the
+branch diagnostic workflow at `03b9a92ef697fd7abade80a6ec5c9364eb0ea0bc`.
+Its identity, accepted result, resource report and complete evaluation summary
+are retained under `evidence/operator-acceptance/weil-42738438173/`. The summary
+is gzip-compressed without changing its uncompressed bytes. `manifest.json`
+records the original artifact digest and individual file digests. The source
+was subsequently encrypted and archived before recording the recovered Result.
