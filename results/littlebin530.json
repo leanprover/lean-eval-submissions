@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-11-10T23:41:55Z",
+      "benchmark_commit": "85a88c37f80170d9f08651dc63ce6b81a8a48cb9",
+      "declared_model": "Claude Opus 5.5 and earlier Claude Opus models (human-orchestrated)",
+      "intake": {
+        "issue_number": 2179,
+        "kind": "issue"
+      },
+      "problem_id": "weil_conjectures",
+      "production_metadata": {
+        "production_description": "Most proof code was written by Claude Code agents using Claude Opus 5.5 and earlier Claude Opus models, orchestrated and supervised by the project authors. The human authors supplied the statements, definitions, blueprint, proof architecture and review of definitions. Operator-recovered attribution from formalization.yaml and README at formal-arithmetic-geometry/weil-conjectures@c8676a0e623ea4c3c62570f1aea5f2061c969db1. Verified from public source on christian-weil."
+      },
+      "result_id": "r2_11cb47525b68eb8a1ed10d0b8092b99908b892ee2dd7dd21718828edb9ccdb9e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "68900a4574c3b86ccb7c9a3a6b88b6fe7a61162e",
+        "repo": "formal-arithmetic-geometry/weil-conjectures"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "littlebin530"
+}
