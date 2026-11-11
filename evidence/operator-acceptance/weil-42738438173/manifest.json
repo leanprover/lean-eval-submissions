@@ -1,0 +1,20 @@
+{
+  "acceptance_kind": "maintainer-authorized operator recovery",
+  "artifact_id": 13814191104,
+  "artifact_sha256": "901919f535d68c9865e27d12907793447726bba0055181f1fa35ede26f96f6f5",
+  "file_sha256": {
+    "identity.json": "bd889b4c482aea9163c69cf7e09feb2d368ef1fe17499430f39eda26f2ff9b2e",
+    "resource-report.json": "af6482660de85555588b1875ddbf4d71f8ff4df13fac93d56240ed3784e13541",
+    "results.json": "1a0745b9498b17b273bea773e7f5e4ff82833d49d158326b121ca858d93efb8c",
+    "summary.json": "d18d1052235bb36637fa2df9c57bcd651ddd745ade690a95fb1bd7b16e1528bf"
+  },
+  "operator_issue_number": 2179,
+  "result_id": "r2_11cb47525b68eb8a1ed10d0b8092b99908b892ee2dd7dd21718828edb9ccdb9e",
+  "runner": {
+    "name": "christian-weil",
+    "operated_by": "submitter project team"
+  },
+  "schema_version": 1,
+  "verification_run_attempt": 1,
+  "verification_run_id": 42738438173
+}
