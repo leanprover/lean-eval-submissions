@@ -586,6 +586,83 @@ CFSG_REQUIRES = _requires(
 
 
 class WorkspacePrimingTests(unittest.TestCase):
+    def test_historical_tauceti_only_helper_keeps_existing_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark = pathlib.Path(tmp)
+            (benchmark / "scripts").mkdir()
+            (benchmark / "scripts/fetch_dependency_caches.sh").write_text("exit 73\n")
+            with mock.patch.object(ev.subprocess, "run") as run:
+                ev._restore_dependency_caches(benchmark / "workspace", benchmark)
+                run.assert_not_called()
+
+    def test_library_cache_restore_sees_overlay_and_never_exports_job_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(benchmark)
+            scripts = benchmark / "scripts"
+            scripts.mkdir()
+            helper = scripts / "fetch_dependency_caches.sh"
+            helper.write_text("#!/bin/sh\n", encoding="utf-8")
+            (scripts / "fetch_dependency_caches.py").write_text("# trusted helper\n")
+            (src / "Submission.lean").write_text("import CFSG\n", encoding="utf-8")
+
+            def restore(command, **kwargs):
+                workspace = workspaces / "two_plus_two"
+                self.assertEqual(command, ["bash", str(helper), "--restore", str(workspace)])
+                self.assertEqual((workspace / "Submission.lean").read_text(), "import CFSG\n")
+                self.assertEqual((workspace / "lake-manifest.json").read_text(), ROOT_MANIFEST)
+                self.assertEqual(kwargs["cwd"], benchmark)
+                self.assertEqual(kwargs["env"]["GITHUB_ENV"], "")
+                self.assertNotIn("LAKE_CONFIG", kwargs["env"])
+                self.assertNotIn("LAKE_ARTIFACT_CACHE", kwargs["env"])
+                return ev.subprocess.CompletedProcess(command, 0, "export LAKE_CONFIG=/tmp/cache\n", "")
+
+            with (
+                mock.patch.dict(ev.os.environ, GITHUB_ENV="/tmp/job-env", LAKE_CONFIG="/tmp/old"),
+                mock.patch.object(ev.subprocess, "run", side_effect=restore) as run,
+            ):
+                record = ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                )
+                self.assertTrue(record["overlaid"])
+                run.assert_called_once()
+                self.assertEqual(ev.os.environ["LAKE_CONFIG"], "/tmp/old")
+
+    def test_library_cache_failure_aborts_before_comparator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark = pathlib.Path(tmp)
+            target = benchmark / "workspace"
+            target.mkdir()
+            (benchmark / "scripts").mkdir()
+            (benchmark / "scripts/fetch_dependency_caches.sh").write_text("#!/bin/sh\n")
+            (benchmark / "scripts/fetch_dependency_caches.py").write_text("# trusted helper\n")
+            result = ev.subprocess.CompletedProcess([], 1, "", "CFSG cache pin mismatch")
+            with mock.patch.object(ev.subprocess, "run", return_value=result):
+                with self.assertRaisesRegex(ev.EvaluateError, "CFSG cache pin mismatch"):
+                    ev._restore_dependency_caches(target, benchmark)
+
+    def test_preprimed_replay_does_not_fetch_library_caches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark = pathlib.Path(tmp)
+            generated, root_manifest, packages, src, workspaces = self._setup(benchmark)
+            (benchmark / "scripts").mkdir()
+            (benchmark / "scripts/fetch_dependency_caches.sh").write_text("#!/bin/sh\n")
+            (benchmark / "scripts/fetch_dependency_caches.py").write_text("# trusted helper\n")
+            with mock.patch.object(ev.subprocess, "run") as run:
+                ev.overlay_match(
+                    ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                    generated_root=generated,
+                    workspaces_root=workspaces,
+                    shared_packages=packages,
+                    root_manifest=root_manifest,
+                    prime=False,
+                )
+                run.assert_not_called()
+
     def _setup(
         self,
         tmp_path: pathlib.Path,

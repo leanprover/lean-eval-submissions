@@ -261,6 +261,14 @@ stops before proof checking. A cache miss never authorizes compiling TauCeti.
 The curl wrapper and cache settings are scoped to trusted preparation; later
 sandboxed evaluation remains offline.
 
+After overlaying a solver's Lean files, workspace preparation also invokes the
+trusted benchmark's `scripts/fetch_dependency_caches.sh --restore` helper when
+present. This detects libraries used only by the solution (including CFSG and
+Stacks), restores their imported modules without compiling them, and stops on
+incompatible pins or missing artifacts. Only import headers are parsed; solver
+code is elaborated later inside comparator. Network-free historical replay
+skips this step and continues to require preprimed workspaces.
+
 - Secrets, GitHub Apps, and branch protection: [`docs/ci-secrets.md`](docs/ci-secrets.md).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).
 - Local-only replay planner and disposable-VM contract:

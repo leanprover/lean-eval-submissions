@@ -177,7 +177,11 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
    regressions introduced by *benchmark-repo* changes; this pipeline
    re-runs them as a per-submission pre-flight gate.
 8. Runs `evaluate_submission.py`, which overlays the submission onto a
-   pristine `generated/<id>/` workspace and invokes comparator.
+   pristine `generated/<id>/` workspace. When the trusted benchmark provides
+   a dependency cache helper, setup parses the overlaid import headers and
+   restores registered, pinned library modules with cache-only builds before
+   invoking comparator. It never elaborates solver targets during preparation.
+   Cache settings remain outside comparator's environment.
 
 The evaluation steps live in `evaluate-attempt.yml`, shared by the standard
 and optional larger attempt. The `evaluate` job in `submission.yml` selects
