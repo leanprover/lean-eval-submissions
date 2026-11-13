@@ -22,6 +22,14 @@ which copies every downloaded output into the shared
      import any TauCeti module, not only those the benchmark imports.
   2. `lake build`: the benchmark root itself.
 
+Before step 1, a plain `lake build Mathlib` (without the TauCeti cache
+settings) compiles any Mathlib module that `lake exe cache get` could not
+download. Mathlib's cache occasionally lacks a module, and step 1 must not
+compile anything, so a single hole would otherwise fail every evaluation.
+Mathlib cannot import TauCeti, so this build can never compile TauCeti, and
+Lake keys TauCeti's outputs by input traces, which a locally compiled
+Mathlib module reproduces.
+
 Later workspace builds, including comparator's sandboxed build (whose
 environment is reduced to PATH, HOME and LEAN_ABORT_ON_PANIC), then find
 TauCeti up to date on disk and need neither the artifact cache nor the
@@ -47,6 +55,7 @@ import time
 
 FETCH_SCRIPT = pathlib.Path("scripts") / "fetch_dependency_caches.sh"
 TAUCETI = "TauCeti"
+MATHLIB = "Mathlib"
 # Ordinary builds report `Built` or `Building` for compilation. Cache-only
 # failures can also say `Building` without ever running the compiler.
 COMPILED_TAUCETI = re.compile(r"\bBuil(?:t|ding) TauCeti\b")
@@ -179,9 +188,12 @@ def build_benchmark_root(root: pathlib.Path) -> None:
     if not pins_tauceti(root):
         lake_build(root, [], dict(os.environ), forbid_tauceti_compile=False)
         return
-    env = dict(os.environ)
-    env.pop("GITHUB_ENV", None)
-    env.update(fetch_cache_settings(root))
+    cache_settings = fetch_cache_settings(root)
+    plain_env = dict(os.environ)
+    plain_env.pop("GITHUB_ENV", None)
+    lake_build(root, [MATHLIB], plain_env, forbid_tauceti_compile=True)
+    env = dict(plain_env)
+    env.update(cache_settings)
     env["CURL"] = str(CACHE_CURL)
     env["LAKE_RESTORE_ARTIFACTS"] = "true"
     for attempt in range(1, CACHE_RESTORE_ATTEMPTS + 1):

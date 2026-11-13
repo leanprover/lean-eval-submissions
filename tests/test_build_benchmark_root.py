@@ -62,10 +62,13 @@ class BuildBenchmarkRootTests(unittest.TestCase):
                 target = targets[0] if targets else "root"
                 for line in json.loads(os.environ.get("FAKE_LAKE_OUTPUT", "{{}}")).get(target, []):
                     print(line, flush=True)
+                if target == "Mathlib":
+                    # The configured failure and delay model the TauCeti and root builds.
+                    sys.exit(0)
                 time.sleep(float(os.environ.get("FAKE_LAKE_LINGER", "0")))
-                if os.environ.get("FAKE_LAKE_FAIL_FIRST_RESTORE") == "1":
+                if os.environ.get("FAKE_LAKE_FAIL_FIRST_RESTORE") == "1" and "--no-build" in sys.argv:
                     with open({str(self.calls)!r}) as f:
-                        if len(f.readlines()) == 1:
+                        if sum("--no-build" in line for line in f) == 1:
                             sys.exit(3)
                 sys.exit(int(os.environ.get("FAKE_LAKE_RC", "0")))
                 """
@@ -145,9 +148,12 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertEqual(rc, 0, stderr)
         calls = self._calls()
         self.assertEqual(
-            [call["argv"] for call in calls], [["-v", "--no-build", "build", "TauCeti"], ["build"]]
+            [call["argv"] for call in calls],
+            [["build", "Mathlib"], ["-v", "--no-build", "build", "TauCeti"], ["build"]],
         )
-        for call in calls:
+        # Mathlib's cache holes are compiled without TauCeti's cache settings.
+        self.assertEqual(calls[0]["env"], {})
+        for call in calls[1:]:
             self.assertEqual(pathlib.Path(call["cwd"]), self.root.resolve())
             self.assertEqual(
                 call["env"],
@@ -183,7 +189,10 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("compiled TauCeti instead of downloading it", stderr)
         self.assertIn("Built TauCeti.Algebra.Lie.B", stderr)
-        self.assertEqual([call["argv"] for call in self._calls()], [["-v", "--no-build", "build", "TauCeti"]])
+        self.assertEqual(
+            [call["argv"] for call in self._calls()],
+            [["build", "Mathlib"], ["-v", "--no-build", "build", "TauCeti"]],
+        )
 
     def test_failed_tauceti_job_counts_as_compiling(self) -> None:
         self.assertTrue(br.COMPILED_TAUCETI.search("✖ [3/9] Building TauCeti.X"))
@@ -213,8 +222,8 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertIn("curl: (22)", stdout)
         self.assertIn("503", stdout)
         self.assertIn("No dependency compilation was permitted", stderr)
-        self.assertEqual(len(self._calls()), 2)
-        self.assertTrue(all("--no-build" in call["argv"] for call in self._calls()))
+        self.assertEqual(len(self._calls()), 3)
+        self.assertTrue(all("--no-build" in call["argv"] for call in self._calls()[1:]))
 
     def test_restoration_retries_before_building_the_root(self) -> None:
         (self.root / "lake-manifest.json").write_text(
@@ -226,8 +235,10 @@ class BuildBenchmarkRootTests(unittest.TestCase):
             rc, stdout, stderr = self._run()
         self.assertEqual(rc, 0, stderr)
         self.assertIn("retrying without compiling", stdout)
-        self.assertEqual(["--no-build" in c["argv"] for c in self._calls()], [True, True, False])
-        self.assertTrue(all(c["env"]["CURL"] == str(br.CACHE_CURL) for c in self._calls()))
+        self.assertEqual(
+            ["--no-build" in c["argv"] for c in self._calls()], [False, True, True, False]
+        )
+        self.assertTrue(all(c["env"]["CURL"] == str(br.CACHE_CURL) for c in self._calls()[1:]))
 
     def test_root_build_still_rejects_tauceti_compilation(self) -> None:
         (self.root / "lake-manifest.json").write_text(
@@ -240,7 +251,23 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         rc, _, stderr = self._run()
         self.assertEqual(rc, 1)
         self.assertIn("compiled TauCeti instead of downloading it", stderr)
-        self.assertEqual(len(self._calls()), 2)
+        self.assertEqual(len(self._calls()), 3)
+
+    def test_mathlib_cache_hole_is_compiled_before_cache_only_restore(self) -> None:
+        (self.root / "lake-manifest.json").write_text(
+            _manifest(["mathlib", "TauCeti"]), encoding="utf-8"
+        )
+        self._write_fetch_script(f'echo "{TAUCETI_EXPORT}"\n')
+        os.environ["FAKE_LAKE_OUTPUT"] = json.dumps(
+            {"Mathlib": ["✔ [3882/8975] Built Mathlib.Tactic.CategoryTheory.BicategoryCoherence (9.1s)"]}
+        )
+        rc, stdout, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertIn("Built Mathlib.Tactic.CategoryTheory.BicategoryCoherence", stdout)
+        self.assertEqual(
+            [call["argv"] for call in self._calls()],
+            [["build", "Mathlib"], ["-v", "--no-build", "build", "TauCeti"], ["build"]],
+        )
 
     def test_fetch_script_failure_or_bad_output_fails_closed(self) -> None:
         (self.root / "lake-manifest.json").write_text(
