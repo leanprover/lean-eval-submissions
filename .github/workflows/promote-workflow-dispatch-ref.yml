@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   promote-dispatch-ref:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment: submission-dispatch-promotion
     permissions:

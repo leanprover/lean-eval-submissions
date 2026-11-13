@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   set-staging-intake:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment: cloudflare-staging
     defaults:
@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.11.10'
+          python-version: '3.11.18'
 
       - name: Verify exact reviewed deployment
         env:

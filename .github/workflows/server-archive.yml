@@ -29,7 +29,7 @@ on:
 jobs:
   archive:
     environment: archive-${{ inputs.callback_environment }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     permissions:
       contents: read
@@ -80,7 +80,7 @@ jobs:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           ACTIONS_ID_TOKEN_REQUEST_URL: ''
         with:
-          python-version: '3.11.10'
+          python-version: '3.11.18'
 
       - name: Resolve source owner
         id: source_owner

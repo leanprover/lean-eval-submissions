@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   gate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Require an immutable protected dispatch tag
@@ -24,7 +24,7 @@ jobs:
   wrap-only:
     needs: gate
     environment: archive-production
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       id-token: write

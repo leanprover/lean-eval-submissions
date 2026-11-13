@@ -46,7 +46,7 @@ jobs:
   authorize-manual:
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 1
     steps:
       - name: Require an upstream protected-main dispatch
@@ -69,7 +69,7 @@ jobs:
   migrate:
     needs: authorize-manual
     environment: archive-migration-production
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -109,7 +109,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.11.10'
+          python-version: '3.11.18'
 
       - name: Check out the exact private audit source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

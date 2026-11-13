@@ -8,6 +8,9 @@
 self-hosted-runner:
   labels:
     - ubuntu-latest-large
+    # GitHub-hosted, but unknown to actionlint v1.7.12. Remove once the pinned
+    # actionlint recognises it.
+    - ubuntu-26.04
     # Namespace (nscloud) runner, as leanprover/lean4 CI uses.
     - nscloud-ubuntu-24.04-amd64-32x64
     - nscloud-ubuntu-24.04-amd64-32x64-with-features

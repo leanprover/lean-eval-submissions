@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -27,7 +27,7 @@ jobs:
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.11.10'
+          python-version: '3.11.18'
 
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -67,7 +67,7 @@ jobs:
         run: python -m unittest discover -v -s tests -p 'test_*.py'
 
   solution-dependency-sandbox:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -112,7 +112,7 @@ jobs:
         run: python scripts/smoke_acceptance_measurements.py --sandbox "${{ steps.bwrap.outputs.path }}"
 
   lake-cache-restoration:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -143,7 +143,7 @@ jobs:
         run: python3 -m unittest discover -v -s tests -p test_lake_cache_restore.py
 
   artifact-upload:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -160,7 +160,7 @@ jobs:
 
   artifact-download:
     needs: artifact-upload
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
