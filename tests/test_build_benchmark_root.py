@@ -113,6 +113,23 @@ class BuildBenchmarkRootTests(unittest.TestCase):
         self.assertNotIn("LAKE_RESTORE_ARTIFACTS", calls[0]["env"])
         self.assertEqual(self.github_env.read_text(), "")
 
+    def test_new_helper_restores_imported_modules_without_a_whole_library_build(self) -> None:
+        (self.root / "lake-manifest.json").write_text(_manifest(["mathlib", "TauCeti"]))
+        (self.root / "scripts/fetch_dependency_caches.py").write_text("# capability marker\n")
+        self._write_fetch_script('[ "$1" = --restore ]\n' + f'echo "{TAUCETI_EXPORT}"\n')
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual([call["argv"] for call in self._calls()], [["build"]])
+        self.assertEqual(self.github_env.read_text(), "")
+
+    def test_new_helper_can_report_no_library_imports(self) -> None:
+        (self.root / "lake-manifest.json").write_text(_manifest(["mathlib", "TauCeti"]))
+        (self.root / "scripts/fetch_dependency_caches.py").write_text("# capability marker\n")
+        self._write_fetch_script('[ "$1" = --restore ]\n')
+        rc, _, stderr = self._run()
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual([call["argv"] for call in self._calls()], [["build"]])
+
     def test_tauceti_without_fetch_script_fails_before_building(self) -> None:
         (self.root / "lake-manifest.json").write_text(
             _manifest(["mathlib", "TauCeti"]), encoding="utf-8"

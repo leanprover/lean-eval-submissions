@@ -456,6 +456,7 @@ _FINAL_SIDECAR_FIELDS = {
     "archived_at",
     "benchmark_commit",
     "archiver_workflow_run",
+    "toolchain",
     "problem_ids",
     "evaluator_verdict",
 }
@@ -619,6 +620,10 @@ def _validate_sidecar(sidecar: dict, *, finalized: bool = False) -> None:
             or not SHA40_RE.fullmatch(benchmark_commit)
         ):
             sys.exit("final sidecar.benchmark_commit must be a lowercase commit SHA")
+        if "toolchain" in sidecar and (not isinstance(sidecar["toolchain"], str) or re.fullmatch(
+            r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?", sidecar["toolchain"]
+        ) is None):
+            sys.exit("final sidecar.toolchain must be a canonical Lean release")
         workflow_run = sidecar.get("archiver_workflow_run")
         if workflow_run is not None and (
             not isinstance(workflow_run, str) or not workflow_run.strip()
@@ -928,6 +933,10 @@ def _push(args: argparse.Namespace) -> int:
         if not SHA40_RE.fullmatch(args.benchmark_commit):
             sys.exit(f"--benchmark-commit must be a 40-char lowercase hex SHA, got {args.benchmark_commit!r}")
         sidecar["benchmark_commit"] = args.benchmark_commit
+    if getattr(args, "toolchain", None):
+        if re.fullmatch(r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?", args.toolchain) is None:
+            sys.exit("--toolchain must be a canonical Lean release")
+        sidecar["toolchain"] = args.toolchain
     if args.workflow_run_url:
         sidecar["archiver_workflow_run"] = args.workflow_run_url
 
@@ -1420,6 +1429,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="summary.json from evaluate (optional; "
                              "per-problem verdict goes into the sidecar).")
     p_push.add_argument("--benchmark-commit", default="")
+    p_push.add_argument("--toolchain")
     p_push.add_argument("--workflow-run-url", default="")
     p_push.add_argument("--audit-repo", default=DEFAULT_AUDIT_REPO)
     p_push.add_argument(

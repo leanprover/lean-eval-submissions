@@ -121,6 +121,15 @@ def build_registry(
 def _git_reader(repository: pathlib.Path) -> Callable[[str], bytes]:
     def read(commit: str) -> bytes:
         try:
+            profiles = subprocess.run(
+                ["git", "-C", str(repository), "ls-tree", "--name-only", commit,
+                 "supported-toolchains.json"], check=True, capture_output=True, timeout=30,
+            )
+            if profiles.stdout.strip():
+                raise ToolchainRegistryError(
+                    "multi-toolchain benchmarks require profile-aware replay; use the toolchain "
+                    "in the result verification receipt instead of inferring the root pin"
+                )
             completed = subprocess.run(
                 ["git", "-C", str(repository), "show", f"{commit}:lean-toolchain"],
                 check=True,

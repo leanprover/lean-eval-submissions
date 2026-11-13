@@ -634,6 +634,45 @@ def _prime_workspace(target: pathlib.Path) -> None:
             )
 
 
+def _restore_dependency_caches(target: pathlib.Path, benchmark: pathlib.Path) -> None:
+    """Restore trusted library artifacts after overlaying solver import headers.
+
+    The benchmark helper parses headers without elaborating submissions and uses
+    cache-only builds of its registered, pinned library modules. It must never
+    build Submission, Solution, or other user-controlled targets. Older benchmark
+    revisions without the helper retain their existing priming behavior.
+    """
+    helper = benchmark / "scripts/fetch_dependency_caches.sh"
+    # The older TauCeti-only helper ran before solver overlay and did not
+    # distinguish invalid solver headers. Preserve historical behavior.
+    if not (benchmark / "scripts/fetch_dependency_caches.py").is_file():
+        return
+    if helper.is_symlink():
+        raise EvaluateError(f"Benchmark dependency cache helper is not a regular file: {helper}")
+    if not helper.exists():
+        return
+    if not helper.is_file():
+        raise EvaluateError(f"Benchmark dependency cache helper is not a regular file: {helper}")
+    env = dict(os.environ, GITHUB_ENV="")
+    env.pop("LAKE_CONFIG", None)
+    env.pop("LAKE_ARTIFACT_CACHE", None)
+    result = subprocess.run(
+        ["bash", str(helper.resolve()), "--restore", str(target.resolve())],
+        cwd=benchmark,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    # Its stdout contains shell exports for interactive callers. Restoration
+    # puts outputs on disk; do not propagate cache settings into comparator.
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
+    if result.returncode:
+        raise EvaluateError(f"Dependency cache restoration failed in {target}:\n{result.stderr}")
+
+
 def _require_preprimed_workspace(target: pathlib.Path) -> None:
     """Verify the network-free replay image already primed this workspace."""
     manifest = target / "lake-manifest.json"
@@ -759,6 +798,8 @@ def overlay_match(
             _install_root_manifest(target, root_manifest)
         else:
             _prime_workspace(target)
+        benchmark = root_manifest.parent if root_manifest is not None else generated_root.parent
+        _restore_dependency_caches(target, benchmark)
     elif require_preprimed:
         _require_preprimed_workspace(target)
 

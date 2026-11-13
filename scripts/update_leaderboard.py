@@ -160,7 +160,14 @@ def update_leaderboard(
     solution_publication_date: str | None = None,
     verification_run_id: int | None = None,
     verification_run_attempt: int | None = None,
+    toolchain: str | None = None,
 ) -> dict:
+    if toolchain is not None and re.fullmatch(
+        r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?", toolchain
+    ) is None:
+        raise UpdateError("toolchain must be a canonical Lean release")
+    if toolchain is not None and verification_run_id is None:
+        raise UpdateError("a selected toolchain requires a verification receipt")
     _require_login(user)
     _require_sha("benchmark-commit", benchmark_commit)
     _require_sha("submission-ref", submission_ref)
@@ -235,6 +242,8 @@ def update_leaderboard(
                 "run_id": verification_run_id,
                 "run_attempt": verification_run_attempt,
             }))
+        if toolchain is not None:
+            evidence[-1][1]["toolchain"] = toolchain
         record = {
             "result_id": identifier,
             "problem_id": problem_id,
@@ -340,6 +349,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Evaluation JSON containing passed IDs and statement revisions.",
     )
     parser.add_argument("--benchmark-commit", required=True)
+    parser.add_argument("--toolchain")
     parser.add_argument(
         "--submission-kind",
         required=True,
@@ -423,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
             leaderboard_dir=args.leaderboard_dir,
             passed=passed,
             benchmark_commit=args.benchmark_commit,
+            toolchain=args.toolchain,
             submission_kind=args.submission_kind,
             submission_repo=args.submission_repo,
             submission_ref=args.submission_ref,

@@ -280,6 +280,15 @@ def build_matrix(
     source_counts: Counter[str] = Counter()
     for commit, binding in sorted(bindings.items()):
         try:
+            profiles = subprocess_git(
+                benchmark_repository, "ls-tree", "--name-only", commit,
+                "supported-toolchains.json", maximum=4096,
+            )
+            if profiles.strip():
+                raise PrivateImageMatrixError(
+                    "multi-toolchain benchmarks require profile-aware replay; use the "
+                    "archived toolchain instead of inferring the root pin"
+                )
             raw_toolchain = subprocess_git(
                 benchmark_repository, "show", f"{commit}:lean-toolchain", maximum=4096
             )

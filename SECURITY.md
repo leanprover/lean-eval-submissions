@@ -161,9 +161,14 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
 1. Checks out this repo (the pipeline scripts) and `leanprover/lean-eval`
    at the exact commit frozen by the preceding archive job, both with
    `persist-credentials: false`.
-2. Verifies `benchmark_commit` and toolchain against the archive outputs.
+2. Verifies `benchmark_commit` against the archive outputs.
 3. Independently fetches the submission with a step-scoped `lean-eval-bot`
-   token and verifies the deterministic metadata digest against archive.
+   token, verifies its metadata digest, and resolves its toolchain request
+   against the frozen benchmark's approved configurations. Selection reads the
+   archive without extracting or executing source. Unsupported requests are
+   retained by the archive lane and become terminal rejections here; one archive
+   may not mix toolchains. Regenerate selected pristine workspaces with the
+   approved configuration before the solver overlay.
 4. Strips `.git` from both checkouts before untrusted Lean runs.
 5. Builds the trusted benchmark and CLI, and installs pinned bubblewrap.
    The benchmark toolchain supplies comparator, exporter, Lean checker, and NanoDa.
@@ -177,7 +182,11 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` for the full
    regressions introduced by *benchmark-repo* changes; this pipeline
    re-runs them as a per-submission pre-flight gate.
 8. Runs `evaluate_submission.py`, which overlays the submission onto a
-   pristine `generated/<id>/` workspace and invokes comparator.
+   pristine `generated/<id>/` workspace. When the trusted benchmark provides
+   a dependency cache helper, setup parses the overlaid import headers and
+   restores registered, pinned library modules with cache-only builds before
+   invoking comparator. It never elaborates solver targets during preparation.
+   Cache settings remain outside comparator's environment.
 
 The evaluation steps live in `evaluate-attempt.yml`, shared by the standard
 and optional larger attempt. The `evaluate` job in `submission.yml` selects

@@ -5,33 +5,19 @@ downloading TauCeti's build outputs instead of compiling them.
 
 Usage: python scripts/build_benchmark_root.py <benchmark-root>
 
-A benchmark whose `lake-manifest.json` pins no TauCeti package (every
-lean-eval commit before TauCeti was added) gets a plain `lake build`.
+For benchmarks with the selective Python cache helper, run it with --restore
+before building the root. It parses import headers and restores only required
+library modules and their dependencies with compilation disabled. A benchmark
+with no registered library imports needs no artifact-cache settings.
 
-Otherwise the benchmark must ship `scripts/fetch_dependency_caches.sh`,
-which checks that the pinned TauCeti was built with the benchmark's Lean
-toolchain and Mathlib, fetches TauCeti's Lake cache mappings and prints the
-Lake settings that make builds download TauCeti's outputs. Those settings
-apply only to the builds run here: they are not written to `$GITHUB_ENV`,
-so nothing later in the job, trusted or not, reads the artifact cache or
-reaches its service. Both builds below run with LAKE_RESTORE_ARTIFACTS=true,
-which copies every downloaded output into the shared
-`.lake/packages/<pkg>/.lake/build` tree:
+Older snapshots retain their TauCeti-only preparation: fetch revision mappings,
+restore the whole TauCeti library with `lake --no-build`, then build the root.
+Snapshots predating TauCeti get a plain build.
 
-  1. `lake -v --no-build build TauCeti`: the whole TauCeti library, so a submission may
-     import any TauCeti module, not only those the benchmark imports.
-  2. `lake build`: the benchmark root itself.
-
-Later workspace builds, including comparator's sandboxed build (whose
-environment is reduced to PATH, HOME and LEAN_ABORT_ON_PANIC), then find
-TauCeti up to date on disk and need neither the artifact cache nor the
-network.
-
-TauCeti must never be compiled here. Cache-only materialization prevents Lake
-from falling back to compilation, and verbose logs retain the underlying
-artifact-download errors. Individual downloads have bounded retries and atomic
-publication through lake_cache_curl.py. The compilation guard also remains on
-the subsequent root build.
+Cache settings apply only to trusted preparation and are never written to
+GITHUB_ENV. Later comparator builds use restored files in the shared package
+tree and stay offline. Downloads have bounded retries and atomic publication;
+cache misses never authorize compilation of TauCeti.
 """
 
 from __future__ import annotations
@@ -99,7 +85,7 @@ def parse_exports(stdout: str) -> dict[str, str]:
     return exports
 
 
-def fetch_cache_settings(root: pathlib.Path) -> dict[str, str]:
+def fetch_cache_settings(root: pathlib.Path, *, restore: bool = False) -> dict[str, str]:
     if not (root / FETCH_SCRIPT).is_file():
         raise BuildRootError(
             f"{root / 'lake-manifest.json'} pins TauCeti but {root / FETCH_SCRIPT} "
@@ -112,7 +98,7 @@ def fetch_cache_settings(root: pathlib.Path) -> dict[str, str]:
     env.pop("GITHUB_ENV", None)
     env["CURL"] = str(CACHE_CURL)
     result = subprocess.run(
-        ["bash", str(FETCH_SCRIPT), "."],
+        ["bash", str(FETCH_SCRIPT), *(["--restore"] if restore else []), "."],
         cwd=root,
         env=env,
         stdout=subprocess.PIPE,
@@ -121,6 +107,9 @@ def fetch_cache_settings(root: pathlib.Path) -> dict[str, str]:
     )
     if result.returncode != 0:
         raise BuildRootError(f"{FETCH_SCRIPT} failed with exit code {result.returncode}")
+    if restore and not result.stdout.strip():
+        # No registered library imports need artifacts.
+        return {}
     return parse_exports(result.stdout)
 
 
@@ -176,6 +165,17 @@ def lake_build(
 
 
 def build_benchmark_root(root: pathlib.Path) -> None:
+    if (root / "scripts/fetch_dependency_caches.py").is_file():
+        env = dict(os.environ)
+        for name in ("GITHUB_ENV", "LAKE_CONFIG", "LAKE_ARTIFACT_CACHE"):
+            env.pop(name, None)
+        env.update(fetch_cache_settings(root, restore=True))
+        env["CURL"] = str(CACHE_CURL)
+        env["LAKE_RESTORE_ARTIFACTS"] = "true"
+        # The new helper restores exactly the imported library modules. A
+        # whole-library `build TauCeti` would fetch unrelated artifacts too.
+        lake_build(root, [], env, forbid_tauceti_compile=True)
+        return
     if not pins_tauceti(root):
         lake_build(root, [], dict(os.environ), forbid_tauceti_compile=False)
         return

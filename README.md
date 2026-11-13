@@ -35,6 +35,20 @@ The service verifies both installations and exact-commit access before it
 records or dispatches a submission. This is enforced for browser and headless
 submission clients; it is not a form checkbox or user assertion.
 
+The benchmark supports Lean v4.35.0 and v4.36.0-rc2. A submission requests one
+of its approved configurations through the closest `lean-toolchain` file at or
+above its submitted workspace; a missing file uses the benchmark default. All
+attempted workspaces in one submission must select the same toolchain. Each
+configuration has its own dependency pins and caches. Problem statements must
+compile under both configurations; their elaborated meanings are not compared.
+
+The archive lane freezes this selection against its exact benchmark checkout.
+Evaluation verifies the source metadata, repeats the selection, installs the
+approved configuration, and regenerates the selected pristine workspaces before
+overlaying solver files. Unsupported requests are archived and then rejected.
+Result verification receipts and archive sidecars retain the selected toolchain and benchmark commit. Historical snapshots
+without the selection helper keep their original single-toolchain behavior.
+
 The service accepts a problem ID, declared model, exact repository and commit,
 publication choice, production metadata, and acceptance of the current terms.
 It resolves the problem group and current statement revision itself from the
@@ -260,6 +274,17 @@ verbose logs retain the artifact error and evaluation
 stops before proof checking. A cache miss never authorizes compiling TauCeti.
 The curl wrapper and cache settings are scoped to trusted preparation; later
 sandboxed evaluation remains offline.
+
+After overlaying a solver's Lean files, workspace preparation also invokes the
+trusted benchmark's `scripts/fetch_dependency_caches.sh --restore` helper when
+present. This detects libraries used only by the solution (including CFSG and
+Stacks), restores their imported modules without compiling them, and stops on
+incompatible pins or missing artifacts. Only import headers are parsed; solver
+code is elaborated later inside comparator. Network-free historical replay
+skips this step and continues to require preprimed workspaces. The benchmark
+supplies public cache endpoints by default. Stacks cache endpoints can be
+overridden through the `STACKS_ARTIFACT_ENDPOINT` and `STACKS_REVISION_ENDPOINT`
+repository variables; empty variables retain the benchmark defaults.
 
 - Secrets, GitHub Apps, and branch protection: [`docs/ci-secrets.md`](docs/ci-secrets.md).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).

@@ -119,7 +119,8 @@ jobs:
             echo "benchmark checkout does not match the archived commit" >&2
             exit 1
           fi
-          if [ "$actual_toolchain" != "$EXPECTED_TOOLCHAIN" ]; then
+          if [ ! -f lean-eval/scripts/select_submission_toolchain.py ] &&
+              [ "$actual_toolchain" != "$EXPECTED_TOOLCHAIN" ]; then
             echo "benchmark toolchain does not match the archived toolchain" >&2
             exit 1
           fi
@@ -245,7 +246,20 @@ jobs:
             exit 1
           fi
 
+      - name: Select and verify the archived benchmark configuration
+        id: configuration
+        env:
+          EXPECTED_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: |
+          python scripts/prepare_benchmark_toolchain.py \
+            --benchmark-root lean-eval \
+            --source-tar /tmp/fetch-out/source.tar.gz \
+            --metadata /tmp/fetch-out/metadata.json \
+            --expected "$EXPECTED_TOOLCHAIN" --apply \
+            --rejection-output /tmp/evaluate-out
+
       - name: Strip git state before running untrusted Lean
+        if: steps.configuration.outputs.rejected != 'true'
         # Both checkouts: Lake exposes the host read-only, so any
         # authenticated remote left in a `.git/config` anywhere the
         # sandbox can stat it is readable by the untrusted Lean elaborator.
@@ -253,6 +267,7 @@ jobs:
 
       # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0, also v1 HEAD as of 2026-05-04).
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        if: steps.configuration.outputs.rejected != 'true'
         with:
           lake-package-directory: lean-eval
           use-mathlib-cache: true
@@ -267,18 +282,31 @@ jobs:
           lint: false
 
       - name: Build the benchmark root with downloaded dependency caches
+        if: steps.configuration.outputs.rejected != 'true'
         # Trusted phase: runs before the submission source is unpacked or
         # any untrusted Lean runs.
-        # TauCeti must never be compiled here: the script downloads its
-        # build outputs into the shared package tree (the whole library,
-        # so a submission may import any TauCeti module) and fails on a
-        # cache miss. The Lake cache settings stay inside this step, and
-        # later workspace builds, including comparator's sandboxed one,
-        # find TauCeti up to date on disk without the network. Benchmarks
-        # that pin no TauCeti get a plain `lake build`. See the script.
+        # Restore only imported library modules with the selective benchmark
+        # helper. Legacy snapshots retain their TauCeti-only preparation.
+        # Cache settings stay in this step; comparator uses restored outputs
+        # from the shared package tree and runs without network access.
+        env:
+          STACKS_ARTIFACT_ENDPOINT: ${{ vars.STACKS_ARTIFACT_ENDPOINT }}
+          STACKS_REVISION_ENDPOINT: ${{ vars.STACKS_REVISION_ENDPOINT }}
         run: python scripts/build_benchmark_root.py lean-eval
 
+      - name: Regenerate selected workspaces for this configuration
+        if: steps.configuration.outputs.rejected != 'true'
+        env:
+          EXPECTED_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: |
+          python scripts/prepare_benchmark_toolchain.py \
+            --benchmark-root lean-eval \
+            --source-tar /tmp/fetch-out/source.tar.gz \
+            --metadata /tmp/fetch-out/metadata.json \
+            --expected "$EXPECTED_TOOLCHAIN" --regenerate
+
       - name: Install bubblewrap for Lake comparator
+        if: steps.configuration.outputs.rejected != 'true'
         id: bwrap
         run: |
           sudo apt-get update
@@ -295,22 +323,26 @@ jobs:
       # the lean-eval checkout. See leanprover/lean-eval SECURITY.md >
       # "Validations done at submission time".
       - name: Probe sandbox is engaged
+        if: steps.configuration.outputs.rejected != 'true'
         env:
           COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
         run: python lean-eval/scripts/sandbox_engaged_probe.py --require-tools
 
       - name: Probe env-var allowlist
+        if: steps.configuration.outputs.rejected != 'true'
         env:
           COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
         run: python lean-eval/scripts/security_probes/env_dump_probe.py --require-tools
 
       - name: Extract submission source
+        if: steps.configuration.outputs.rejected != 'true'
         run: |
           mkdir -p /tmp/submission-src
           tar -xzf /tmp/fetch-out/source.tar.gz -C /tmp/submission-src --strip-components=1
           rm /tmp/fetch-out/source.tar.gz
 
       - name: Run evaluate_submission.py
+        if: steps.configuration.outputs.rejected != 'true'
         # Sharing the benchmark repo's .lake/packages tree across every
         # per-submission workspace lets each workspace reuse Mathlib
         # (~3GB unpacked) instead of cloning + decompressing it per
@@ -321,6 +353,8 @@ jobs:
         # requires, instead of running `lake update` (which could check out
         # different revisions inside the shared tree).
         env:
+          STACKS_ARTIFACT_ENDPOINT: ${{ vars.STACKS_ARTIFACT_ENDPOINT }}
+          STACKS_REVISION_ENDPOINT: ${{ vars.STACKS_REVISION_ENDPOINT }}
           PROBLEM_ID: ${{ inputs.problem_id }}
           STATEMENT_REVISION: ${{ inputs.statement_revision }}
           COMPARATOR_BWRAP: ${{ steps.bwrap.outputs.path }}
@@ -347,7 +381,7 @@ jobs:
             python scripts/evaluate_submission.py "${EVALUATION_ARGS[@]}"
 
       - name: Collect source-free acceptance measurements
-        if: success()
+        if: success() && steps.configuration.outputs.rejected != 'true'
         continue-on-error: true
         env:
           RUNNER_TIER: ${{ inputs.runner_tier }}

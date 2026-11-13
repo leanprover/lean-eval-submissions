@@ -9,6 +9,17 @@ The machine-readable envelope is `schemas/results-v2.schema.json`. The Python
 validator additionally recomputes every stable ID and enforces uniqueness and
 cross-field invariants that JSON Schema cannot express.
 
+New recordings also write an immutable `verification/<result_id>.json` receipt.
+It binds the result ID, benchmark commit, exact verification run and attempt,
+and selected `toolchain`. Earlier receipts without `toolchain` predate multiple
+configurations and retain the benchmark root's single pin. Retries never replace
+an existing result or its receipt. The base result-row schema stays unchanged.
+
+Historical replay planners that infer a toolchain from the root file refuse
+benchmarks containing `supported-toolchains.json`. Such results require a replay
+profile using the receipt's selected toolchain and the matching configuration;
+using the root pin would incorrectly replay stable results on the RC.
+
 ## Stable `result_id` contract
 
 For a GitHub login `user`, the exact submitted model label `declared_model`,

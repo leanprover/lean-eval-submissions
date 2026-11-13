@@ -40,7 +40,7 @@ jobs:
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       source_metadata_sha256: ${{ steps.source_identity.outputs.metadata_sha256 }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
-      toolchain: ${{ steps.benchmark.outputs.toolchain }}
+      toolchain: ${{ steps.toolchain.outputs.toolchain || steps.benchmark.outputs.toolchain }}
     steps:
       - name: Assert immutable server workflow ref
         env:
@@ -133,6 +133,17 @@ jobs:
           else
             echo succeeded=false >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Select the archived source's approved toolchain
+        id: toolchain
+        continue-on-error: true
+        if: steps.fetch.outcome == 'success'
+        run: |
+          selected=$(python scripts/prepare_benchmark_toolchain.py \
+            --benchmark-root lean-eval \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json --archive)
+          echo "toolchain=$selected" >> "$GITHUB_OUTPUT"
 
       - name: Freeze source identity
         id: source_identity
@@ -262,6 +273,7 @@ jobs:
             --ciphertext /tmp/archive-envelope/source.tar.gz.age \
             --sidecar /tmp/archive-envelope/sidecar.partial.json \
             --benchmark-commit "${{ steps.benchmark.outputs.sha }}" \
+            --toolchain "${{ steps.toolchain.outputs.toolchain || steps.benchmark.outputs.toolchain }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --locator-output /tmp/archive-locator.json \
             --completion-output /tmp/archive-completion.json

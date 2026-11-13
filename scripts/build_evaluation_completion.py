@@ -86,10 +86,15 @@ def build(
         passed = result_document.get("passed")
         if not isinstance(passed, list) or any(not isinstance(item, str) for item in passed):
             raise ValueError("evaluation results passed field is invalid")
+        rejection_reason = result_document.get("rejection_reason", "proof_rejected")
+        if rejection_reason not in {"proof_rejected", "unsupported_toolchain_request"}:
+            raise ValueError("unrecognized evaluation rejection reason")
+        if rejection_reason != "proof_rejected" and passed:
+            raise ValueError("a toolchain rejection cannot contain accepted problems")
         outcome = (
             {"status": "accepted", "evaluator_version": evaluator_version}
             if problem_id in passed
-            else {"status": "rejected", "reason_code": "proof_rejected"}
+            else {"status": "rejected", "reason_code": rejection_reason}
         )
     return {
         "schema_version": 1,

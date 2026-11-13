@@ -36,6 +36,7 @@ def default_call(
     solution_publication_date: str | None = None,
     verification_run_id: int | None = None,
     verification_run_attempt: int | None = None,
+    toolchain: str | None = None,
 ) -> dict:
     return ul.update_leaderboard(
         user=user,
@@ -55,6 +56,7 @@ def default_call(
         now=now,
         verification_run_id=verification_run_id,
         verification_run_attempt=verification_run_attempt,
+        toolchain=toolchain,
     )
 
 
@@ -96,6 +98,19 @@ def v1_file() -> dict:
 
 
 class UpdateLeaderboardTests(unittest.TestCase):
+    def test_selected_toolchain_is_bound_to_the_immutable_verification_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            default_call(leaderboard_dir=root, passed=["alpha"], verification_run_id=123,
+                         verification_run_attempt=1, toolchain="leanprover/lean4:v4.35.0")
+            record = load_user(root)["results"][0]
+            path = root / "verification" / f"{record['result_id']}.json"
+            before = path.read_bytes()
+            self.assertEqual(json.loads(before)["toolchain"], "leanprover/lean4:v4.35.0")
+            default_call(leaderboard_dir=root, passed=["alpha"], verification_run_id=456,
+                         verification_run_attempt=1, toolchain="leanprover/lean4:v4.36.0-rc2")
+            self.assertEqual(path.read_bytes(), before)
+
     def test_original_verification_is_recorded_and_duplicate_does_not_replace_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
