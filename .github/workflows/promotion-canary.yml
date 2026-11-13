@@ -25,7 +25,7 @@ permissions: {}
 
 jobs:
   source-free-no-op:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 3
     steps:
       - name: Verify exact source-free dispatch identity

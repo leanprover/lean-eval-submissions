@@ -20,7 +20,7 @@ jobs:
   publish:
     if: inputs.confirm_registry_publication == true
     environment: cloudflare-staging
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 180
     env:
       IMAGE: lean-eval-authoritative:${{ github.sha }}

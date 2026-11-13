@@ -96,7 +96,7 @@ class PublicReplayWorkflowTests(unittest.TestCase):
             self.assertIn(commit, self.text)
         self.assertIn("go-version: '1.25.12'", self.text)
         self.assertIn("rustup toolchain install 1.89.0", self.text)
-        self.assertIn("runs-on: ubuntu-24.04", self.text)
+        self.assertIn("runs-on: ubuntu-26.04", self.text)
 
     def test_artifact_contains_only_source_free_json(self) -> None:
         artifact = self.text.split("name: public-replay-smoke-evidence", 1)[1]
