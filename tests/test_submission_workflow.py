@@ -211,6 +211,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             self.all_text,
             re.compile(
                 r"^      - uses: leanprover/lean-action@[0-9a-f]{40}\n"
+                r"        if: steps.configuration.outputs.rejected != 'true'\n"
                 r"        with:\n"
                 r"          lake-package-directory: lean-eval\n"
                 r"          use-mathlib-cache: true\n"

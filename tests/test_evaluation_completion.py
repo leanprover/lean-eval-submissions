@@ -12,6 +12,17 @@ SUBMISSION_ID = "0198abcd-1111-7000-8000-000000000001"
 
 
 class EvaluationCompletionTests(unittest.TestCase):
+    def test_unsupported_toolchain_is_a_terminal_rejection(self) -> None:
+        archive, results = self.fixture()
+        results.write_text(json.dumps({"passed": [],
+                                       "rejection_reason": "unsupported_toolchain_request"}))
+        completion = build(archive_completion=archive, results=results,
+                           evaluate_result="success", problem_id="two_plus_two",
+                           benchmark_commit="c" * 40, toolchain="leanprover/lean4:v4.36.0-rc2",
+                           evaluator_version="d" * 40)
+        self.assertEqual(completion["outcome"], {
+            "status": "rejected", "reason_code": "unsupported_toolchain_request"})
+
     def fixture(self, passed: list[str] | None = None) -> tuple[pathlib.Path, pathlib.Path]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

@@ -608,6 +608,7 @@ class PushTests(unittest.TestCase):
                     "--sidecar", str(sidecar),
                     "--summary", str(summary),
                     "--benchmark-commit", "f" * 40,
+                    "--toolchain", "leanprover/lean4:v4.35.0",
                     "--workflow-run-url", "https://example.invalid/run/1",
                 ])
             self.assertEqual(rc, 0)
@@ -632,6 +633,7 @@ class PushTests(unittest.TestCase):
                              ["halting_problem", "p_eq_np", "two_plus_two"])
             self.assertEqual(len(uploaded_sidecar["sha256_ciphertext"]), 64)
             self.assertEqual(uploaded_sidecar["benchmark_commit"], "f" * 40)
+            self.assertEqual(uploaded_sidecar["toolchain"], "leanprover/lean4:v4.35.0")
             self.assertIn("archived_at", uploaded_sidecar)
             self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
 

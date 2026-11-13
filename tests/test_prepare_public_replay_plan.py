@@ -4,6 +4,7 @@ import json
 import pathlib
 import sys
 import tempfile
+import subprocess
 import unittest
 from unittest import mock
 
@@ -17,6 +18,7 @@ from aggregate_public_replay_github_evidence import (
 from build_public_replay_toolchain_registry import (
     ToolchainRegistryError,
     build_registry,
+    _git_reader,
     main as build_toolchain_main,
     resolved_benchmark_commits,
 )
@@ -45,6 +47,25 @@ def canonical(value: dict) -> bytes:
 
 
 class PublicReplayPlanTests(unittest.TestCase):
+    def test_single_pin_replay_refuses_a_multi_configuration_benchmark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = pathlib.Path(temporary)
+            def git(*arguments):
+                return subprocess.check_output(["git", "-C", str(repository), *arguments], text=True).strip()
+            git("init", "-q")
+            (repository / "lean-toolchain").write_text("leanprover/lean4:v4.36.0-rc2\n")
+            git("add", ".")
+            git("-c", "user.name=Tests", "-c", "user.email=tests@example.invalid",
+                "commit", "-qm", "single toolchain")
+            reader = _git_reader(repository)
+            self.assertEqual(reader(git("rev-parse", "HEAD")), b"leanprover/lean4:v4.36.0-rc2\n")
+            (repository / "supported-toolchains.json").write_text("{}")
+            git("add", ".")
+            git("-c", "user.name=Tests", "-c", "user.email=tests@example.invalid",
+                "commit", "-qm", "multiple configurations")
+            with self.assertRaisesRegex(ToolchainRegistryError, "profile-aware replay"):
+                reader(git("rev-parse", "HEAD"))
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temp.name)

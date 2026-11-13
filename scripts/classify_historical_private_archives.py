@@ -44,6 +44,7 @@ COMMON_SIDECAR_FIELDS = archive_migration.PRESERVED_FIELDS | {
     "size_bytes_ciphertext",
 }
 OPTIONAL_SIDECAR_FIELDS = {
+    "toolchain",
     "production_description",
     "solution_publication_status",
     "solution_publication_date",
@@ -307,6 +308,10 @@ def _validate_sidecar_metadata(
     benchmark = sidecar.get("benchmark_commit")
     if not isinstance(benchmark, str) or COMMIT.fullmatch(benchmark) is None:
         raise CrosswalkError("archive sidecar benchmark commit is invalid")
+    if "toolchain" in sidecar and (not isinstance(sidecar["toolchain"], str) or re.fullmatch(
+        r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?", sidecar["toolchain"]
+    ) is None):
+        raise CrosswalkError("archive sidecar toolchain is invalid")
     plaintext_digest = sidecar.get("sha256_plaintext_tar")
     ciphertext_digest = sidecar.get("sha256_ciphertext")
     plaintext_size = sidecar.get("size_bytes_plaintext_tar")

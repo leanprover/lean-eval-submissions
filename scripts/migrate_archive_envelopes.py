@@ -75,6 +75,7 @@ PRESERVED_FIELDS = {
     "archived_at",
     "benchmark_commit",
     "archiver_workflow_run",
+    "toolchain",
     "problem_ids",
     "evaluator_verdict",
 }

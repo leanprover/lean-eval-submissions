@@ -553,6 +553,11 @@ def inspect_benchmark(
     }
     if not required_root_paths <= paths:
         raise ProfileMatrixError("benchmark is missing required evaluator inputs")
+    if "supported-toolchains.json" in paths:
+        raise ProfileMatrixError(
+            "multi-toolchain benchmarks require profile-aware replay; a root-pin profile "
+            "cannot represent the toolchain in the result verification receipt"
+        )
     toolchain_bytes = _git(
         repository,
         "show",

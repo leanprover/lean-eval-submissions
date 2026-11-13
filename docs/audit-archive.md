@@ -284,3 +284,10 @@ rewritten, the entry is logged and skipped. Private-repo submissions
 where the bot has lost access fall into the same bucket. The
 backfill is idempotent — entries that already exist in the audit
 repo are not re-uploaded.
+
+For benchmarks with multiple supported configurations, finalized archive sidecars
+also retain the selected `toolchain` alongside `benchmark_commit`. Envelope
+migration preserves this field. Older sidecars keep their original single-pin
+interpretation. An unsupported source request is retained in the encrypted
+archive and reported as a terminal evaluation rejection, without a larger-runner
+retry or a result recording.

@@ -279,7 +279,7 @@ jobs:
       source_metadata_sha256: ${{ steps.source_identity.outputs.metadata_sha256 }}
       source_commit: ${{ steps.source_identity.outputs.source_commit }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
-      toolchain: ${{ steps.benchmark.outputs.toolchain }}
+      toolchain: ${{ steps.toolchain.outputs.toolchain || steps.benchmark.outputs.toolchain }}
     steps:
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'
@@ -461,6 +461,17 @@ jobs:
             echo "succeeded=not_attempted" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Select the archived source's approved toolchain
+        id: toolchain
+        continue-on-error: true
+        if: steps.archive_fetch.outcome == 'success'
+        run: |
+          selected=$(python scripts/prepare_benchmark_toolchain.py \
+            --benchmark-root lean-eval \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json --archive)
+          echo "toolchain=$selected" >> "$GITHUB_OUTPUT"
+
       - name: Freeze source identity
         id: source_identity
         if: steps.archive_fetch.outcome == 'success'
@@ -564,6 +575,7 @@ jobs:
             --ciphertext /tmp/archive-encrypt/source.tar.gz.age \
             --sidecar /tmp/archive-encrypt/sidecar.partial.json \
             --benchmark-commit "${{ steps.benchmark.outputs.sha }}" \
+            --toolchain "${{ steps.toolchain.outputs.toolchain || steps.benchmark.outputs.toolchain }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             "${LOCATOR_FLAG[@]}" \
             "${COMPLETION_FLAG[@]}"
@@ -1023,6 +1035,7 @@ jobs:
           RESULTS_PATH: /tmp/submission-results/results.json
           SUMMARY_PATH: /tmp/submission-results/summary.json
           BENCHMARK_COMMIT: ${{ needs.evaluate.outputs.benchmark_commit }}
+          TOOLCHAIN: ${{ needs.evaluate.outputs.toolchain }}
         run: |
           set -euo pipefail
           if [ ! -f "$METADATA_PATH" ] || [ ! -f "$RESULTS_PATH" ]; then
@@ -1103,6 +1116,7 @@ jobs:
               --leaderboard-dir results-store \
               --results-json "$RESULTS_PATH" \
               --benchmark-commit "$BENCHMARK_COMMIT" \
+              --toolchain "$TOOLCHAIN" \
               --submission-kind "$SUBMISSION_KIND" \
               --submission-repo "$SUBMISSION_REPO" \
               --submission-ref "$SUBMISSION_REF" \
@@ -1264,6 +1278,10 @@ jobs:
           results = json.load(open(os.environ["RESULTS_PATH"]))
           summary = json.load(open(os.environ["SUMMARY_PATH"]))
           lines = ["## Submission result", ""]
+          if results.get("rejection_reason") == "unsupported_toolchain_request":
+              lines.append("Rejected: the submission requests an unsupported or mixed Lean toolchain. "
+                           "Choose one supported configuration in the workspace's lean-toolchain file.")
+              lines.append("")
           passed = results.get("passed") or []
           if passed:
               lines.append(f"✅ Newly-solved problems: {', '.join(passed)}")
