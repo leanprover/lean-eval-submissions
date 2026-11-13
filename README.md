@@ -267,9 +267,10 @@ present. This detects libraries used only by the solution (including CFSG and
 Stacks), restores their imported modules without compiling them, and stops on
 incompatible pins or missing artifacts. Only import headers are parsed; solver
 code is elaborated later inside comparator. Network-free historical replay
-skips this step and continues to require preprimed workspaces. Stacks cache URLs
-can be configured through the `STACKS_ARTIFACT_ENDPOINT` and
-`STACKS_REVISION_ENDPOINT` repository variables.
+skips this step and continues to require preprimed workspaces. The benchmark
+supplies public cache endpoints by default. Stacks cache endpoints can be
+overridden through the `STACKS_ARTIFACT_ENDPOINT` and `STACKS_REVISION_ENDPOINT`
+repository variables; empty variables retain the benchmark defaults.
 
 - Secrets, GitHub Apps, and branch protection: [`docs/ci-secrets.md`](docs/ci-secrets.md).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).
