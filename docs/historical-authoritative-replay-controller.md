@@ -103,9 +103,8 @@ The driver binds the protected commit that starts the chain. Before every
 successor dispatch and again at the beginning of every successor, the workflow
 requires either that exact commit or a complete, non-truncated descendant whose
 entire diff consists only of added or modified `results/*.json` files and newly
-added `verification/r2_<64 lowercase hex digits>.json` evidence. Existing
-verification evidence cannot be changed. Any code,
-workflow, deletion, rename, divergent history, or oversized comparison stops
+added `verification/r2_<64 lowercase hex digits>.json` evidence. Verification evidence present at the protected baseline cannot be changed.
+Any code, workflow, deletion, rename, divergent history, or oversized comparison stops
 the chain before replay authority is used.
 
 Only the five-minute driver and replenishment jobs receive `actions: write`.

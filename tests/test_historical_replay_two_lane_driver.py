@@ -295,7 +295,10 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
                                 value=7,
                                 baseline=baseline,
                                 head=head,
-                                comparison={**comparison, "files": [bad_file]},
+                                comparison={
+                                    **comparison,
+                                    "files": [comparison["files"][0], bad_file],
+                                },
                             )
 
 
