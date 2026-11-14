@@ -18,6 +18,27 @@
         "ref": "2c7ace40d681d9696fbc15c54c9edca9a2ad9f07",
         "repo": "plby/Erdos90"
       }
+    },
+    {
+      "accepted_at": "2026-11-14T07:33:19Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Codex (with human in the loop)",
+      "intake": {
+        "issue_number": 2186,
+        "kind": "issue"
+      },
+      "problem_id": "two_ninety_theorem",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_945d7ca0b05642b2bb8da29ad543b57e6c8e89806f68218400df4a1d5f92705e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d189bb1f517df8523b98c6d961d6cfdc3819ef79",
+        "repo": "plby/lean-eval-submissions"
+      }
     }
   ],
   "schema_version": 2,
