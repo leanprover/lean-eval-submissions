@@ -240,7 +240,7 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
                 self.assertEqual(payload["inputs"]["private_lane_index"], lane)
                 self.assertEqual(payload["inputs"]["remaining_runs"], "64")
 
-    def test_successor_accepts_only_complete_results_only_descendants(self) -> None:
+    def test_successor_accepts_only_complete_result_data_descendants(self) -> None:
         baseline = "1" * 40
         head = "2" * 40
         comparison = {
@@ -252,7 +252,10 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
             "ahead_by": 1,
             "total_commits": 1,
             "commits": [{"sha": head}],
-            "files": [{"filename": "results/alice.json", "status": "added"}],
+            "files": [
+                {"filename": "results/alice.json", "status": "modified"},
+                {"filename": "verification/r2_" + "a" * 64 + ".json", "status": "added"},
+            ],
         }
         for workflow, step_name in (
             (PUBLIC, "Dispatch exactly one bounded public-lane successor"),
@@ -272,19 +275,31 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
                     payload["inputs"]["reviewed_implementation_commit"], baseline
                 )
 
-        comparison["files"][0]["filename"] = "scripts/changed.py"
-        with self.assertRaises(AssertionError):
-            public_successor = shell_step(
-                PUBLIC, "Dispatch exactly one bounded public-lane successor"
-            )
-            exercise_dispatch(
-                public_successor,
-                counter="REMAINING_RUNS",
-                value=7,
-                baseline=baseline,
-                head=head,
-                comparison=comparison,
-            )
+                for bad_file in (
+                    {"filename": "scripts/changed.py", "status": "added"},
+                    {"filename": "results/alice.json", "status": "removed"},
+                    {"filename": "verification/r2_" + "a" * 64 + ".json", "status": "modified"},
+                    {"filename": "verification/r2_" + "a" * 64 + ".json", "status": "removed"},
+                    {"filename": "verification/not-a-result.json", "status": "added"},
+                    {
+                        "filename": "verification/r2_" + "a" * 64 + ".json",
+                        "status": "renamed",
+                        "previous_filename": "scripts/a.py",
+                    },
+                ):
+                    with self.subTest(step=step_name, file=bad_file):
+                        with self.assertRaises(AssertionError):
+                            exercise_dispatch(
+                                script,
+                                counter="REMAINING_RUNS",
+                                value=7,
+                                baseline=baseline,
+                                head=head,
+                                comparison={
+                                    **comparison,
+                                    "files": [comparison["files"][0], bad_file],
+                                },
+                            )
 
 
 if __name__ == "__main__":
