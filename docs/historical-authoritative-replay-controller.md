@@ -102,7 +102,9 @@ non-v1 tasks and hard-limit every lane to 1,024 runs per start.
 The driver binds the protected commit that starts the chain. Before every
 successor dispatch and again at the beginning of every successor, the workflow
 requires either that exact commit or a complete, non-truncated descendant whose
-entire diff consists only of added or modified `results/*.json` files. Any code,
+entire diff consists only of added or modified `results/*.json` files and newly
+added `verification/r2_<64 lowercase hex digits>.json` evidence. Existing
+verification evidence cannot be changed. Any code,
 workflow, deletion, rename, divergent history, or oversized comparison stops
 the chain before replay authority is used.
 

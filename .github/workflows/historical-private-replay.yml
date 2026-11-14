@@ -24,7 +24,7 @@ on:
         type: number
         default: 1
       reviewed_implementation_commit:
-        description: Protected baseline; only complete Results-only descendants are accepted
+        description: Protected baseline; only complete result-data descendants are accepted
         required: false
         type: string
         default: ''
@@ -97,8 +97,10 @@ jobs:
                   .ahead_by == (.commits | length) and
                   (.files | length) > 0 and (.files | length) < 300 and
                   all(.files[];
-                    (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
-                    (.status == "added" or .status == "modified") and
+                    ((.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                     (.status == "added" or .status == "modified") or
+                     (.filename | test("^verification/r2_[0-9a-f]{64}[.]json$")) and
+                     .status == "added") and
                     (has("previous_filename") | not))
                 ' <<< "$comparison" >/dev/null
             fi
@@ -1676,8 +1678,10 @@ jobs:
               .ahead_by == .total_commits and .ahead_by == (.commits | length) and
               (.files | length) > 0 and (.files | length) < 300 and
               all(.files[];
-                (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
-                (.status == "added" or .status == "modified") and
+                ((.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                 (.status == "added" or .status == "modified") or
+                 (.filename | test("^verification/r2_[0-9a-f]{64}[.]json$")) and
+                 .status == "added") and
                 (has("previous_filename") | not))
             ' <<< "$comparison" >/dev/null
           fi
