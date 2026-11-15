@@ -7904,6 +7904,28 @@
         "ref": "247abef1c922f464411d2fe03f0f0158d4204694",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-11-15T02:00:06Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Claude Fable 5.2",
+      "intake": {
+        "issue_number": 2190,
+        "kind": "issue"
+      },
+      "problem_id": "green_tao",
+      "production_metadata": {
+        "production_description": "Produced autonomously by Claude Fable 5.2 in Claude Code, using parallel subagents, with internet access disabled throughout (sandboxed shell with no network, local Lean LSP tools only), starting from the generated `green_tao` workspace. Human direction was limited to the initial task brief. Route: the Conlon–Fox–Zhao relative Szemerédi theorem, Szemerédi's theorem derived from the density Hales–Jewett theorem, and an elementary Selberg-sieve majorant for the primes. About 9,100 lines of new Lean importing only Mathlib; no sorry, added axioms, or native_decide. Wall-clock time from task start to the first passing local comparator run: 2 h 49 min.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_56a0cdcd32aa09bbb86fadd4e68454e5ab6e59230373f3a45d94d9193bd9e9e7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ba8669dd1b951d24ff90b357081cfdc0c7e7818e",
+        "repo": "Vilin97/lean-eval-green-tao-fable"
+      }
     }
   ],
   "schema_version": 2,
