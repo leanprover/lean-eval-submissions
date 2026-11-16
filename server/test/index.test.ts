@@ -227,7 +227,7 @@ describe("Worker routing", () => {
     });
     const readyEnv = {
       ...ENV,
-      GITHUB_STATE_TOKEN: "state-secret",
+      GITHUB_BROKER: { fetch: upstream } as unknown as Fetcher,
       INTAKE_ENABLED: "true",
       INTAKE_ENABLEMENT_MODE: "durable",
       READINESS_TOKEN: "readiness-secret",
@@ -270,7 +270,7 @@ describe("Worker routing", () => {
       }),
       {
         ...ENV,
-        GITHUB_STATE_TOKEN: "state-secret",
+        GITHUB_BROKER: { fetch: upstream } as unknown as Fetcher,
         READINESS_TOKEN: "readiness-secret",
       },
       LIFECYCLE,
@@ -288,7 +288,8 @@ describe("Worker routing", () => {
     });
     expect(upstream).toHaveBeenCalledTimes(4);
     const [, init] = upstream.mock.calls[3] ?? [];
-    expect(init?.method).toBe("PATCH");
+    expect(typeof init?.body).toBe("string");
+    expect(JSON.parse(init?.body as string)).toMatchObject({ authority: "state", method: "PATCH" });
     upstream.mockRestore();
   });
 
@@ -324,7 +325,7 @@ describe("Worker routing", () => {
         ...ENV,
         DEPLOYMENT_ENVIRONMENT: "production",
         STATE_REPOSITORY: "leanprover/lean-eval-state",
-        GITHUB_STATE_TOKEN: "state-secret",
+        GITHUB_BROKER: { fetch: upstream } as unknown as Fetcher,
         READINESS_TOKEN: "readiness-secret",
       },
       LIFECYCLE,

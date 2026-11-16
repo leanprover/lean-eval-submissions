@@ -1236,35 +1236,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Redeploy leaderboard
-        if: github.event_name == 'issues' || inputs.callback_environment == 'production'
-        # Fire a repository_dispatch so the leaderboard rebuilds with the
-        # new result. Best-effort: if the dispatch fails AFTER the result
-        # push succeeded, the data advanced but the site did not — surface
-        # an operator-actionable comment rather than failing the job (which
-        # would mislead the `notify` job into reporting a record failure).
-        env:
-          DISPATCH_TOKEN: ${{ secrets.LEADERBOARD_WRITE_TOKEN }}
-          COMMENT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE: ${{ github.event.issue.number }}
-          SUBMISSION_ID: ${{ inputs.submission_id }}
-        run: |
-          set -uo pipefail
-          if GH_TOKEN="$DISPATCH_TOKEN" gh api repos/leanprover/lean-eval-leaderboard/dispatches \
-              -X POST \
-              -F event_type=results-advanced \
-              -F "client_payload[issue]=$ISSUE" \
-              -F "client_payload[submission_id]=$SUBMISSION_ID"; then
-            echo "leaderboard redeploy dispatched"
-          else
-            echo "::warning::leaderboard redeploy dispatch failed"
-            if [ "${{ github.event_name }}" = "issues" ]; then
-              GH_TOKEN="$COMMENT_TOKEN" gh issue comment "$ISSUE" \
-                --repo "${{ github.repository }}" \
-                --body "⚠️ The result was recorded, but the leaderboard redeploy dispatch failed. An operator should re-run it: \`gh api repos/leanprover/lean-eval-leaderboard/dispatches -X POST -F event_type=results-advanced\`" || true
-            fi
-          fi
-
       - name: Comment submission summary
         if: github.event_name == 'issues'
         env:
@@ -1488,3 +1459,32 @@ jobs:
               --header "Content-Type: application/json" --data-binary "@$receipt" \
               "$endpoint/api/v1/results/$result_id/measurements"
           done
+
+  leaderboard_refresh:
+    # A publication outage must not turn an accepted proof into a rejection.
+    # The scheduled reconciler retries this job independently of evaluation.
+    continue-on-error: true
+    needs: record
+    if: >-
+      !cancelled() && needs.record.result == 'success' &&
+      (github.event_name == 'issues' || inputs.callback_environment == 'production')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Mint leaderboard publication installation token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_LEADERBOARD_APP_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_LEADERBOARD_APP_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-leaderboard
+          permission-contents: write
+      - name: Redeploy leaderboard
+        env:
+          GH_TOKEN: ${{ steps.publisher.outputs.token }}
+        run: >-
+          gh api repos/leanprover/lean-eval-leaderboard/dispatches
+          -X POST -F event_type=results-advanced

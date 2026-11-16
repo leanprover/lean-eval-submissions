@@ -15,7 +15,7 @@ const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 // GitHub caps an unpaginated compare at 250 commits. Reject a truncated proof.
 const GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT = 250;
 
-type Authority = "source" | "legacy_source" | "dispatch" | "results" | "benchmark";
+type Authority = "source" | "legacy_source" | "dispatch" | "results" | "benchmark" | "state";
 type BrokerRequest = Readonly<{
   schema_version: 1;
   audience: "lean-eval-submission-server";
@@ -38,6 +38,8 @@ export type BrokerRuntimeEnv = Omit<
   | "SOURCE_APP_PRIVATE_KEY"
   | "LEGACY_SOURCE_APP_ID"
   | "LEGACY_SOURCE_APP_PRIVATE_KEY"
+  | "STATE_APP_ID"
+  | "STATE_APP_PRIVATE_KEY"
 > & Readonly<{
   DEPLOYED_COMMIT: string;
   DEPLOYMENT_ENVIRONMENT: "staging" | "production";
@@ -49,6 +51,8 @@ export type BrokerRuntimeEnv = Omit<
   SOURCE_APP_PRIVATE_KEY?: string;
   LEGACY_SOURCE_APP_ID?: string;
   LEGACY_SOURCE_APP_PRIVATE_KEY?: string;
+  STATE_APP_ID?: string;
+  STATE_APP_PRIVATE_KEY?: string;
 }>;
 
 type GitHubApp = Readonly<{ appId: string; privateKey: string }>;
@@ -190,7 +194,7 @@ function decodeRequest(value: unknown): BrokerRequest {
     data.schema_version !== 1 ||
     data.audience !== "lean-eval-submission-server" ||
     (data.authority !== "source" && data.authority !== "legacy_source" && data.authority !== "dispatch" &&
-      data.authority !== "results" && data.authority !== "benchmark") ||
+      data.authority !== "results" && data.authority !== "benchmark" && data.authority !== "state") ||
     (data.method !== "GET" && data.method !== "POST" && data.method !== "PATCH") ||
     typeof data.url !== "string" ||
     (data.body !== null && typeof data.body !== "string") ||
@@ -361,7 +365,72 @@ function assertBenchmarkRequest(request: BrokerRequest, url: URL): string {
   return repository;
 }
 
+function assertStateRequest(request: BrokerRequest, url: URL, env: BrokerRuntimeEnv): string {
+  const { repository, suffix } = repositoryFromPath(url.pathname);
+  const expected = env.DEPLOYMENT_ENVIRONMENT === "production"
+    ? "leanprover/lean-eval-state"
+    : "leanprover/lean-eval-state-staging";
+  if (repository !== expected || request.expected_commit !== null) {
+    throw new BrokerError(403, "State authority targeted the wrong environment repository");
+  }
+  if (request.method === "GET" && request.body === null) {
+    const contentRead = /^\/contents\/[A-Za-z0-9_./-]+$/.test(suffix) &&
+      url.searchParams.size === 1 && COMMIT.test(url.searchParams.get("ref") ?? "");
+    const objectRead = (suffix === "" || suffix === "/branches/main" ||
+      suffix === "/git/ref/heads/main" ||
+      /^\/git\/(?:commits|trees)\/[0-9a-f]{40}$/.test(suffix) ||
+      /^\/compare\/[0-9a-f]{40}\.\.\.[0-9a-f]{40}$/.test(suffix)) &&
+      url.searchParams.size === 0;
+    if (contentRead || objectRead) return repository;
+  }
+  if (request.body === null || url.searchParams.size !== 0) {
+    throw new BrokerError(403, "State operation was not allowlisted");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(request.body) as unknown;
+  } catch {
+    throw new BrokerError(400, "State body was not JSON");
+  }
+  const body = object(parsed, "State body");
+  if (request.method === "PATCH" && suffix === "/git/refs/heads/main") {
+    exactKeys(body, ["sha", "force"], "State reference update");
+    if (typeof body.sha === "string" && COMMIT.test(body.sha) && body.force === false) return repository;
+  } else if (request.method === "POST" && suffix === "/git/commits") {
+    exactKeys(body, ["message", "parents", "tree"], "State commit");
+    if (typeof body.message === "string" && body.message.length > 0 &&
+      typeof body.tree === "string" && COMMIT.test(body.tree) &&
+      Array.isArray(body.parents) && body.parents.length === 1 &&
+      typeof body.parents[0] === "string" && COMMIT.test(body.parents[0])) return repository;
+  } else if (request.method === "POST" && suffix === "/git/trees") {
+    exactKeys(body, ["base_tree", "tree"], "State tree");
+    if (typeof body.base_tree !== "string" || !COMMIT.test(body.base_tree) ||
+      !Array.isArray(body.tree) || body.tree.length === 0) {
+      throw new BrokerError(403, "State tree did not extend an existing tree");
+    }
+    for (const value of body.tree) {
+      const entry = object(value, "State tree entry");
+      const deletion = entry.sha === null;
+      exactKeys(entry, deletion ? ["path", "mode", "type", "sha"] : ["path", "mode", "type", "content"], "State tree entry");
+      if (typeof entry.path !== "string" || !/^(?:events|views)\/[A-Za-z0-9_./-]+\.json$/.test(entry.path) ||
+        entry.path.split("/").some((part) => part === "" || part === "." || part === "..") ||
+        entry.mode !== "100644" || entry.type !== "blob" ||
+        (deletion ? !entry.path.startsWith("views/dispatch-outbox/") : typeof entry.content !== "string")) {
+        throw new BrokerError(403, "State tree could change only ledger events and views");
+      }
+    }
+    return repository;
+  }
+  throw new BrokerError(403, "State operation was not allowlisted");
+}
+
 function appFor(authority: Authority, env: BrokerRuntimeEnv): GitHubApp {
+  if (authority === "state") {
+    if (!env.STATE_APP_ID || !APP_ID.test(env.STATE_APP_ID) || !env.STATE_APP_PRIVATE_KEY) {
+      throw new BrokerError(503, "State GitHub App is not configured");
+    }
+    return { appId: env.STATE_APP_ID, privateKey: env.STATE_APP_PRIVATE_KEY };
+  }
   const dispatchAuthority = authority === "dispatch" || authority === "results";
   const legacySourceAuthority = authority === "legacy_source";
   const appId = dispatchAuthority
@@ -506,7 +575,9 @@ async function installationToken(
   if (!Number.isSafeInteger(installation.id) || Number(installation.id) < 1) {
     throw new BrokerError(502, "GitHub App installation ID was invalid");
   }
-  const permissions = authority === "dispatch"
+  const permissions = authority === "state"
+    ? { contents: "write", metadata: "read" }
+    : authority === "dispatch"
     ? { actions: "write", contents: "read", metadata: "read" }
     : { contents: "read", metadata: "read" };
   const tokenResponse = await fetcher(`${GITHUB_API}/app/installations/${String(installation.id)}/access_tokens`, {
@@ -697,7 +768,9 @@ async function proxy(
       ? assertDispatchRequest(brokerRequest, url, env)
       : brokerRequest.authority === "results"
         ? assertResultsRequest(brokerRequest, url, env)
-        : assertBenchmarkRequest(brokerRequest, url);
+        : brokerRequest.authority === "state"
+          ? assertStateRequest(brokerRequest, url, env)
+          : assertBenchmarkRequest(brokerRequest, url);
   // Benchmark reads use the read-only Source Reader App, scoped to lean-eval.
   // Anonymous requests share a small IP-based quota across Cloudflare traffic.
   const headers = githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));

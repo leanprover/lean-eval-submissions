@@ -18,7 +18,8 @@ is unrelated to this pipeline.
 | `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_CLIENT_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch); protected `deploy-worker.yml` (broker-secret convergence) |
 | `lean-eval-recorder` | GitHub App | `LEAN_EVAL_RECORDER_CLIENT_ID`, `LEAN_EVAL_RECORDER_PRIVATE_KEY` | `submission.yml` (record) |
 | `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_CLIENT_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
-| `LEADERBOARD_WRITE_TOKEN` | Fine-grained PAT | `LEADERBOARD_WRITE_TOKEN` | `submission.yml` (leaderboard redeploy dispatch) |
+| State Writer | GitHub App | `LEAN_EVAL_STATE_APP_ID`, `LEAN_EVAL_STATE_APP_PRIVATE_KEY` | protected `deploy-worker.yml` (private broker State credentials) |
+| Leaderboard Publisher | GitHub App | `LEAN_EVAL_LEADERBOARD_APP_ID`, `LEAN_EVAL_LEADERBOARD_APP_PRIVATE_KEY` | `submission.yml` (leaderboard refresh) |
 | Ruleset `main protection` | Repository Ruleset | (config in this file, applied via API) | branch protection on `main` |
 | Ruleset `Protect staging Results` | Repository Ruleset | (config in this file, applied via API) | branch protection on `staging-results` |
 
@@ -249,47 +250,33 @@ token is never co-resident with an attacker-influenced process. See
    gh secret set LEAN_EVAL_ARCHIVER_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
    ```
 
-## PAT: `LEADERBOARD_WRITE_TOKEN`
+## GitHub Apps: State Writer and Leaderboard Publisher
 
-Fine-grained Personal Access Token used by
-[`.github/workflows/submission.yml`](../.github/workflows/submission.yml)
-to fire a `repository_dispatch` (`event_type: results-advanced`) at
-<https://github.com/leanprover/lean-eval-leaderboard> after a result is
-recorded, so the leaderboard site redeploys with the new result.
+These Apps replace personal-token authentication for production service work.
+Create them privately under `leanprover`, with Contents read/write, Metadata
+read, and webhooks disabled. Install State Writer only on `lean-eval-state`
+and `lean-eval-state-staging`; install Leaderboard Publisher only on
+`lean-eval-leaderboard`. Keep their keys separate.
 
-This is the same PAT `leanprover/lean-eval` and `leanprover/lean-eval-leaderboard`
-already use for their leaderboard interactions; the submission pipeline
-just needs its own copy of the secret.
+Store their IDs and PEM keys in the repository secrets listed in the audit
+table. The protected deploy workflow converges State credentials into the
+private brokers. The submission workflow mints a Leaderboard Publisher token
+restricted to `lean-eval-leaderboard`, dispatches `results-advanced`, and revokes
+the token after the job. No App key is passed to untrusted evaluation jobs.
 
-### Repository secrets
+`leaderboard_refresh` is independent of `record`: an outage cannot remove
+accepted credit. The hourly submission reconciler retries failed or timed-out
+`measurement_state` and `leaderboard_refresh` jobs for completed runs in the
+last seven days, at most 25 jobs per scan and 168 attempts per run. It never
+reruns evaluation or recording. An exhausted scan or attempt budget fails
+visibly for operator recovery. The scan uses its repository `GITHUB_TOKEN`.
 
-- `LEADERBOARD_WRITE_TOKEN` in `leanprover/lean-eval-submissions`.
+The old `LEADERBOARD_WRITE_TOKEN` secret is no longer used by submissions.
+Other repositories may still use their copies; do not revoke the shared PAT
+until all of its consumers have migrated.
 
-The token must be a fine-grained PAT with
-`leanprover/lean-eval-leaderboard` selected and `Contents: Read and
-write` — that permission is what the `repository_dispatch` REST endpoint
-authorizes on (per
-<https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event>).
-
-### Reconstruction from scratch
-
-1. Open <https://github.com/settings/personal-access-tokens/new>.
-2. Resource owner: **leanprover** (requires org-owner approval).
-3. Repository access: **Only select repositories** →
-   `leanprover/lean-eval-leaderboard`.
-4. Repository permissions: **Contents: Read and write**.
-5. Save the token, then write it to this repo:
-   ```bash
-   gh secret set LEADERBOARD_WRITE_TOKEN -R leanprover/lean-eval-submissions --body <TOKEN>
-   ```
-
-When rotating the PAT, update the copies in `leanprover/lean-eval` and
-`leanprover/lean-eval-leaderboard` together (see those repos' own docs).
-Replace all three copies before revoking the old token in its issuing GitHub
-account, then verify one dispatch from each caller. The repository APIs expose
-the secret names but not the PAT issuer or expiry; those two current facts are
-not recoverable from this repository and must not be guessed. Record them in
-the credential inventories during the next reviewed, packet-bound PAT rotation.
+See [`state-app-migration.md`](state-app-migration.md) for provisioning and
+verification, including the State ruleset bypass and staging-first rollout.
 
 ## Branch protection on `main` (Repository Ruleset)
 

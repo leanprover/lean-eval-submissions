@@ -448,6 +448,18 @@ function repoPath(config: GitHubStateConfig, path: string): string {
 }
 
 async function responseError(response: Response): Promise<GitHubStateError> {
+  // Keep upstream bodies, repository paths, and credentials out of diagnostics.
+  const numericHeader = (name: string): number | null => {
+    const value = response.headers.get(name);
+    return value !== null && /^[0-9]{1,12}$/.test(value) ? Number(value) : null;
+  };
+  console.error(JSON.stringify({
+    event: "state_github_request_failed",
+    upstream_status: response.status,
+    rate_limit_remaining: numericHeader("x-ratelimit-remaining"),
+    rate_limit_reset: numericHeader("x-ratelimit-reset"),
+    retry_after: numericHeader("retry-after"),
+  }));
   return new GitHubStateError(response.status, (await response.text()).slice(0, 300));
 }
 
