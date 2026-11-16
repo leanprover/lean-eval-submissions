@@ -415,7 +415,7 @@ function assertStateRequest(request: BrokerRequest, url: URL, env: BrokerRuntime
       if (typeof entry.path !== "string" || !/^(?:events|views)\/[A-Za-z0-9_./-]+\.json$/.test(entry.path) ||
         entry.path.split("/").some((part) => part === "" || part === "." || part === "..") ||
         entry.mode !== "100644" || entry.type !== "blob" ||
-        (deletion ? !entry.path.startsWith("views/dispatch-outbox/") : typeof entry.content !== "string")) {
+        (deletion ? !entry.path.startsWith("views/") : typeof entry.content !== "string")) {
         throw new BrokerError(403, "State tree could change only ledger events and views");
       }
     }

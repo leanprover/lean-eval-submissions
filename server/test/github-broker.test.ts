@@ -205,6 +205,28 @@ describe("GitHub App broker", () => {
   });
 
   it.each([
+    "views/dispatch-outbox/01/0198abcd-0000-7000-8000-000000000001.json",
+    `views/model-identity-reverse-impacts/aa/mi1_${"a".repeat(64)}.json`,
+  ])("permits ledger CAS removal of a materialized view (%s)", async (path) => {
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 893 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({ token: "ghs_state-view-token", expires_at: new Date(NOW + 3_600_000).toISOString() }));
+      }
+      expect(url).toBe("https://api.github.com/repos/leanprover/lean-eval-state-staging/git/trees");
+      return Promise.resolve(Response.json({ sha: COMMIT }));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest("state", "https://api.github.com/repos/leanprover/lean-eval-state-staging/git/trees", {
+        method: "POST",
+        body: JSON.stringify({ base_tree: COMMIT, tree: [{ path, mode: "100644", type: "blob", sha: null }] }),
+      }), environment(), upstream, NOW,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
     ["GET", "leanprover/lean-eval-state", "", null],
     ["GET", "attacker/lean-eval-state-staging", "", null],
     ["GET", "leanprover/lean-eval-state-staging", "/contents/events/a.json?ref=main", null],
