@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-11-16T07:00:42Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "GPT-6.1-sol xhigh with additional custom tools",
+      "intake": {
+        "issue_number": 2192,
+        "kind": "issue"
+      },
+      "problem_id": "jacobian_challenge_alggeo",
+      "production_metadata": {
+        "production_description": "Correction and resubmission of #2172, which was rejected before proof evaluation because its Lean `4.35.0-rc3` toolchain was unsupported.\n\nAuthors: Axel Delaval; Jie Xu; Shitan Xu.\n\nPublic library: https://github.com/frenzymath/Jacobian-Challenge\n\nHuman direction of the project, strategy, and release; mathematical review of milestone statements. Codex agents developed and adapted Lean proofs, integrated them, and post-processed the formalization into a reusable library. Tools included a formalization graph, task delegation, code search, repository reuse, and Lean/cluster compilation. Parts of the library are adapted from Weil's conjectures project; see NOTICE in the public library.\n\nThe submission packages all nine answers for `jacobian_challenge_alggeo` from library commit `dce1ca5941773caba3608dceff56371cefce58ec`, updated to supported stable Lean `4.35.0` with the benchmark-required Mathlib `074063781836922cb02701cd12943c9f51731afa`. The official Challenge, Solution bridge, configuration, and test driver are unchanged. The original library's admitted Challenge is excluded from proof dependencies. The updated package passed its full build (`lake --no-cache build Submission Solution Challenge`) and the unchanged official `lake test` comparator on November 16, 2026: both NanoDa and Lean accepted the solution, and the comparator reported \"Your solution is okay!\" The checked source digest and stage results are committed in `validation-20261116.json`. Complete auxiliary-model, token, cost, and elapsed-time totals have not been established.",
+        "solution_publication_date": "2026-11-05",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b14d935fb78fdd6718f4ec3e9c62cd622ce69b04559d645189ecfc45ca992bad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "6c0f1a76747bc07ca623780aaa53aafa105d4c7d",
+        "repo": "frenzymath/lean-eval-submissions"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "AxelDlv00"
+}
