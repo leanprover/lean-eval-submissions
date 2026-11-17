@@ -45,6 +45,29 @@
         "ref": "44d08fe4052790bbde1be46c419968e1676a2431",
         "repo": "frenzymath/lean-eval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-17T13:59:40Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Archon Horizon + Codex",
+      "intake": {
+        "issue_number": 2198,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_3d_topological",
+      "production_metadata": {
+        "production_description": "Authors: FrenzyMath (PKU@AI4maths): Axel Delaval; Leheng Chen; Zhiyuan Zhang.\n\nPublic library: https://github.com/frenzymath/Poincare-Conjecture\n\nRetry of #2194 using the same validated source commit after its standard evaluation reached the six-hour deadline (`evaluation_timeout`), without a final proof verdict. Companion smooth submission #2196 passed. We are retrying the standard tier because the earlier topological run recorded slower compilation on identical shared sources.\n\nThe original formalization was developed through combined Archon Horizon and Codex workflows. See https://arxiv.org/html/2610.08329v1 and the source provenance and third-party notices in the submission repository. This resubmission migrates the public proof to supported Lean 4.35.0 and pinned Mathlib 074063781836922cb02701cd12943c9f51731afa, with unchanged benchmark statements.\n\nThis retries topological Poincaré #2113, whose October 14 evaluation reached the six-hour limit during compilation on the older GitHub-hosted runner. The current standard evaluation runner has 16 CPUs and 32 GB. The exact submitted package passed local compilation and the unchanged official comparator test enforcing both bundled NanoDa and Lean. Source hashes, commands, exit codes, and available console logs are in `reports/evidence/stable-20261116/`. Local checks used independent Slurm allocations on one node: smooth had 16 CPUs / 60,000 MiB with LEAN_NUM_THREADS=16; topological had 26 CPUs / 100,000 MiB with LEAN_NUM_THREADS=8. Each had its own memory limit and source/build workspace. The final topological build reused helpers compiled in a preceding 5h13m local build under its distinct package name. That build passed, but its test encountered stale local dependency paths; correcting the unsubmitted overrides preserved all package source hashes and compiled helpers. Because this cluster limits memory mappings to 65,530, a local process restriction selected the stock Lean loader's built-in read/malloc fallback; the submitted build configuration does not include this workaround. These timings do not establish a cold hosted runtime or guarantee completion within six hours. This snapshot contains only the topological benchmark package.",
+        "solution_publication_date": "2026-10-14",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_d5e525d4040617a34c21864ce62e3b4a8bae712540a785f51ce238ab25badfdb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "dd1a1643a05aced8ab0cc9da862d0e7a24200502",
+        "repo": "frenzymath/lean-eval-submissions"
+      }
     }
   ],
   "schema_version": 2,
