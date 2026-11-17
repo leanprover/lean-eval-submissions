@@ -22,6 +22,29 @@
         "ref": "6c0f1a76747bc07ca623780aaa53aafa105d4c7d",
         "repo": "frenzymath/lean-eval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-17T05:34:54Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Archon Horizon + Codex",
+      "intake": {
+        "issue_number": 2196,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_3d_smooth",
+      "production_metadata": {
+        "production_description": "The original formalization was developed through combined Archon Horizon and Codex workflows. See https://arxiv.org/html/2610.08329v1 and the source provenance and third-party notices in the submission repository. This resubmission migrates the public proof to supported Lean 4.35.0 and pinned Mathlib 074063781836922cb02701cd12943c9f51731afa, with unchanged benchmark statements.\n\nThis retries smooth Poincaré #2119, whose October 14 evaluation reached the six-hour limit during compilation on the older GitHub-hosted runner. The current standard evaluation runner has 16 CPUs and 32 GB. The exact submitted package passed local compilation and the unchanged official comparator test enforcing both bundled NanoDa and Lean. Source hashes, commands, exit codes, and available console logs are in `reports/evidence/stable-20261116/`. The smooth console capture stopped during the default kernel check after a login interruption; its compute-node completion receipt records official test exit code 0 and stable sources, as documented in the evidence. Local checks used independent Slurm allocations on one node: smooth had 16 CPUs / 60,000 MiB with LEAN_NUM_THREADS=16; topological had 26 CPUs / 100,000 MiB with LEAN_NUM_THREADS=8. Each had its own memory limit and source/build workspace. The final smooth build reused compiled helper artifacts. Because this cluster limits memory mappings to 65,530, a local process restriction selected the stock Lean loader's built-in read/malloc fallback; the submitted build configuration does not include this workaround. These timings do not establish a cold hosted runtime or guarantee completion within six hours. This snapshot contains only the smooth benchmark package.\n\nThis is also a retry of #2193, whose evaluation failed in the source-fetch step with a GitHub API HTTP 403 before Lean compilation or kernel checking started. The exact validated source commit is unchanged. The repository is public; the parallel topological evaluation fetched it successfully, and a subsequent unauthenticated API check returned HTTP 200.\n\nThe subsequent attempt #2195 successfully fetched the source but failed during Lean environment setup: the GitHub release download for the elan installer returned HTTP 502. This retry again uses the same validated source commit; neither attempt reached submission compilation or proof checking.",
+        "solution_publication_date": "2026-10-14",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_f36e97eec9c312372ecfc820ad35ebff39f977974dcf6e7aee6c4f75d2cd9ea3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "44d08fe4052790bbde1be46c419968e1676a2431",
+        "repo": "frenzymath/lean-eval-submissions"
+      }
     }
   ],
   "schema_version": 2,
