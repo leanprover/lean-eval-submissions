@@ -1,0 +1,8 @@
+{
+  "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+  "result_id": "r2_1aa5b9b23d5e3b32f0d7d255f1ce403d5143628457ad1bebce51f3eb797328d4",
+  "run_attempt": 1,
+  "run_id": 44017791492,
+  "schema_version": 1,
+  "toolchain": "leanprover/lean4:v4.35.0"
+}
