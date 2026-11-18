@@ -654,6 +654,27 @@
         "ref": "aed826a54a91cef8f256b1536d31e0b7f1459dcc",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-18T08:21:18Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1ed95-b1c9-718d-84b7-41b960d398e8"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_096f2534ece2784178beab629ccc87736dcd604d38536167a0c8105df3f9966d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a54ea297dab9f65da2129dbe08e5935f177d47fc",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
