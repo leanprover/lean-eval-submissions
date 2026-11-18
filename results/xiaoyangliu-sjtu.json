@@ -675,6 +675,25 @@
         "ref": "a54ea297dab9f65da2129dbe08e5935f177d47fc",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-18T11:03:16Z",
+      "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1ee0a-2649-72f3-8b32-b9364f6f0d91"
+      },
+      "problem_id": "annals_fractal_uncertainty",
+      "production_metadata": {},
+      "result_id": "r2_b1185d4e7a647d0c5d60cdb805959b66e9409c3e700058e3e71e64e0e65e6625",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9e759812984d65c7348a06fb46c46a913557e496",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
