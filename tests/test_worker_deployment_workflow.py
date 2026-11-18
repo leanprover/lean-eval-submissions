@@ -1030,6 +1030,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "LEGACY_SOURCE_APP_PRIVATE_KEY",
             "SOURCE_APP_ID",
             "SOURCE_APP_PRIVATE_KEY",
+            "STATE_APP_ID",
+            "STATE_APP_PRIVATE_KEY",
         }
         for environment in ("staging", "production"):
             self.assertEqual(

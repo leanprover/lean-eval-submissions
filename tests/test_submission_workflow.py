@@ -102,7 +102,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
                 "  evaluate:", "  archive_issue:",
                 "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
-                "  evaluation_state:", "  record:", "  result_state:", "  notify:", "  measurement_state:",
+                "  evaluation_state:", "  record:", "  result_state:", "  notify:", "  measurement_state:", "  leaderboard_refresh:",
             ],
             "expected exactly the reviewed submission jobs",
         )
@@ -432,8 +432,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("scripts/build_result_receipt.py", record)
         self.assertIn("name: submission-result-completion", record)
         self.assertIn(
-            "if: github.event_name == 'issues' || inputs.callback_environment == 'production'",
-            record,
+            "(github.event_name == 'issues' || inputs.callback_environment == 'production')",
+            self.text.split("\n  leaderboard_refresh:", 1)[1],
         )
 
     def test_record_waits_on_archive(self) -> None:

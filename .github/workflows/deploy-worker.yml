@@ -255,6 +255,25 @@ jobs:
           printf '%s' "$LEGACY_SOURCE_APP_PRIVATE_KEY" |
             timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
               LEGACY_SOURCE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env staging
+      - name: Converge staging State broker credentials
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STATE_APP_ID: ${{ secrets.LEAN_EVAL_STATE_APP_ID }}
+          STATE_APP_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_STATE_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$STATE_APP_ID" =~ ^[1-9][0-9]{0,15}$ ]] || \
+            [[ "$STATE_APP_PRIVATE_KEY" != *"-----BEGIN "*"PRIVATE KEY-----"* ]]; then
+            echo "State GitHub App credentials are missing or malformed" >&2
+            exit 1
+          fi
+          printf '%s' "$STATE_APP_ID" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              STATE_APP_ID --config wrangler.broker.jsonc --env staging
+          printf '%s' "$STATE_APP_PRIVATE_KEY" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              STATE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env staging
       - name: Deploy staging GitHub broker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -536,6 +555,25 @@ jobs:
           printf '%s' "$LEGACY_SOURCE_APP_PRIVATE_KEY" |
             timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
               LEGACY_SOURCE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env production
+      - name: Converge production State broker credentials
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STATE_APP_ID: ${{ secrets.LEAN_EVAL_STATE_APP_ID }}
+          STATE_APP_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_STATE_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$STATE_APP_ID" =~ ^[1-9][0-9]{0,15}$ ]] || \
+            [[ "$STATE_APP_PRIVATE_KEY" != *"-----BEGIN "*"PRIVATE KEY-----"* ]]; then
+            echo "State GitHub App credentials are missing or malformed" >&2
+            exit 1
+          fi
+          printf '%s' "$STATE_APP_ID" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              STATE_APP_ID --config wrangler.broker.jsonc --env production
+          printf '%s' "$STATE_APP_PRIVATE_KEY" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              STATE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env production
       - name: Deploy production GitHub broker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

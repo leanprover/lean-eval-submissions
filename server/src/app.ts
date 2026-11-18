@@ -183,7 +183,6 @@ export type RuntimeEnv = Omit<
     GITHUB_BROKER?: Fetcher;
     GITHUB_OAUTH_CLIENT_ID?: string;
     GITHUB_OAUTH_CLIENT_SECRET?: string;
-    GITHUB_STATE_TOKEN?: string;
     GITHUB_VERIFICATION_TOKEN?: string;
     INTAKE_ENABLED: string;
     INTAKE_ENABLEMENT_MODE?: string;
@@ -533,17 +532,21 @@ function cacheReadiness(env: RuntimeEnv, response: Response, lifecycle: Lifecycl
   lifecycle.waitUntil(caches.default.put(readinessCacheKey(env), cached).catch(() => undefined));
 }
 
-const timedGitHubFetch: GitHubFetch = (input, init) =>
-  fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(5000) });
+function stateGitHubFetch(env: RuntimeEnv): GitHubFetch {
+  return (input, init) => {
+    if (!env.GITHUB_BROKER) throw new GitHubStateError(503, "State GitHub broker missing");
+    return githubBrokerFetch(env.GITHUB_BROKER, "state")(input, init);
+  };
+}
 
 function stateRepository(
   env: RuntimeEnv,
-  githubFetch: GitHubFetch = timedGitHubFetch,
+  githubFetch?: GitHubFetch,
 ): GitHubStateRepository {
-  if (!env.GITHUB_STATE_TOKEN) throw new GitHubStateError(503, "State credential missing");
   return new GitHubStateRepository(
-    { repository: env.STATE_REPOSITORY, token: env.GITHUB_STATE_TOKEN, userAgent: "lean-eval-submission-worker" },
-    githubFetch,
+    // The private broker supplies installation credentials and strips this placeholder.
+    { repository: env.STATE_REPOSITORY, token: "broker-managed", userAgent: "lean-eval-submission-worker" },
+    githubFetch ?? stateGitHubFetch(env),
   );
 }
 
@@ -559,7 +562,7 @@ async function readiness(
   if (!verifyWrite && !intake.effective) {
     return json({ status: "not_ready", reason: "intake_disabled", environment: env.DEPLOYMENT_ENVIRONMENT }, 503);
   }
-  if (!env.GITHUB_STATE_TOKEN) return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
+  if (!env.GITHUB_BROKER) return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
   if (!verifyWrite) {
     const cached = await cachedReadiness(env);
     if (cached) return cached;
@@ -2892,7 +2895,7 @@ async function reconcilePromotionCanariesScheduled(
   const ledger = state(
     env,
     dependencies,
-    subrequests.wrap(dependencies.stateFetch ?? timedGitHubFetch),
+    subrequests.wrap(dependencies.stateFetch ?? stateGitHubFetch(env)),
   );
   const scanOffset = Math.floor(scheduledTime / 60_000) * DISPATCH_OUTBOX_SCAN_LIMIT;
   const entries = await ledger.listDispatchOutbox(
@@ -2973,7 +2976,7 @@ export async function handleScheduled(
   dependencies: ApiDependencies = {},
 ): Promise<void> {
   const subrequests = dependencies.scheduledSubrequestBudget ?? new ScheduledSubrequestBudget();
-  const githubFetch = dependencies.stateFetch ?? timedGitHubFetch;
+  const githubFetch = dependencies.stateFetch ?? stateGitHubFetch(env);
   const intake = currentIntake(env, dependencies);
   if (promotionCanaryEnabled(env)) {
     try {

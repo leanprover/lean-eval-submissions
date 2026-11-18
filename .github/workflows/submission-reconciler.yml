@@ -18,7 +18,7 @@ on:
 
 permissions:
   issues: write
-  actions: read
+  actions: write
 
 jobs:
   reconcile:
@@ -41,3 +41,10 @@ jobs:
           REPO: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
         run: python scripts/reconcile_orphan_submissions.py
+
+      - name: Retry failed result publication jobs
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python scripts/retry_result_publications.py

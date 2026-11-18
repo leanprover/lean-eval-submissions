@@ -37,6 +37,7 @@ jobs:
       github.ref == 'refs/heads/main'))
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    environment: cloudflare-production
     permissions:
       actions: read
       contents: read
@@ -81,6 +82,25 @@ jobs:
           PY
           )
           echo "deployed_commit=$deployed_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Verify authenticated production State writes
+        id: state
+        continue-on-error: true
+        env:
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/state-readiness.json"
+          status=$(curl --silent --show-error --proto '=https' --max-redirs 0 \
+            --connect-timeout 10 --max-time 25 --request POST \
+            --header "Authorization: Bearer $READINESS_TOKEN" \
+            --output "$response" --write-out '%{http_code}' \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz)
+          contract=$(python -c 'import json; print(json.load(open(".audit/cloudflare-rollback-qualification-v1.json"))["state_main_commit"])')
+          schema=$(python -c 'import json; print(json.load(open(".audit/cloudflare-rollback-qualification-v1.json"))["state_event_schema_sha256"])')
+          python scripts/validate_cloudflare_rollback.py production-state-readiness \
+            --response "$response" --http-status "$status" \
+            --expected-contract "$contract" --expected-schema "$schema"
 
       - name: Bind health to protected deployment evidence
         id: deployment
@@ -137,6 +157,7 @@ jobs:
         if: always()
         env:
           ENDPOINT_OUTCOME: ${{ steps.endpoints.outcome }}
+          STATE_OUTCOME: ${{ steps.state.outcome }}
           DEPLOYMENT_OUTCOME: ${{ steps.deployment.outcome }}
           DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
           DEPLOYMENT_REASON: ${{ steps.deployment.outputs.reason }}
@@ -147,7 +168,7 @@ jobs:
           status=failed
           reason=verification_step_failed
           if [ "$DEPLOYMENT_OUTCOME" = "success" ]; then
-            if [ "$ENDPOINT_OUTCOME" = "success" ] && [ "$DEPLOYMENT_STATUS" = "ready" ]; then
+            if [ "$ENDPOINT_OUTCOME" = "success" ] && [ "$STATE_OUTCOME" = "success" ] && [ "$DEPLOYMENT_STATUS" = "ready" ]; then
               status=ready
               reason=none
             elif [ "$DEPLOYMENT_STATUS" = "suppressed" ]; then
@@ -155,6 +176,8 @@ jobs:
               reason="$DEPLOYMENT_REASON"
             elif [ "$DEPLOYMENT_REASON" = "deployment_rollout_stuck" ]; then
               reason="$DEPLOYMENT_REASON"
+            elif [ "$STATE_OUTCOME" != "success" ]; then
+              reason=state_unavailable
             elif [ "$ENDPOINT_OUTCOME" != "success" ]; then
               reason=endpoint_health_failed
             else

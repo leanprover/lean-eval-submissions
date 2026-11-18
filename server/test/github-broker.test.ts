@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { GitHubStateRepository } from "../src/github-state";
 import { githubBrokerFetch } from "../src/github-broker-client";
 import type { BrokerRuntimeEnv } from "../src/github-broker";
 
@@ -19,6 +20,8 @@ const ENV = {
   DISPATCH_WORKFLOW: "submission.yml",
   LEGACY_SOURCE_APP_ID: "Iv23liLATwL7VxAK37uX",
   LEGACY_SOURCE_APP_PRIVATE_KEY: "set in beforeAll",
+  STATE_APP_ID: "123456789",
+  STATE_APP_PRIVATE_KEY: "set in beforeAll",
   SOURCE_APP_ID: "4666604",
   SOURCE_APP_PRIVATE_KEY: "set in beforeAll",
 } satisfies BrokerRuntimeEnv;
@@ -77,11 +80,12 @@ function environment(): BrokerRuntimeEnv {
     DISPATCH_APP_PRIVATE_KEY: privateKey,
     LEGACY_SOURCE_APP_PRIVATE_KEY: privateKey,
     SOURCE_APP_PRIVATE_KEY: privateKey,
+    STATE_APP_PRIVATE_KEY: privateKey,
   };
 }
 
 function brokerRequest(
-  authority: "source" | "legacy_source" | "dispatch" | "results" | "benchmark",
+  authority: "source" | "legacy_source" | "dispatch" | "results" | "benchmark" | "state",
   url: string,
   options: Readonly<{ method?: string; body?: string | null; expectedCommit?: string | null }> = {},
 ): Request {
@@ -120,6 +124,126 @@ beforeEach(async () => {
 });
 
 describe("GitHub App broker", () => {
+  it("completes a real ledger append through the State installation broker", async () => {
+    const head = "1".repeat(40);
+    const tree = "2".repeat(40);
+    const newTree = "3".repeat(40);
+    const newCommit = "4".repeat(40);
+    const root = "https://api.github.com/repos/leanprover/lean-eval-state-staging";
+    const event = {
+      schema_version: 1 as const,
+      event_id: "0198abcd-0000-7000-8000-000000000001",
+      event_type: "system.initialized" as const,
+      occurred_at: "2026-08-20T06:07:08.000Z",
+      subject_id: "state_staging" as const,
+      causation_event_id: null,
+      actor: { kind: "system" as const },
+      payload: { environment: "staging" as const },
+    };
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 891 }));
+      if (url.endsWith("/access_tokens")) {
+        expect(JSON.parse(bodyText(init?.body))).toEqual({
+          repositories: ["lean-eval-state-staging"],
+          permissions: { contents: "write", metadata: "read" },
+        });
+        return Promise.resolve(Response.json({ token: "ghs_isolated-state-token", expires_at: new Date(NOW + 3_600_000).toISOString() }));
+      }
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer ghs_isolated-state-token");
+      expect(init?.redirect).toBe("manual");
+      if (url === `${root}/git/ref/heads/main`) return Promise.resolve(Response.json({ object: { sha: head } }));
+      if (url === `${root}/git/commits/${head}`) return Promise.resolve(Response.json({ tree: { sha: tree } }));
+      if (url.includes("/contents/events/")) return Promise.resolve(new Response(null, { status: 404 }));
+      if (url === `${root}/git/trees`) return Promise.resolve(Response.json({ sha: newTree }));
+      if (url === `${root}/git/commits`) return Promise.resolve(Response.json({ sha: newCommit }));
+      expect(url).toBe(`${root}/git/refs/heads/main`);
+      expect(JSON.parse(bodyText(init?.body))).toEqual({ sha: newCommit, force: false });
+      return Promise.resolve(Response.json({ object: { sha: newCommit } }));
+    });
+    const bindingFetch: Pick<Fetcher, "fetch">["fetch"] = (input, init) =>
+      handleBrokerRequest(new Request(inputUrl(input), init), environment(), upstream, NOW);
+    const ledger = new GitHubStateRepository(
+      { repository: "leanprover/lean-eval-state-staging", token: "unused-personal-token", userAgent: "test" },
+      githubBrokerFetch({ fetch: bindingFetch }, "state"),
+    );
+    await expect(ledger.appendEvent(event)).resolves.toMatchObject({ commit: newCommit, created: true });
+    expect(upstream.mock.calls.filter(([input]) => inputUrl(input).endsWith("/access_tokens"))).toHaveLength(1);
+  });
+
+  it("refreshes expiring State installation tokens and separates environment scopes", async () => {
+    let exchanges = 0;
+    let currentTime = NOW;
+    const repositories: unknown[] = [];
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 892 }));
+      if (url.endsWith("/access_tokens")) {
+        exchanges += 1;
+        repositories.push(JSON.parse(bodyText(init?.body)));
+        return Promise.resolve(Response.json({ token: `ghs_state-token-${String(exchanges)}`, expires_at: new Date(currentTime + 3_600_000).toISOString() }));
+      }
+      return Promise.resolve(Response.json({ permissions: { push: true } }));
+    });
+    const read = (production: boolean) => handleBrokerRequest(
+      brokerRequest("state", `https://api.github.com/repos/leanprover/lean-eval-state${production ? "" : "-staging"}`),
+      { ...environment(), DEPLOYMENT_ENVIRONMENT: production ? "production" : "staging" }, upstream, currentTime,
+    );
+    expect((await read(false)).status).toBe(200);
+    expect((await read(false)).status).toBe(200);
+    expect(exchanges).toBe(1);
+    expect((await read(true)).status).toBe(200);
+    expect(exchanges).toBe(2);
+    currentTime += 59 * 60 * 1000;
+    expect((await read(false)).status).toBe(200);
+    expect(exchanges).toBe(3);
+    expect(repositories).toEqual([
+      { repositories: ["lean-eval-state-staging"], permissions: { contents: "write", metadata: "read" } },
+      { repositories: ["lean-eval-state"], permissions: { contents: "write", metadata: "read" } },
+      { repositories: ["lean-eval-state-staging"], permissions: { contents: "write", metadata: "read" } },
+    ]);
+  });
+
+  it.each([
+    "views/dispatch-outbox/01/0198abcd-0000-7000-8000-000000000001.json",
+    `views/model-identity-reverse-impacts/aa/mi1_${"a".repeat(64)}.json`,
+  ])("permits ledger CAS removal of a materialized view (%s)", async (path) => {
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 893 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({ token: "ghs_state-view-token", expires_at: new Date(NOW + 3_600_000).toISOString() }));
+      }
+      expect(url).toBe("https://api.github.com/repos/leanprover/lean-eval-state-staging/git/trees");
+      return Promise.resolve(Response.json({ sha: COMMIT }));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest("state", "https://api.github.com/repos/leanprover/lean-eval-state-staging/git/trees", {
+        method: "POST",
+        body: JSON.stringify({ base_tree: COMMIT, tree: [{ path, mode: "100644", type: "blob", sha: null }] }),
+      }), environment(), upstream, NOW,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
+    ["GET", "leanprover/lean-eval-state", "", null],
+    ["GET", "attacker/lean-eval-state-staging", "", null],
+    ["GET", "leanprover/lean-eval-state-staging", "/contents/events/a.json?ref=main", null],
+    ["PATCH", "leanprover/lean-eval-state-staging", "/git/refs/heads/main", JSON.stringify({ sha: COMMIT, force: true })],
+    ["PATCH", "leanprover/lean-eval-state-staging", "/git/refs/heads/other", JSON.stringify({ sha: COMMIT, force: false })],
+    ["POST", "leanprover/lean-eval-state-staging", "/git/trees", JSON.stringify({ base_tree: COMMIT, tree: [{ path: "schema/changed.json", mode: "100644", type: "blob", content: "{}" }] })],
+    ["POST", "leanprover/lean-eval-state-staging", "/git/trees", JSON.stringify({ base_tree: COMMIT, tree: [{ path: "events/a.json", mode: "100644", type: "blob", sha: null }] })],
+  ])("rejects an out-of-scope State request before using credentials (%s %s%s)", async (method, repo, suffix, body) => {
+    const upstream = vi.fn<typeof fetch>();
+    const response = await handleBrokerRequest(
+      brokerRequest("state", `https://api.github.com/repos/${repo}${suffix}`, { method, body }),
+      environment(), upstream, NOW,
+    );
+    expect(response.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
   it("mints a repository-scoped source token and proxies an allowlisted read", async () => {
     const calls: string[] = [];
     const upstream = vi.fn<typeof fetch>((input, init) => {

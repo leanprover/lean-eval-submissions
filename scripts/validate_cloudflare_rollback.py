@@ -34,6 +34,8 @@ SECRET_BINDINGS = {
         "LEGACY_SOURCE_APP_PRIVATE_KEY",
         "SOURCE_APP_ID",
         "SOURCE_APP_PRIVATE_KEY",
+        "STATE_APP_ID",
+        "STATE_APP_PRIVATE_KEY",
     },
     "replay": set(),
 }

@@ -2071,7 +2071,7 @@ describe("scheduled dispatch reconciliation in workerd", () => {
     const budget = new ScheduledSubrequestBudget(2);
 
     await expect(handleScheduled(
-      { ...ENV, GITHUB_STATE_TOKEN: "state-token" },
+      ENV,
       NOW_MS,
       {
         stateFetch,

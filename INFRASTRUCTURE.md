@@ -125,7 +125,8 @@ These GitHub environment copies support deployment and protected verification;
 they are not the complete Worker runtime secret set. Each deployed intake
 Worker separately has environment-specific Wrangler secrets for:
 
-- `GITHUB_STATE_TOKEN`, scoped only to its matching private State repository;
+- `GITHUB_STATE_TOKEN`, retained temporarily for rollback to pre-App versions;
+  current code never reads it;
 - `READINESS_TOKEN`;
 - `AUTH_TOKEN_SECRET`;
 - `LIFECYCLE_CALLBACK_TOKEN`; and
@@ -273,24 +274,35 @@ remove it when those credentials retire. The internet-facing Worker must not
 write workflows, repository settings, the submissions repository, or the other
 environment's State.
 
-Each fine-grained PAT consumes the issuing user's shared GitHub REST core
-allowance; its one-repository permission scope does not create an independent
-rate bucket. GitHub quota exhaustion therefore makes the matching Worker's
-readiness and State-dependent routes fail closed with `503` until capacity
-returns. While either Worker is in operational use, reserve the issuing
-principal's allowance by avoiding unrelated high-volume authenticated API work
-from that principal and treat a sustained readiness failure as a reason to
-pause intake. This is a current availability limitation, not permission to
-bypass State or weaken its fail-closed behavior.
+The current State adapter uses the private GitHub broker's `state` authority.
+`STATE_APP_ID` and `STATE_APP_PRIVATE_KEY` are installed only in the broker,
+from protected deployment secrets `LEAN_EVAL_STATE_APP_ID` and
+`LEAN_EVAL_STATE_APP_PRIVATE_KEY`. Register a private State Writer App with
+Contents read/write and Metadata read, installed only on the two State
+repositories. Each request mints or reuses a short-lived installation token
+restricted to the matching environment's single repository. State code never
+falls back to the personal token. App registration and installation must be
+completed before merging this migration; see
+[`docs/state-app-migration.md`](docs/state-app-migration.md).
 
-Rotate each token separately before its deadline: create a replacement with
-the same one-repository scope under the packet-bound principal, replace only the
-matching Worker's `GITHUB_STATE_TOKEN`, run the protected write preflight with
-intake disabled, and then revoke the old token in its issuing account. If the
-principal changes, update the matching State ruleset bypass only as a separate
-reviewed ruleset change. Immediate revocation removes the token in its issuing
-account and keeps that environment's intake disabled until a replacement has
-passed the same preflight.
+Add the State Writer App's Integration ID as an always-bypass actor to each
+State ruleset, preserving the existing history and validation rules. The
+broker restricts writes to ledger events and views, single-parent commits,
+and non-forced updates of `main`; it cannot modify State schemas, scripts,
+workflow files, or another environment's repository. Verify staging before
+production with the existing State writer workflow.
+
+Installation tokens use the App installation's API allowance rather than a
+maintainer's personal allowance. The installation still has finite capacity:
+State diagnostics log upstream status and numeric rate-limit headers without
+private paths, source, tokens, or upstream error bodies. The lifecycle monitor
+checks authenticated production State write readiness, not just public health.
+
+The bootstrap PATs above remain declared runtime secrets solely to preserve
+rollback capability during migration. Their expiry does not affect migrated
+State access. Remove those secrets and their declaration in a separate
+coordinated retirement after production verification and the rollback window.
+Do not revoke any PAT shared by another service without checking its consumers.
 
 ### Audit repository rulesets
 
