@@ -23,6 +23,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 
 from build_result_receipt import result_tree_digest
+from inventory_historical_replay import InventoryError, canonical_inventory_bytes, inventory
 from reconcile_historical_replay_inventory_delta import (
     InventoryDeltaError,
     _load_schema,
@@ -157,12 +158,13 @@ def _verify_results_checkout(root: pathlib.Path, commit: str) -> None:
 
 def _results_bindings(
     root: pathlib.Path, commit: str, expected_store: str, *, verify_git: bool
-) -> dict[str, dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     if verify_git:
         _verify_results_checkout(root, commit)
     if not root.is_dir() or root.is_symlink():
         raise FinalDeltaError("Results root must be one real directory")
     bindings: dict[str, dict[str, Any]] = {}
+    intake_kinds: dict[str, str] = {}
     files: list[tuple[str, dict[str, Any]]] = []
     total_bytes = 0
     for path in sorted(root.iterdir(), key=lambda item: item.name):
@@ -191,6 +193,7 @@ def _results_bindings(
             result_id = record["result_id"]
             if result_id in bindings or len(bindings) >= MAX_RESULTS:
                 raise FinalDeltaError("Results identity inventory is invalid")
+            intake_kinds[result_id] = record["intake"]["kind"]
             bindings[result_id] = {
                 "owner_login": document["user"].lower(),
                 "declared_model": record["declared_model"],
@@ -206,7 +209,7 @@ def _results_bindings(
         raise FinalDeltaError("Results store digest cannot be reproduced") from error
     if actual_store != expected_store:
         raise FinalDeltaError("Results store digest differs from the cutoff inventory")
-    return bindings
+    return bindings, intake_kinds
 
 
 def _inventory_inputs(
@@ -429,20 +432,39 @@ def build_packet(
     baseline, current, delta, inventory_raw = _inventory_inputs(
         baseline_path, current_path, delta_path, inventory_schema_path
     )
-    results = _results_bindings(
+    results, intake_kinds = _results_bindings(
         results_root,
         current["source_commit"],
         current["results_store_sha256"],
         verify_git=verify_git,
     )
+    try:
+        actual_inventory = canonical_inventory_bytes(
+            inventory(results_root, current["source_commit"])
+        )
+    except InventoryError as error:
+        raise FinalDeltaError("cannot rederive exact cutoff inventory") from error
+    if actual_inventory != inventory_raw["current"]:
+        raise FinalDeltaError("cutoff inventory differs from exact canonical Results")
     if set(results) != {item["result_id"] for item in current["entries"]}:
         raise FinalDeltaError("Results records do not exactly equal the cutoff inventory")
-    public, public_raw = _public_decisions(public_decisions_path, delta, inventory_raw["delta"])
+    legacy_delta = {
+        **delta,
+        "entries": [
+            item for item in delta["entries"]
+            if intake_kinds[item["result_id"]] == "issue"
+        ],
+    }
+    public, public_raw = _public_decisions(
+        public_decisions_path, legacy_delta, inventory_raw["delta"]
+    )
     private, crosswalk, crosswalk_raw = _private_crosswalk(
         private_crosswalk_path, private_crosswalk_schema_path, current
     )
 
     entries: list[dict[str, Any]] = []
+    excluded_server: list[dict[str, Any]] = []
+    excluded_counts: Counter[str] = Counter()
     classifications: Counter[tuple[str, str]] = Counter()
     image_requirements: Counter[tuple[str, str]] = Counter()
     archive_versions: Counter[int] = Counter()
@@ -461,6 +483,21 @@ def build_packet(
             or result["results_path"] != inventory_entry["results_path"]
         ):
             raise FinalDeltaError("cutoff inventory entry differs from its exact Result")
+        # Intake comes from the exact validated canonical Result, never an
+        # inventory claim or archive/public-source classification. Preserve the
+        # full append-only inventory while excluding ordinary server intake
+        # from historical replay, migration, image and unavailable work.
+        if intake_kinds[result_id] == "server":
+            excluded_counts[visibility] += 1
+            excluded_server.append({
+                "result_id": result_id,
+                "intake_kind": "server",
+                "source_visibility": visibility,
+                "results_path": result["results_path"],
+                "result_file_sha256": result["result_file_sha256"],
+                "result_tree_digest": result["result_tree_digest"],
+            })
+            continue
         output: dict[str, Any] = {
             "result_id": result_id,
             "source_visibility": visibility,
@@ -562,11 +599,11 @@ def build_packet(
         for visibility in ("public", "private")
     }
     if (
-        result_counts["public"]["total"]
+        result_counts["public"]["total"] + excluded_counts["public"]
         != delta["delta_counts"]["public_source_probe_pending"]
-        or result_counts["private"]["total"]
+        or result_counts["private"]["total"] + excluded_counts["private"]
         != delta["delta_counts"]["private_archive_migration_pending"]
-        or sum(row["total"] for row in result_counts.values())
+        or sum(row["total"] for row in result_counts.values()) + len(excluded_server)
         != delta["delta_counts"]["result_count"]
     ):
         raise FinalDeltaError("final delta classification counts changed")
@@ -590,6 +627,15 @@ def build_packet(
                 "audit_commit": crosswalk["audit_commit"],
                 "archive_inventory_digest": crosswalk["archive_inventory_digest"],
             },
+        },
+        "intake_scope": {
+            "legacy_issue_result_count": len(entries),
+            "excluded_server_result_count": len(excluded_server),
+            "excluded_server_counts": {
+                "public": excluded_counts["public"],
+                "private": excluded_counts["private"],
+            },
+            "excluded_server_results": excluded_server,
         },
         "classification_counts": result_counts,
         "archive_migration": {

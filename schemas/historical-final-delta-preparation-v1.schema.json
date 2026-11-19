@@ -11,6 +11,7 @@
     "source_repository",
     "cutoff",
     "classification_inputs",
+    "intake_scope",
     "classification_counts",
     "archive_migration",
     "image_requirement_count",
@@ -49,6 +50,80 @@
             "audit_repository": {"const": "leanprover/lean-eval-audit"},
             "audit_commit": {"$ref": "#/$defs/commit"},
             "archive_inventory_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
+    "intake_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacy_issue_result_count",
+        "excluded_server_result_count",
+        "excluded_server_counts",
+        "excluded_server_results"
+      ],
+      "properties": {
+        "legacy_issue_result_count": {
+          "$ref": "#/$defs/count"
+        },
+        "excluded_server_result_count": {
+          "$ref": "#/$defs/count"
+        },
+        "excluded_server_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "public",
+            "private"
+          ],
+          "properties": {
+            "public": {
+              "$ref": "#/$defs/count"
+            },
+            "private": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        },
+        "excluded_server_results": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "result_id",
+              "intake_kind",
+              "source_visibility",
+              "results_path",
+              "result_file_sha256",
+              "result_tree_digest"
+            ],
+            "properties": {
+              "result_id": {
+                "$ref": "#/$defs/resultId"
+              },
+              "intake_kind": {
+                "const": "server"
+              },
+              "source_visibility": {
+                "enum": [
+                  "public",
+                  "private"
+                ]
+              },
+              "results_path": {
+                "type": "string",
+                "pattern": "^results/[A-Za-z0-9][A-Za-z0-9_.-]*\\.json$"
+              },
+              "result_file_sha256": {
+                "$ref": "#/$defs/digest"
+              },
+              "result_tree_digest": {
+                "$ref": "#/$defs/digest"
+              }
+            }
           }
         }
       }
@@ -99,7 +174,7 @@
     },
     "entries": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 10000,
       "items": {
         "oneOf": [

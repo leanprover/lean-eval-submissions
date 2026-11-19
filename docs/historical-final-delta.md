@@ -27,6 +27,21 @@ The accepted paths are:
 - `evidence/historical-replay/public-source-decisions/<sha256>.json`; and
 - `evidence/historical-replay/private-crosswalks/<sha256>.json`.
 
+The full inventory and append-only delta continue to account for every canonical
+Result. The preparation packet independently reads each exact canonical
+`intake.kind`: only `issue` Results enter historical classifications, image
+requirements, archive migration or later replay. Ordinary `server` Results are
+explicitly excluded in `intake_scope`, with source-free Result/file bindings,
+per-visibility counts and exact conservation of the full delta. They must not
+be reclassified as unavailable or silently scheduled for historical replay.
+Public-source decisions cover only legacy Issue delta entries. The private
+crosswalk still binds the complete current private corpus; excluded server
+entries do not create archive-migration or replay work. Classification totals
+and packet `entries` therefore describe legacy Issue intake, while
+`cutoff.delta_counts` and the workflow's expected count inputs describe the
+complete append-only delta. A later execution binding must consume the legacy
+partition and preserve the explicit server exclusion proof.
+
 The packet commit may be a documentation/data-only descendant of the cutoff
 commit, but its `results/` tree must be byte-identical to the cutoff commit.
 
