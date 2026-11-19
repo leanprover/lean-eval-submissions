@@ -1,3 +1,4 @@
+import { HISTORICAL_PUBLIC_COMMAND, PUBLIC_RUNTIME_PROFILE_PATH, PUBLIC_RUNTIME_MISMATCH_EXIT, PUBLIC_RUNTIME_GUARD_EXIT, PUBLIC_RUNTIME_MISMATCH_STDERR, PUBLIC_RUNTIME_GUARD_STDERR } from "./historical-public-command";
 import type { Sandbox } from "@cloudflare/sandbox";
 
 import {
@@ -214,11 +215,6 @@ const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
 const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
 const HISTORICAL_PUBLIC_PROCESS_ID = "lean-eval-historical-public";
-const HISTORICAL_PUBLIC_COMMAND =
-  "base64 --decode /workspace/historical-public-source.tar.gz.b64 "
-  + "> /workspace/historical-public-source.tar.gz "
-  + "&& rm /workspace/historical-public-source.tar.gz.b64 "
-  + "&& /opt/lean-eval/historical-public-runner";
 const ARCHIVE_ASSEMBLE_TIMEOUT_MS = 300_000;
 // Parts sit directly in /workspace under a fixed prefix rather than in a baked
 // subdirectory, which a runtime mount over /workspace could shadow.
@@ -387,7 +383,12 @@ async function startBackgroundProcess(
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
-  if (existing !== null) return;
+  if (existing !== null) {
+    if (processId === HISTORICAL_PUBLIC_PROCESS_ID && existing.command !== command) {
+      throw new ProcessStartConflictError();
+    }
+    return;
+  }
   await prepare();
   try {
     await sandbox.startProcess(command, {
@@ -405,7 +406,7 @@ async function startBackgroundProcess(
     } catch {
       throw new ProcessStartConflictError();
     }
-    if (existing === null) {
+    if (existing === null || (processId === HISTORICAL_PUBLIC_PROCESS_ID && existing.command !== command)) {
       throw new ProcessStartConflictError();
     }
   }
@@ -1276,13 +1277,19 @@ function historicalTerminalReceipt(
   request: HistoricalPublicProcessBinding,
   status: string,
   logs: { stdout: string; stderr: string },
+  exitCode: number | undefined,
   now = Date.now(),
 ): HistoricalPublicTerminalReceipt {
   let httpStatus: 200 | 500;
   let body: HistoricalPublicTerminalReceipt["body"];
   try {
     if (status !== "completed") {
-      throw new ReplayExecutorError("command_failed");
+      let detail: string | undefined;
+      if (status === "failed" && logs.stdout === "") {
+        if (exitCode === PUBLIC_RUNTIME_MISMATCH_EXIT && logs.stderr === PUBLIC_RUNTIME_MISMATCH_STDERR) detail = "runtime_profile_mismatch";
+        if (exitCode === PUBLIC_RUNTIME_GUARD_EXIT && logs.stderr === PUBLIC_RUNTIME_GUARD_STDERR) detail = "runtime_profile_guard_failed";
+      }
+      throw new ReplayExecutorError("command_failed", detail);
     }
     if (logs.stdout.length > 64 * 1024) {
       throw new ReplayExecutorError("command_output_invalid");
@@ -1408,6 +1415,7 @@ async function historicalProcessStatus(
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
+  if (process !== null && process.command !== HISTORICAL_PUBLIC_COMMAND) throw new ReplayExecutorError("command_output_invalid");
   if (process === null) throw new ReplayExecutorError("command_rpc_failed");
   let status: Awaited<ReturnType<typeof process.getStatus>>;
   try {
@@ -1426,7 +1434,7 @@ async function historicalProcessStatus(
   }
   const receipt = await prepareHistoricalTerminalReceipt(
     store,
-    historicalTerminalReceipt(request, status, logs),
+    historicalTerminalReceipt(request, status, logs, process.exitCode),
     request,
   );
   return historicalTerminalReceiptResponse(
@@ -1983,6 +1991,7 @@ export async function handleReplayRequest(
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         await startHistoricalPublicProcess(sandbox, async () => {
+          await writeSandboxFile(sandbox, PUBLIC_RUNTIME_PROFILE_PATH, input.execution_profile_canonical);
           await writeSandboxFile(
             sandbox,
             "/workspace/historical-public-request.json",

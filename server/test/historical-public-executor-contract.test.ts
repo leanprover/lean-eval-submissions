@@ -1,3 +1,4 @@
+import qualification from "../../evidence/public-replay/profiles/bdf83d6f0e73223fac9465557ea58122c3beb450d30a60046056011d4e014433.json";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,9 +8,9 @@ import {
   readHistoricalPublicExecutorStatusRequest,
 } from "../src/historical-public-executor-contract";
 
-const EXECUTION_DIGEST = "4".repeat(64);
+const EXECUTION_DIGEST = qualification.execution_profile_digest;
 const MEASUREMENT_DIGEST = "5".repeat(64);
-const VM_IMAGE_DIGEST = `sha256:${"6".repeat(64)}`;
+const VM_IMAGE_DIGEST = qualification.registry_manifest_digest;
 
 async function sha256(value: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", value);
@@ -58,6 +59,7 @@ async function fixture(): Promise<Record<string, unknown>> {
     execution_profile_digest: EXECUTION_DIGEST,
     measurement_config_digest: MEASUREMENT_DIGEST,
     vm_image_digest: VM_IMAGE_DIGEST,
+    execution_profile: qualification.execution_profile,
     handoff,
     source_archive_base64: btoa(
       String.fromCharCode(...sourceArchive),
@@ -180,7 +182,7 @@ describe("historical public executor boundary", () => {
   it("polls only the same complete immutable execution identity", async () => {
     const body = await fixture();
     const status = Object.fromEntries(Object.entries(body).filter(
-      ([field]) => field !== "handoff" && field !== "source_archive_base64",
+      ([field]) => field !== "handoff" && field !== "source_archive_base64" && field !== "execution_profile" && field !== "execution_profile_canonical",
     ));
     await expect(readHistoricalPublicExecutorStatusRequest(new Request(
       "https://example.test",

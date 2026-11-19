@@ -1,11 +1,13 @@
+import { HISTORICAL_PUBLIC_COMMAND } from "../src/historical-public-command";
+import qualification from "../../evidence/public-replay/profiles/bdf83d6f0e73223fac9465557ea58122c3beb450d30a60046056011d4e014433.json";
 import { describe, expect, it, vi } from "vitest";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
 import { canonicalHistoricalPublicHandoff } from "../src/historical-public-executor-contract";
 
-const PROFILE_DIGEST = "3".repeat(64);
+const PROFILE_DIGEST = qualification.execution_profile_digest;
 const MEASUREMENT_DIGEST = "4".repeat(64);
-const VM_IMAGE_DIGEST = `sha256:${"5".repeat(64)}`;
+const VM_IMAGE_DIGEST = qualification.registry_manifest_digest;
 
 async function input(): Promise<Record<string, unknown>> {
   const ciphertext = btoa("age-encryption.org/v1\nfixture");
@@ -162,6 +164,7 @@ async function historicalPublicInput(): Promise<Record<string, unknown>> {
     execution_profile_digest: PROFILE_DIGEST,
     measurement_config_digest: MEASUREMENT_DIGEST,
     vm_image_digest: VM_IMAGE_DIGEST,
+    execution_profile: qualification.execution_profile,
     handoff,
     source_archive_base64: btoa(sourceText),
   };
@@ -190,7 +193,7 @@ function historicalPublicRunnerVerdict(body: Record<string, unknown>): Record<st
 
 function historicalStatusInput(body: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(body).filter(
-    ([field]) => field !== "handoff" && field !== "source_archive_base64",
+    ([field]) => field !== "handoff" && field !== "source_archive_base64" && field !== "execution_profile" && field !== "execution_profile_canonical",
   ));
 }
 
@@ -1867,6 +1870,7 @@ describe("chunked archive upload routes", () => {
         writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
         exec: () => { throw new Error("blocking exec must remain unreachable"); },
         getProcess: () => Promise.resolve({
+          command: HISTORICAL_PUBLIC_COMMAND,
           getStatus: () => Promise.resolve("running"),
         } as never),
         destroy: () => Promise.resolve(),
@@ -1974,6 +1978,7 @@ describe("chunked archive upload routes", () => {
       },
     };
     const process = {
+      command: HISTORICAL_PUBLIC_COMMAND,
       getStatus: () => Promise.resolve(processStatus),
       getLogs: () => {
         logReads += 1;
@@ -2045,6 +2050,12 @@ describe("chunked archive upload routes", () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("/opt/lean-eval/historical-public-runner");
     expect(processIds).toEqual(["lean-eval-historical-public"]);
+    const canonicalProfile = writes.get("/workspace/historical-public-runtime-profile.json");
+    expect(canonicalProfile).toBeDefined();
+    if (canonicalProfile === undefined) throw new Error("missing canonical profile");
+    expect(await hexDigest(new TextEncoder().encode("lean-eval-replay-execution-profile-v1\0" + canonicalProfile)))
+      .toBe(PROFILE_DIGEST);
+    expect([...writes.keys()][0]).toBe("/workspace/historical-public-runtime-profile.json");
     expect(writes.get("/workspace/historical-public-request.json"))
       .toBe(canonicalHistoricalPublicHandoff(body.handoff));
     expect(writes.get("/workspace/historical-public-source.tar.gz.b64"))
@@ -2059,7 +2070,7 @@ describe("chunked archive upload routes", () => {
     const duplicateStart = await handleReplayRequest(startRequest(), enabled, dependencies);
     expect(duplicateStart.status).toBe(202);
     expect(commands).toHaveLength(1);
-    expect(writes).toHaveLength(2);
+    expect(writes).toHaveLength(3);
 
     const running = await handleReplayRequest(statusRequest(), enabled, dependencies);
     expect(running.status).toBe(202);
@@ -2112,7 +2123,8 @@ describe("chunked archive upload routes", () => {
     const initialReadsComplete = new Promise<void>((resolve) => {
       releaseInitialReads = resolve;
     });
-    const process = { getStatus: () => Promise.resolve("running") };
+    const process = {
+      command: HISTORICAL_PUBLIC_COMMAND, getStatus: () => Promise.resolve("running") };
     const sandbox = {
       writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
       exec: () => { throw new Error("blocking exec must remain unreachable"); },
@@ -2354,6 +2366,7 @@ describe("chunked archive upload routes", () => {
         writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
         exec: () => { throw new Error("blocking exec must remain unreachable"); },
         getProcess: () => Promise.resolve({
+          command: HISTORICAL_PUBLIC_COMMAND,
           getStatus: () => Promise.resolve("failed"),
           getLogs: () => {
             logReads += 1;
@@ -2434,6 +2447,7 @@ describe("chunked archive upload routes", () => {
         writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
         exec: () => { throw new Error("blocking exec must remain unreachable"); },
         getProcess: () => Promise.resolve({
+          command: HISTORICAL_PUBLIC_COMMAND,
           getStatus: () => Promise.resolve("completed"),
           getLogs: () => Promise.resolve({
             stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
@@ -2720,4 +2734,81 @@ describe("chunked archive upload routes", () => {
       logged.mockRestore();
     }
   });
+  it("rejects a tampered full profile before any binding or sandbox lookup", async () => {
+    const body = await historicalPublicInput();
+    body.execution_profile = { ...qualification.execution_profile, kernel_release: "wrong" };
+    let touched = 0;
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/historical-public-replay", {
+      method: "POST", body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => { touched += 1; throw new Error("unreachable"); },
+      receiptStore: () => { touched += 1; throw new Error("unreachable"); },
+    });
+    expect(response.status).toBe(400);
+    expect(touched).toBe(0);
+  });
+
+  it("never accepts an old unguarded public process at start or status", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      for (const operation of ["start", "status"]) {
+        const body = await historicalPublicInput();
+        let writes = 0;
+        let prepared = 0;
+        const receipts = terminalReceiptStore(historicalProcessBindingInput(body), null);
+        const response = await handleReplayRequest(new Request(
+          `https://example.test/api/v1/historical-public-replay${operation === "status" ? "/status" : ""}`,
+          { method: "POST", body: JSON.stringify(operation === "status" ? historicalStatusInput(body) : body) },
+        ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+          authenticate: () => Promise.resolve(),
+          receiptStore: () => ({ ...receipts, prepareReceipt: () => { prepared += 1; throw new Error("unreachable"); } }),
+          sandbox: () => ({
+            getProcess: () => Promise.resolve({ command: "old unguarded command" } as never),
+            writeFile: () => { writes += 1; throw new Error("unreachable"); },
+            exec: () => { throw new Error("unreachable"); },
+            destroy: () => Promise.resolve(),
+          }),
+        });
+        expect(response.status).toBe(500);
+        expect(writes).toBe(0);
+        expect(prepared).toBe(0);
+      }
+    } finally { logged.mockRestore(); }
+  });
+
+  it("classifies runtime guard failures only with exact status, exit, stdout and stderr", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      for (const testCase of [
+        { status: "failed", exit: 42, stdout: "", stderr: "historical-public-runtime: runtime_profile_mismatch\n", detail: "runtime_profile_mismatch" },
+        { status: "failed", exit: 43, stdout: "", stderr: "historical-public-runtime: runtime_profile_guard_failed\n", detail: "runtime_profile_guard_failed" },
+        { status: "failed", exit: 1, stdout: "", stderr: "historical-public-runtime: runtime_profile_mismatch\n", detail: undefined },
+        { status: "failed", exit: 42, stdout: "fake", stderr: "historical-public-runtime: runtime_profile_mismatch\n", detail: undefined },
+        { status: "failed", exit: 42, stdout: "", stderr: "historical-public-runtime: runtime_profile_mismatch\nextra", detail: undefined },
+        { status: "killed", exit: 42, stdout: "", stderr: "historical-public-runtime: runtime_profile_mismatch\n", detail: undefined },
+      ]) {
+        const body = await historicalPublicInput();
+        let destroyed = false;
+        const receipts = terminalReceiptStore(historicalProcessBindingInput(body), null);
+        const response = await handleReplayRequest(new Request("https://example.test/api/v1/historical-public-replay/status", {
+          method: "POST", body: JSON.stringify(historicalStatusInput(body)),
+        }), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+          authenticate: () => Promise.resolve(), receiptStore: () => receipts,
+          sandbox: () => ({
+            writeFile: () => { throw new Error("unreachable"); }, exec: () => { throw new Error("unreachable"); },
+            getProcess: () => Promise.resolve({ command: HISTORICAL_PUBLIC_COMMAND, exitCode: testCase.exit,
+              getStatus: () => Promise.resolve(testCase.status),
+              getLogs: () => Promise.resolve({ stdout: testCase.stdout, stderr: testCase.stderr }),
+            } as never),
+            destroy: () => { destroyed = true; return Promise.resolve(); },
+          }),
+        });
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({ error: "executor_failed", reason: "command_failed", ...(testCase.detail === undefined ? {} : { detail: testCase.detail }) });
+        expect(destroyed).toBe(true);
+      }
+    } finally { logged.mockRestore(); }
+  });
+
 });
