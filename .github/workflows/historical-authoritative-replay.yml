@@ -18,6 +18,16 @@ on:
         required: true
         type: number
         default: 1
+      consecutive_deferrals:
+        description: Consecutive queued-task warm retries (hard cap 2)
+        required: true
+        type: number
+        default: 0
+      deferred_task_id:
+        description: Exact queued task bound to a consecutive warm retry
+        required: false
+        type: string
+        default: ''
       reviewed_implementation_commit:
         description: Protected baseline; only complete result-data descendants are accepted
         required: false
@@ -42,6 +52,8 @@ jobs:
     outputs:
       preflight_kind: ${{ steps.preflight.outputs.kind }}
       plan_kind: ${{ steps.started.outputs.deferred == 'true' && 'deferred' || steps.plan.outputs.kind }}
+      next_deferrals: ${{ steps.started.outputs.next_deferrals || '0' }}
+      next_deferred_task: ${{ steps.started.outputs.deferred_task_id }}
     environment: replay-production
     runs-on: ubuntu-26.04
     timeout-minutes: 360
@@ -51,6 +63,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HISTORICAL_CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED }}
           REPLENISH_LANE: ${{ inputs.replenish_lane }}
+          CONSECUTIVE_DEFERRALS: ${{ inputs.consecutive_deferrals }}
+          DEFERRED_TASK_ID: ${{ inputs.deferred_task_id }}
           REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
         run: |
           set -euo pipefail
@@ -59,6 +73,13 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
           test "$HISTORICAL_CONTROLLER_ENABLED" = true
+          [[ "$CONSECUTIVE_DEFERRALS" =~ ^[0-9]+$ ]]
+          test "$CONSECUTIVE_DEFERRALS" -le 2
+          if [ "$CONSECUTIVE_DEFERRALS" -gt 0 ]; then
+            [[ "$DEFERRED_TASK_ID" =~ ^rt1_[0-9a-f]{64}$ ]]
+          else
+            test -z "$DEFERRED_TASK_ID"
+          fi
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
           test "$branch" = "$GITHUB_SHA"$'\ttrue'
@@ -220,6 +241,9 @@ jobs:
       - name: Plan the exact next qualified public task
         id: plan
         if: steps.preflight.outputs.kind == 'none'
+        env:
+          CONSECUTIVE_DEFERRALS: ${{ inputs.consecutive_deferrals }}
+          DEFERRED_TASK_ID: ${{ inputs.deferred_task_id }}
         run: |
           set -euo pipefail
           queue="$RUNNER_TEMP/state-views/historical-public-replay-queue.json"
@@ -229,6 +253,10 @@ jobs:
             --queue "$queue" --repository-root . \
             --output "$RUNNER_TEMP/historical-replay-plan.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/historical-replay-plan.json")
+          if [ "$CONSECUTIVE_DEFERRALS" -gt 0 ]; then
+            test "$kind" = execution
+            test "$(jq -er .task.replay_task_id "$RUNNER_TEMP/historical-replay-plan.json")" = "$DEFERRED_TASK_ID"
+          fi
           case "$kind" in
             execution)
               test "$(jq -r .transport.status "$RUNNER_TEMP/historical-replay-plan.json")" = ready
@@ -408,6 +436,7 @@ jobs:
         if: ${{ !cancelled() && (steps.prepare.outputs.ready == 'true' || steps.prepare.outcome == 'failure') }}
         env:
           PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
+          CONSECUTIVE_DEFERRALS: ${{ inputs.consecutive_deferrals }}
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
         run: |
           set -euo pipefail
@@ -447,13 +476,24 @@ jobs:
               if python scripts/historical_replay_job_budget.py \
                 --plan "$plan" \
                 --job-started-epoch "$HISTORICAL_REPLAY_JOB_STARTED_EPOCH" \
-                --phase before-start; then
+                --phase before-start > "$RUNNER_TEMP/historical-budget.json"; then
                 :
               else
                 budget_status=$?
                 if [ "$budget_status" -ne 3 ]; then exit "$budget_status"; fi
                 # No start was published: a bounded successor may reuse this
                 # warmed image/reservation without consuming a task attempt.
+                cat "$RUNNER_TEMP/historical-budget.json"
+                metrics=$(jq -r '"elapsed=\(.setup_elapsed_seconds)s required=\(.required_seconds)s remaining=\(.remaining_seconds)s"' \
+                  "$RUNNER_TEMP/historical-budget.json")
+                echo "::warning title=Public replay deferred::$metrics; task remains queued."
+                echo "Public replay deferred: $metrics; no task attempt started." >> "$GITHUB_STEP_SUMMARY"
+                if [ "$CONSECUTIVE_DEFERRALS" -ge 2 ]; then
+                  echo 'Consecutive deferral limit reached; stop for timing diagnosis.' >> "$GITHUB_STEP_SUMMARY"
+                  exit 1
+                fi
+                echo "next_deferrals=$(( CONSECUTIVE_DEFERRALS + 1 ))" >> "$GITHUB_OUTPUT"
+                echo "deferred_task_id=$(jq -er .task.replay_task_id "$plan")" >> "$GITHUB_OUTPUT"
                 echo 'deferred=true' >> "$GITHUB_OUTPUT"
                 exit 0
               fi
@@ -481,7 +521,7 @@ jobs:
 
       - name: Invoke the exact executor without Cloudflare or State write authority
         id: execute
-        if: steps.started.outputs.appended == 'true' && steps.prepare.outputs.ready == 'true'
+        if: steps.started.outputs.appended == 'true' && steps.prepare.outputs.ready == 'true' && steps.prepare.outcome == 'success'
         env:
           HISTORICAL_EXECUTOR_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay
         run: |
@@ -872,6 +912,12 @@ jobs:
           done
           test "$published" = true
 
+      - name: Stop the lane after a recorded preparation failure
+        if: ${{ !cancelled() && steps.prepare.outcome == 'failure' }}
+        run: |
+          echo 'Preparation failed; any started attempt was accounted for. Stop before retrying other tasks.' >&2
+          exit 1
+
       - name: Confirm credentials remained separated and remove scratch
         if: always()
         run: |
@@ -919,6 +965,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REMAINING_RUNS: ${{ inputs.remaining_runs }}
+          NEXT_DEFERRALS: ${{ needs.replay-one.outputs.next_deferrals }}
+          NEXT_DEFERRED_TASK: ${{ needs.replay-one.outputs.next_deferred_task }}
           REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
         run: |
           set -euo pipefail
@@ -929,6 +977,13 @@ jobs:
           [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$REMAINING_RUNS" -ge 2
           test "$REMAINING_RUNS" -le 1024
+          [[ "$NEXT_DEFERRALS" =~ ^[0-9]+$ ]]
+          test "$NEXT_DEFERRALS" -le 2
+          if [ "$NEXT_DEFERRALS" -gt 0 ]; then
+            [[ "$NEXT_DEFERRED_TASK" =~ ^rt1_[0-9a-f]{64}$ ]]
+          else
+            test -z "$NEXT_DEFERRED_TASK"
+          fi
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
           head=${branch%%$'\t'*}
@@ -954,12 +1009,14 @@ jobs:
           next_runs=$(( REMAINING_RUNS - 1 ))
           request=$(mktemp)
           trap 'rm -f "$request"' EXIT
-          jq -n --arg remaining "$next_runs" '{
+          jq -n --arg remaining "$next_runs" --arg deferrals "$NEXT_DEFERRALS" --arg deferred_task "$NEXT_DEFERRED_TASK" '{
             ref: "main",
             inputs: {
               confirm_authoritative_replay: "true",
               replenish_lane: "true",
               remaining_runs: $remaining,
+              consecutive_deferrals: $deferrals,
+              deferred_task_id: $deferred_task,
               reviewed_implementation_commit: env.REVIEWED_IMPLEMENTATION_COMMIT
             }
           }' > "$request"

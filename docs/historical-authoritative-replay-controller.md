@@ -103,20 +103,26 @@ If capacity is insufficient while the refreshed task is still queued, the run
 reports successful `deferred` without starting an attempt or invoking an
 executor. An enabled replenisher may launch one successor using the existing
 strictly decreasing `remaining_runs` budget and unchanged baseline checks.
-This permits a warmed retry after a cold image rollout, but cannot create an
-infinite loop or enlarge the reviewed chain ceiling. Busy/unknown attempts and
-State/rebind errors still stop the chain. Deferred runs consume chain budget,
-not task execution attempts.
+At most two consecutive warmed successors are permitted for the same exact
+queued task. The dispatch carries that task identity and consecutive-deferral
+counter; successful execution resets both. A third refusal fails the job while
+the task remains queued, stopping for diagnosis. Every refusal emits a warning
+and source-free elapsed/required/remaining summary, even in a single manual run.
+Busy/unknown attempts, task changes, and State/rebind errors stop the chain.
+Deferred runs consume the existing decreasing chain budget, never task attempts.
+No infinite or silently green warm loop is introduced.
 
 A preparation failure, including a noncancelled step timeout, instead publishes
 the existing start/failure pair without the execution-capacity guard, because
 no executor will run. `source_fetch_failed` remains retryable only through four
-total attempts. This lets a permanently unfetchable head task terminate rather
-than blocking the lane forever. Operator cancellation never takes this fallback.
+total attempts across deliberate retries. After that accounting the job fails,
+retaining the old stop-chain behavior: an outage cannot automatically exhaust
+attempts across the corpus. A manager diagnoses before deliberately retrying.
+Operator cancellation never takes this fallback.
 
 A second capacity check after request preparation and OIDC minting reserves the
 POST allowance as well as the full measurement limit and grace. Both checks
-print source-free elapsed/required/remaining seconds. A warning after the202
+print source-free elapsed/required/remaining seconds. A warning after the 202
 receipt reports any unexpected job-deadline truncation of the process window.
 The sixty-second State/start allowance is not a guarantee against an arbitrary
 network stall: if State publication already succeeded and startup exceeds that
@@ -190,3 +196,5 @@ Implementation is not activation. Before creating the repository variables:
 
 Production intake, ordinary private replay, and release publication are
 independent gates and do not become enabled by this controller.
+
+A noncancelled preparation-step timeout is a failed outcome before continue-on-error, distinct from job cancellation; see [the Actions runner step implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/StepsRunner.cs#L295).

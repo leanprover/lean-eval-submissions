@@ -55,9 +55,21 @@ class HistoricalPublicPreparationAccountingTests(unittest.TestCase):
         self.assertTrue(condition(started, values))
         self.assertFalse(condition(execute, values))
         self.assertTrue(condition(failure, values))
+        stop = step("Stop the lane after a recorded preparation failure")
+        self.assertTrue(condition(stop, values))
+        self.assertIn("exit 1", stop)
+        replenish = WORKFLOW.split("  replenish-public-lane:\n", 1)[1]
+        self.assertFalse(condition(replenish, {
+            "needs.replay-one.result": "failure", "inputs.replenish_lane": True,
+            "inputs.remaining_runs": 100, "needs.replay-one.outputs.preflight_kind": "none",
+            "needs.replay-one.outputs.plan_kind": "execution",
+        }))
+        # ready=true cannot authorize execution after a late failure/timeout.
+        self.assertFalse(condition(execute, {**values, "steps.prepare.outputs.ready": "true"}))
         # An operator cancellation is never converted into a charged attempt.
         self.assertFalse(condition(started, values, cancelled=True))
         self.assertFalse(condition(failure, values, cancelled=True))
+        self.assertFalse(condition(stop, values, cancelled=True))
         self.assertIn('if [ "$PREPARE_OUTCOME" = success ]; then', started)
         self.assertIn('echo source_fetch_failed > "$RUNNER_TEMP/failure-reason"', started)
 
@@ -74,9 +86,14 @@ class HistoricalPublicPreparationAccountingTests(unittest.TestCase):
         self.assertFalse(condition(replenish, values, cancelled=True))
         self.assertIn('next_runs=$(( REMAINING_RUNS - 1 ))', replenish)
         self.assertIn("steps.started.outputs.deferred == 'true' && 'deferred'", WORKFLOW)
+        self.assertIn("next_deferrals || '0'", WORKFLOW)
+        self.assertIn('consecutive_deferrals: $deferrals', replenish)
+        self.assertIn('deferred_task_id: $deferred_task', replenish)
+        self.assertIn('test "$NEXT_DEFERRALS" -le 2', replenish)
+        self.assertIn('test "$(jq -er .task.replay_task_id "$RUNNER_TEMP/historical-replay-plan.json")" = "$DEFERRED_TASK_ID"', WORKFLOW)
         execute = step("Invoke the exact executor without Cloudflare or State write authority")
         self.assertFalse(condition(execute, {"steps.started.outputs.appended": "",
-                                            "steps.prepare.outputs.ready": "true"}))
+                                            "steps.prepare.outputs.ready": "true", "steps.prepare.outcome": "success"}))
 
     def test_four_preparation_failures_form_terminal_bounded_state_history(self) -> None:
         fixture = controller_tests.HistoricalReplayRecoveryTests()
@@ -114,7 +131,10 @@ class HistoricalPublicPreparationAccountingTests(unittest.TestCase):
     def test_second_cas_budget_refusal_has_no_start_publication(self) -> None:
         self.assert_deferred_cas(first_status=0, rejected_pushes=1)
 
-    def assert_deferred_cas(self, *, first_status: int, rejected_pushes: int) -> None:
+    def test_second_warm_retry_stops_failed_without_state_or_successor(self) -> None:
+        self.assert_deferred_cas(first_status=3, rejected_pushes=0, deferrals=2)
+
+    def assert_deferred_cas(self, *, first_status: int, rejected_pushes: int, deferrals: int = 0) -> None:
         block = step("Append replay.started only after public preparation and capacity checks")
         body = textwrap.dedent(block.split("        run: |\n", 1)[1])
         # Exercise the actual shell control flow: first CAS transport rejects
@@ -124,6 +144,7 @@ python() {
   if [ "$1" = scripts/historical_replay_job_budget.py ]; then
     count=$(cat "$RUNNER_TEMP/budget-count" 2>/dev/null || echo 0)
     count=$((count + 1)); echo "$count" > "$RUNNER_TEMP/budget-count"
+    echo '{"setup_elapsed_seconds":500,"required_seconds":20470,"remaining_seconds":20380}'
     if [ "$count" -eq 1 ]; then return "$BUDGET_FIRST_STATUS"; else return 3; fi
   fi
   while [ "$#" -gt 0 ]; do
@@ -131,6 +152,7 @@ python() {
     shift
   done
 }
+jq() { printf 'rt1_%064s\n' '' | tr ' ' a; }
 git() {
   case "$*" in *rev-parse*) printf '%040d\n' 1 ;; esac
 }
@@ -146,11 +168,17 @@ git() {
                 ["bash", "-c", prelude + body], cwd=root,
                 env={**os.environ, "RUNNER_TEMP": directory, "GITHUB_OUTPUT": str(output),
                      "PREPARE_OUTCOME": "success", "HISTORICAL_REPLAY_JOB_STARTED_EPOCH": "1",
-                     "BUDGET_FIRST_STATUS": str(first_status)},
+                     "BUDGET_FIRST_STATUS": str(first_status), "CONSECUTIVE_DEFERRALS": str(deferrals),
+                     "GITHUB_STEP_SUMMARY": str(root / "summary")},
                 text=True, capture_output=True, check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(output.read_text(), "deferred=true\n")
+            self.assertEqual(result.returncode, 0 if deferrals < 2 else 1, result.stderr)
+            if deferrals < 2:
+                self.assertEqual(output.read_text(), f"next_deferrals={deferrals + 1}\ndeferred_task_id=rt1_{'a' * 64}\ndeferred=true\n")
+            else:
+                self.assertFalse(output.exists())
+            self.assertIn("::warning title=Public replay deferred::", result.stdout)
+            self.assertIn("no task attempt started", (root / "summary").read_text())
             self.assertEqual((root / "pushes").read_text() if (root / "pushes").exists() else "",
                              "rejected\n" * rejected_pushes)
             self.assertEqual((root / "budget-count").read_text(), f"{1 + rejected_pushes}\n")

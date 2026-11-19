@@ -73,7 +73,8 @@ class HistoricalReplayJobBudgetTests(unittest.TestCase):
         root = pathlib.Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/historical-authoritative-replay.yml").read_text()
         server = (root / "server/src/replay-app.ts").read_text()
-        job_minutes = int(re.search(r"timeout-minutes: (\d+)", workflow).group(1))
+        job = workflow.split("  replay-one:\n", 1)[1].split("    steps:\n", 1)[0]
+        job_minutes = int(re.search(r"^    timeout-minutes: (\d+)$", job, re.M).group(1))
         process_seconds = int(re.search(r"process_deadline=.*?\+ (\d+)", workflow).group(1))
         job_seconds = int(re.search(r"job_deadline=.*?\+ (\d+)", workflow).group(1))
         server_timeout_ms = int(re.search(r"AUTHORITATIVE_TIMEOUT_MS = ([\d_]+)", server).group(1).replace("_", ""))
