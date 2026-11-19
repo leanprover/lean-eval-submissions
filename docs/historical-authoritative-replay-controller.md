@@ -65,12 +65,15 @@ enabled with the separately reviewed environment credentials, one invocation:
 3. renders and deploys only the task's qualified immutable image, then proves
    exact health while ordinary replay and staging acceptance remain disabled;
 4. reserves the exact replay-task/attempt cleanup identity in durable storage,
-   without State-write or Cloudflare-deployment authority, before appending
-   `replay.started` by exact-head compare-and-swap;
-5. fetches the exact public repository or Gist commit and benchmark commit,
-   builds the deterministic handoff, and invokes the executor without a State
-   writer or Cloudflare deployment credential in scope; and
-6. appends exactly one attempt-bound terminal event, or a typed orchestration
+   without State-write or Cloudflare-deployment authority;
+5. fetches the exact public repository or Gist commit and benchmark commit and
+   builds the deterministic handoff in a five-minute step, before any attempt
+   becomes running; a preparation failure leaves the task queued;
+6. refreshes validated State, requires the prepared task and all its reviewed
+   bindings to remain identical, and checks execution capacity before each
+   exact-head `replay.started` compare-and-swap; it then invokes the executor
+   without a State writer or Cloudflare deployment credential in scope; and
+7. appends exactly one attempt-bound terminal event, or a typed orchestration
    failure. The orchestration-failure append is explicitly guarded by
    `!cancelled()`: cancellation after start leaves the running attempt untouched
    and converges only through the seven-hour stale recovery on the next
@@ -82,6 +85,25 @@ enabled with the separately reviewed environment credentials, one invocation:
    until the source-free cleanup route consumes the exact durable reservation
    and returns an attempt-bound `destruction: confirmed` proof. Polling and
    cancellation recovery use the same cleanup identity and idempotent proof.
+
+Before every start publication, the capacity check preserves the complete
+reviewed measurement wall limit (currently 330 minutes), five minutes of
+poll/delivery grace, twelve minutes for cleanup/State publication, and a
+five-minute allowance for start publication and invocation. With the existing
+six-hour job this allows eight minutes of setup. A slower cold deployment or
+source preparation stops before starting an attempt; the next manual run can
+reuse the warmed qualified image and idempotent cleanup reservation. It does
+not automatically retry or claim the remaining queue is complete.
+
+A second capacity check after request preparation and OIDC minting refuses to
+invoke an executor if the full measurement limit plus grace no longer fits.
+Both checks print source-free elapsed/required/remaining seconds. The startup
+allowance is conservative, not a guarantee against an arbitrary network stall:
+if State publication already succeeded and startup unexpectedly exceeds that
+allowance, the existing `runner_start_failed` path records the orchestration
+failure. Ambiguous executor starts still require destruction proof; job
+cancellation still uses the seven-hour stale recovery. No execution limit,
+checker outcome, image, toolchain, or retry classification is changed.
 
 Cloudflare deployment, State reads, State writes, public source fetching, and
 executor OIDC are kept in separate steps. The lane has no AWS permission and

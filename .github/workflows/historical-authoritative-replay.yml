@@ -54,6 +54,7 @@ jobs:
           REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
         run: |
           set -euo pipefail
+          echo "HISTORICAL_REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
@@ -84,7 +85,6 @@ jobs:
                 ' <<< "$comparison" >/dev/null
             fi
           fi
-          echo "HISTORICAL_REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -331,62 +331,16 @@ jobs:
             "$RUNNER_TEMP/cleanup-reservation-confirmation.json" >/dev/null
           echo 'reserved=true' >> "$GITHUB_OUTPUT"
 
-      - name: Append replay.started before fetching public source or invoking the executor
-        id: started
-        if: steps.reserve.outputs.reserved == 'true'
-        env:
-          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-        run: |
-          set -euo pipefail
-          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
-          test -z "${CLOUDFLARE_API_TOKEN:-}"
-          published=false
-          for cas_attempt in $(seq 1 4); do
-            local_head=$(git -C state rev-parse HEAD)
-            test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
-            git -C state fetch --no-tags origin \
-              refs/heads/main:refs/remotes/origin/main
-            remote_head=$(git -C state rev-parse refs/remotes/origin/main)
-            git -C state merge-base --is-ancestor "$local_head" "$remote_head"
-            git -C state merge --ff-only refs/remotes/origin/main
-            python state/scripts/state.py --root state validate
-            views="$RUNNER_TEMP/state-views.cas-$cas_attempt"
-            python state/scripts/state.py --root state materialize --output "$views"
-            plan="$RUNNER_TEMP/historical-replay-plan.cas-$cas_attempt.json"
-            event="$RUNNER_TEMP/started-event.cas-$cas_attempt.json"
-            publish_root="$RUNNER_TEMP/historical-started-state-publish-$cas_attempt"
-            python scripts/historical_replay_controller.py refresh-rebind-plan \
-              --plan "$RUNNER_TEMP/historical-replay-plan.json" \
-              --queue "$views/historical-public-replay-queue.json" \
-              --repository-root . \
-              --output "$plan"
-            python scripts/historical_replay_controller.py state-event started \
-              --plan "$plan" \
-              --queue "$views/historical-public-replay-queue.json" \
-              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-              --output "$event"
-            expected=$(git -C state rev-parse HEAD)
-            git clone --quiet --no-hardlinks state "$publish_root"
-            if state_head=$(scripts/publish_replay_state_event \
-              --environment production --root "$publish_root" --event "$event" \
-              --expected-head "$expected" \
-              --message "Start one historical authoritative replay"); then
-              mv "$plan" "$RUNNER_TEMP/historical-replay-plan.json"
-              mv "$event" "$RUNNER_TEMP/started-event.json"
-              published=true
-              break
-            fi
-          done
-          test "$published" = true
-          echo source_fetch_failed > "$RUNNER_TEMP/failure-reason"
-          echo 'appended=true' >> "$GITHUB_OUTPUT"
-          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
-
       - name: Fetch exact public source and benchmark and build the runner handoff
-        if: steps.started.outputs.appended == 'true'
+        id: prepare
+        if: steps.reserve.outputs.reserved == 'true'
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           umask 077
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
           plan="$RUNNER_TEMP/historical-replay-plan.json"
           source_kind=$(jq -er .task.source_kind "$plan")
           source_repository=$(jq -er .task.source_repository "$plan")
@@ -446,7 +400,64 @@ jobs:
               --output "$RUNNER_TEMP/gist-adapter-receipt.json"
           fi
           rm -rf "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Append replay.started only after public preparation and capacity checks
+        id: started
+        if: steps.prepare.outputs.ready == 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            local_head=$(git -C state rev-parse HEAD)
+            test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
+            git -C state fetch --no-tags origin \
+              refs/heads/main:refs/remotes/origin/main
+            remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+            git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+            git -C state merge --ff-only refs/remotes/origin/main
+            python state/scripts/state.py --root state validate
+            views="$RUNNER_TEMP/state-views.cas-$cas_attempt"
+            python state/scripts/state.py --root state materialize --output "$views"
+            plan="$RUNNER_TEMP/historical-replay-plan.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/started-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/historical-started-state-publish-$cas_attempt"
+            python scripts/historical_replay_controller.py refresh-rebind-plan \
+              --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+              --queue "$views/historical-public-replay-queue.json" \
+              --repository-root . \
+              --output "$plan"
+            python scripts/historical_replay_controller.py state-event started \
+              --plan "$plan" \
+              --queue "$views/historical-public-replay-queue.json" \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$event"
+            expected=$(git -C state rev-parse HEAD)
+            git clone --quiet --no-hardlinks state "$publish_root"
+            # Recheck after each potentially slow State refresh/clone and before
+            # every CAS write. A cold setup that consumed the budget stays queued.
+            python scripts/historical_replay_job_budget.py \
+              --plan "$plan" \
+              --job-started-epoch "$HISTORICAL_REPLAY_JOB_STARTED_EPOCH" \
+              --phase before-start
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Start one historical authoritative replay"); then
+              mv "$plan" "$RUNNER_TEMP/historical-replay-plan.json"
+              mv "$event" "$RUNNER_TEMP/started-event.json"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
+          echo 'appended=true' >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
 
       - name: Invoke the exact executor without Cloudflare or State write authority
         id: execute
@@ -496,6 +507,12 @@ jobs:
             rm "$RUNNER_TEMP/historical-oidc-response.json"
           }
           mint_oidc
+          # State publication/OIDC may have been unusually slow. Never invoke
+          # an executor with less than its full reviewed wall time and grace.
+          python scripts/historical_replay_job_budget.py \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --job-started-epoch "$HISTORICAL_REPLAY_JOB_STARTED_EPOCH" \
+            --phase before-execute
           jq '{schema_version, replay_task_id, attempt}' \
             "$RUNNER_TEMP/executor-status-request.json" \
             > "$RUNNER_TEMP/runner-loss-cleanup-request.json"
