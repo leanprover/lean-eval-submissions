@@ -19,6 +19,7 @@ from typing import Any
 NAME = re.compile(r"[a-z0-9-]{1,128}\Z")
 BINDING_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
 NAMESPACE = re.compile(r"[0-9a-f]{32}\Z")
+SCRIPT_ETAG = re.compile(r"[0-9a-f]{64}\Z")
 TIMESTAMP = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z\Z"
 )
@@ -175,7 +176,9 @@ def _verify_worker(
     health: dict[str, Any],
 ) -> tuple[str, dict[str, str]]:
     worker = text(config.get("name"), NAME, "rendered Worker name")
-    version_id, tag = _active_version(service, deployments, worker)
+    version_id, _ = _active_version(service, deployments, worker)
+    active_script = service["result"]["default_environment"]["script"]
+    active_etag = text(active_script.get("etag"), SCRIPT_ETAG, "active script etag")
     expected_inventory = _expected_inventory(config)
 
     settings_result = object_value(settings.get("result"), "Worker settings result")
@@ -194,9 +197,23 @@ def _verify_worker(
     version_result = object_value(version.get("result"), "Worker version result")
     metadata = object_value(version_result.get("metadata"), "Worker version metadata")
     annotations = object_value(
-        version_result.get("annotations"), "Worker version annotations"
+        version_result.get("annotations", {}), "Worker version annotations"
     )
+    settings_annotations = object_value(
+        settings_result.get("annotations", {}), "Worker settings annotations"
+    )
+    # workers/tag is an optional user label, not the service's internal script
+    # tag. When supplied, both views of the active version must agree on it.
+    if "workers/tag" in annotations or "workers/tag" in settings_annotations:
+        version_tag = annotations.get("workers/tag")
+        if (
+            not isinstance(version_tag, str)
+            or not version_tag
+            or version_tag != settings_annotations.get("workers/tag")
+        ):
+            raise OwnershipError("active Worker version annotations differ")
     resources = object_value(version_result.get("resources"), "Worker version resources")
+    version_script = object_value(resources.get("script"), "Worker version script")
     version_inventory, version_namespaces = _binding_inventory(
         resources.get("bindings"), "Worker version"
     )
@@ -219,7 +236,9 @@ def _verify_worker(
         version.get("success") is not True
         or version_result.get("id") != version_id
         or TIMESTAMP.fullmatch(str(metadata.get("created_on"))) is None
-        or annotations.get("workers/tag") != tag
+        # The API's content hash binds the service's active script to the
+        # exact version selected by its single-version deployment.
+        or version_script.get("etag") != active_etag
         or version_inventory != expected_inventory
         or version_namespaces != settings_namespaces
         or runtime.get("migration_tag") != final_migration.get("tag")
@@ -293,6 +312,23 @@ def _verify_application(
             "mode": "private",
         },
     }
+    # The API may expand these exact defaults and human-readable size aliases.
+    # Accept only the known equivalent values; every unexpected field or
+    # non-default command, runtime or size still fails the full comparison.
+    optional_defaults = {
+        "command": [],
+        "entrypoint": [],
+        "memory": f"{instance['memory_mib'] // 1024}GiB",
+        "runtime": "firecracker",
+    }
+    for name, expected_value in optional_defaults.items():
+        if name in configuration:
+            expected_configuration[name] = expected_value
+    disk = object_value(configuration.get("disk"), "container disk configuration")
+    if "size" in disk:
+        expected_configuration["disk"]["size"] = (
+            f"{instance['disk_size_mb'] // 1000}GB"
+        )
     application_id = application.get("id")
     version = application.get("version")
     created_at = application.get("created_at")
