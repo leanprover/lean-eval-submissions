@@ -40,6 +40,8 @@ def exercise_dispatch(
     head: str = "1" * 40,
     comparison: dict | None = None,
     lane: str = "0",
+    next_deferrals: str = "0",
+    next_deferred_task: str = "",
 ) -> tuple[list[str], dict]:
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory)
@@ -93,6 +95,8 @@ def exercise_dispatch(
             "REVIEWED_IMPLEMENTATION_COMMIT": baseline,
             "PRIVATE_REPLAY_LANE_INDEX": lane,
             "PRIVATE_REPLAY_LANE_COUNT": "4",
+            "NEXT_DEFERRALS": next_deferrals,
+            "NEXT_DEFERRED_TASK": next_deferred_task,
             counter: str(value),
         }
         completed = subprocess.run(
@@ -224,6 +228,24 @@ class HistoricalReplayTwoLaneDriverTests(unittest.TestCase):
                 )
                 if target == "historical-private-replay.yml":
                     self.assertEqual(payload["inputs"]["private_lane_index"], "0")
+
+    def test_public_warm_successor_carries_bounded_counter_and_exact_task(self) -> None:
+        script = shell_step(PUBLIC, "Dispatch exactly one bounded public-lane successor")
+        for count in (1, 2):
+            _, payload = exercise_dispatch(
+                script, counter="REMAINING_RUNS", value=7,
+                next_deferrals=str(count), next_deferred_task="rt1_" + "a" * 64,
+            )
+            self.assertEqual(payload["inputs"]["consecutive_deferrals"], str(count))
+            self.assertEqual(payload["inputs"]["deferred_task_id"], "rt1_" + "a" * 64)
+            self.assertEqual(payload["inputs"]["remaining_runs"], "6")
+        _, reset = exercise_dispatch(script, counter="REMAINING_RUNS", value=7)
+        self.assertEqual(reset["inputs"]["consecutive_deferrals"], "0")
+        self.assertEqual(reset["inputs"]["deferred_task_id"], "")
+        for count, task in (("3", "rt1_" + "a" * 64), ("1", ""), ("0", "rt1_" + "a" * 64)):
+            with self.subTest(count=count, task=task), self.assertRaises(AssertionError):
+                exercise_dispatch(script, counter="REMAINING_RUNS", value=7,
+                                  next_deferrals=count, next_deferred_task=task)
 
     def test_each_private_lane_dispatch_payload_is_bound_to_its_shard(self) -> None:
         script = shell_step(
