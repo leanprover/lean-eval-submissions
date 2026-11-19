@@ -1063,10 +1063,8 @@ export class GitHubProvider {
 
   async resolveIntakeProblem(problemId: string): Promise<IntakeProblem> {
     const { visible, status, ...problem } = await this.#readBenchmarkProblem(problemId);
-    const accepted = visible && (
-      (problem.problemGroup === "formalization-evaluation" && status === "active") ||
-      (problem.problemGroup === "software-verification" && (status === "draft" || status === "active"))
-    );
+    // Both supported groups accept drafts independently of flagship-set membership.
+    const accepted = visible && (status === "draft" || status === "active");
     if (!accepted) throw new GitHubProviderError(409, "problem_not_open_for_submission");
     return problem;
   }

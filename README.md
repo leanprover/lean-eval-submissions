@@ -52,9 +52,9 @@ without the selection helper keep their original single-toolchain behavior.
 The service accepts a problem ID, declared model, exact repository and commit,
 publication choice, production metadata, and acceptance of the current terms.
 It resolves the problem group and current statement revision itself from the
-protected LeanEval catalog. Formalization problems must be visible and active;
-software-verification problems may be visible and draft or active. Clients do
-not supply either canonical field.
+protected LeanEval catalog. Both formalization and software-verification problems
+accept submissions when visible and draft or active; draft problems do not need
+flagship-set membership. Clients do not supply either canonical field.
 
 Scheduled publication is the recommended default. A public repository must use
 scheduled publication. A private repository may instead keep accepted source

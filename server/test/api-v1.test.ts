@@ -772,20 +772,29 @@ describe("strict API contract", () => {
       return provider.resolveIntakeProblem("two_plus_two");
     };
 
-    await expect(resolve("formalization-evaluation", "active", true)).resolves.toMatchObject({
-      problemGroup: "formalization-evaluation",
-      statementRevision: 2,
-      benchmarkCommit: "b".repeat(40),
-    });
-    await expect(resolve("software-verification", "draft", true)).resolves.toMatchObject({
-      problemGroup: "software-verification",
-      statementRevision: 2,
-    });
+    for (const group of ["formalization-evaluation", "software-verification"] as const) {
+      for (const status of ["draft", "active"] as const) {
+        await expect(resolve(group, status, true)).resolves.toEqual({
+          problemId: "two_plus_two",
+          problemGroup: group,
+          statementRevision: 2,
+          benchmarkCommit: "b".repeat(40),
+        });
+      }
+    }
     for (const [group, status, visible] of [
-      ["formalization-evaluation", "draft", true],
+      ["formalization-evaluation", "archived", true],
       ["software-verification", "archived", true],
+      ["formalization-evaluation", "draft", false],
+      ["software-verification", "draft", false],
       ["formalization-evaluation", "active", false],
+      ["software-verification", "active", false],
+      ["formalization-evaluation", "disabled", true],
+      ["software-verification", "disabled", true],
+      ["open-conjectures", "draft", true],
       ["open-conjectures", "active", true],
+      ["open-problems", "draft", true],
+      ["unknown", "draft", true],
     ] as const) {
       await expect(resolve(group, status, visible)).rejects.toMatchObject({
         status: 409,
