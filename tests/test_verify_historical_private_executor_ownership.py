@@ -98,7 +98,7 @@ class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):
                 "id": worker,
                 "default_environment": {
                     "environment": "production",
-                    "script": {"tag": "owned-script-tag"},
+                    "script": {"tag": "owned-script-tag", "etag": "f" * 64},
                 },
             },
         }
@@ -123,8 +123,9 @@ class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):
             "result": {
                 "id": version_id,
                 "metadata": {"created_on": "2026-08-27T12:00:00.000Z"},
-                "annotations": {"workers/tag": "owned-script-tag"},
+                "annotations": {"workers/triggered_by": "upload"},
                 "resources": {
+                    "script": {"etag": "f" * 64},
                     "bindings": copy.deepcopy(bindings),
                     "script_runtime": {
                         "migration_tag": "v1",
@@ -195,6 +196,61 @@ class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):
         self.assertTrue(proof["worker_owned"])
         self.assertFalse(proof["application_owned"])
 
+    def test_optional_annotations_may_be_absent(self) -> None:
+        del self.version["result"]["annotations"]
+        self.assertTrue(self.verify()["worker_owned"])
+
+    def test_optional_user_tag_matches_settings_not_internal_script_tag(self) -> None:
+        annotations = {"workers/tag": "operator-label"}
+        self.settings["result"]["annotations"] = copy.deepcopy(annotations)
+        self.version["result"]["annotations"] = annotations
+        self.assertTrue(self.verify()["worker_owned"])
+
+    def test_supplied_user_tags_must_be_present_and_equal_in_both_views(self) -> None:
+        for version_tag, settings_tag in [
+            ("label", None), (None, "label"), ("one", "two"), ("", "")
+        ]:
+            with self.subTest(version_tag=version_tag, settings_tag=settings_tag):
+                self.version["result"]["annotations"] = (
+                    {} if version_tag is None else {"workers/tag": version_tag}
+                )
+                self.settings["result"]["annotations"] = (
+                    {} if settings_tag is None else {"workers/tag": settings_tag}
+                )
+                with self.assertRaisesRegex(ownership.OwnershipError, "annotations differ"):
+                    self.verify()
+
+    def test_service_content_hash_must_be_present_and_well_formed(self) -> None:
+        script = self.service["result"]["default_environment"]["script"]
+        for etag in [None, "", "not-a-content-hash", 42]:
+            with self.subTest(etag=etag):
+                script["etag"] = etag
+                with self.assertRaisesRegex(ownership.OwnershipError, "script etag"):
+                    self.verify()
+
+    def test_version_content_hash_must_match_active_service(self) -> None:
+        script = self.version["result"]["resources"]["script"]
+        for etag in [None, "", "0" * 64]:
+            with self.subTest(etag=etag):
+                script["etag"] = etag
+                with self.assertRaisesRegex(ownership.OwnershipError, "version differs"):
+                    self.verify()
+
+    def test_wrong_version_id_and_split_deployments_are_rejected(self) -> None:
+        self.version["result"]["id"] = "01900000-0000-7000-8000-000000000009"
+        with self.assertRaisesRegex(ownership.OwnershipError, "version differs"):
+            self.verify()
+        self.deployments["result"]["deployments"][0]["versions"].append(
+            {"version_id": self.version["result"]["id"], "percentage": 0}
+        )
+        with self.assertRaisesRegex(ownership.OwnershipError, "single-version"):
+            self.verify()
+
+    def test_version_durable_object_namespace_must_match_settings(self) -> None:
+        self.version["result"]["resources"]["bindings"][-1]["namespace_id"] = "3" * 32
+        with self.assertRaisesRegex(ownership.OwnershipError, "version differs"):
+            self.verify()
+
     def test_extra_binding_is_rejected(self) -> None:
         self.settings["result"]["bindings"].append(  # type: ignore[index]
             {"type": "plain_text", "name": "ESCAPED", "text": "true"}
@@ -216,6 +272,32 @@ class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):
     def test_wrong_or_extended_health_identity_is_rejected(self) -> None:
         self.health["unexpected"] = "leak"
         with self.assertRaisesRegex(ownership.OwnershipError, "health identity"):
+            self.verify()
+
+    def test_api_expanded_container_defaults_match_qualified_configuration(self) -> None:
+        configuration = self.application["configuration"]
+        configuration.update({
+            "command": [], "entrypoint": [], "memory": "12GiB",
+            "runtime": "firecracker",
+        })
+        configuration["disk"]["size"] = "20GB"
+        self.assertTrue(self.verify()["application_owned"])
+
+    def test_expanded_container_fields_cannot_override_qualified_defaults(self) -> None:
+        defaults = copy.deepcopy(self.application["configuration"])
+        for key, wrong in [
+            ("command", ["sh"]), ("entrypoint", ["sh"]),
+            ("memory", "24GiB"), ("runtime", "other"),
+            ("environment_variables", []), ("unexpected", "extra"),
+        ]:
+            with self.subTest(field=key):
+                self.application["configuration"] = copy.deepcopy(defaults)
+                self.application["configuration"][key] = wrong
+                with self.assertRaisesRegex(ownership.OwnershipError, "application differs"):
+                    self.verify()
+        self.application["configuration"] = copy.deepcopy(defaults)
+        self.application["configuration"]["disk"]["size"] = "40GB"
+        with self.assertRaisesRegex(ownership.OwnershipError, "application differs"):
             self.verify()
 
     def test_wrong_application_version_or_settings_are_rejected(self) -> None:
