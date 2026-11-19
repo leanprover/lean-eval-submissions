@@ -193,7 +193,10 @@ def _results_bindings(
             result_id = record["result_id"]
             if result_id in bindings or len(bindings) >= MAX_RESULTS:
                 raise FinalDeltaError("Results identity inventory is invalid")
-            intake_kinds[result_id] = record["intake"]["kind"]
+            intake_kind = record["intake"]["kind"]
+            if intake_kind not in {"issue", "server"}:
+                raise FinalDeltaError("canonical Result intake kind is outside historical scope")
+            intake_kinds[result_id] = intake_kind
             bindings[result_id] = {
                 "owner_login": document["user"].lower(),
                 "declared_model": record["declared_model"],

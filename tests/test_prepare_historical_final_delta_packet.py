@@ -359,11 +359,11 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             fixture.add_modern_server_results()
             packet = fixture.build()
             path = fixture.root / "packet.json"
-            environment = {**os.environ, "PACKET": str(path), "PACKET_SCHEMA": str(ROOT / "schemas/historical-final-delta-preparation-v1.schema.json"), "EXPECTED_COUNT": "6", "EXPECTED_PUBLIC": "3", "EXPECTED_PRIVATE": "3"}
+            environment = {**os.environ, "PACKET": str(path), "PACKET_SCHEMA": str(ROOT / "schemas/historical-final-delta-preparation-v1.schema.json"), "EXPECTED_COUNT": "6", "EXPECTED_PUBLIC": "3", "EXPECTED_PRIVATE": "3", "EXPECTED_LEGACY": "4", "EXPECTED_EXCLUDED": "2"}
             path.write_bytes(canonical(packet))
             good = subprocess.run([sys.executable, "-c", script], env=environment, capture_output=True)
             self.assertEqual(good.returncode, 0, good.stderr)
-            for mutation in ("omit_server", "overlap", "count", "visibility"):
+            for mutation in ("omit_server", "overlap", "count", "visibility", "expected_legacy", "expected_excluded"):
                 with self.subTest(mutation=mutation):
                     changed = json.loads(json.dumps(packet))
                     scope = changed["intake_scope"]
@@ -373,10 +373,15 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
                         scope["excluded_server_results"][0]["result_id"] = changed["entries"][0]["result_id"]
                     elif mutation == "count":
                         scope["excluded_server_result_count"] += 1
-                    else:
+                    elif mutation == "visibility":
                         scope["excluded_server_counts"]["public"] += 1
+                    changed_environment = dict(environment)
+                    if mutation == "expected_legacy":
+                        changed_environment["EXPECTED_LEGACY"] = "6"
+                    if mutation == "expected_excluded":
+                        changed_environment["EXPECTED_EXCLUDED"] = "0"
                     path.write_bytes(canonical(changed))
-                    bad = subprocess.run([sys.executable, "-c", script], env=environment, capture_output=True)
+                    bad = subprocess.run([sys.executable, "-c", script], env=changed_environment, capture_output=True)
                     self.assertNotEqual(bad.returncode, 0)
 
     def test_inventory_cannot_forge_an_excluded_servers_visibility(self):
@@ -394,6 +399,35 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
             fixture.current_path.write_bytes(raw)
             fixture.delta_path.write_bytes(canonical_delta_bytes(delta))
             with self.assertRaisesRegex(FinalDeltaError, "differs from exact canonical Results"):
+                fixture.build()
+
+    def test_server_public_source_decisions_including_unavailability_are_rejected(self):
+        for classification in ("available", "source_ref_permanently_unavailable"):
+            with self.subTest(classification=classification), tempfile.TemporaryDirectory() as temporary:
+                fixture = Fixture(pathlib.Path(temporary))
+                fixture.add_modern_server_results()
+                current = json.loads(fixture.current_path.read_bytes())
+                source = next(item for item in current["entries"] if item["owner"] == "modern" and item["source"]["visibility"] == "public")
+                decision = {"result_id": source["result_id"], "source_repository": source["source"]["repository"], "source_commit": source["source"]["commit"], "classification": classification}
+                if classification == "available":
+                    decision["source_tree"] = "7" * 40
+                else:
+                    decision.update(review_status="reviewed", evidence_sha256="8" * 64)
+                value = json.loads(fixture.decisions_path.read_bytes())
+                value["entries"].append(decision)
+                value["entries"].sort(key=lambda item: item["result_id"])
+                fixture.decisions_path.write_bytes(canonical(value))
+                with self.assertRaisesRegex(FinalDeltaError, "does not bind the delta"):
+                    fixture.build()
+
+    def test_missing_legacy_public_decision_still_fails_when_servers_are_excluded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            fixture.add_modern_server_results()
+            value = json.loads(fixture.decisions_path.read_bytes())
+            value["entries"].pop()
+            fixture.decisions_path.write_bytes(canonical(value))
+            with self.assertRaisesRegex(FinalDeltaError, "exactly cover"):
                 fixture.build()
 
     def test_changed_delta_fails_exact_reconciliation(self) -> None:

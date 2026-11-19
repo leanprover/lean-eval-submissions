@@ -38,6 +38,14 @@ on:
         description: Exact final delta private Result count
         required: true
         type: string
+      expected_legacy_issue_result_count:
+        description: Exact legacy Issue Result count requiring historical classification
+        required: true
+        type: string
+      expected_excluded_server_result_count:
+        description: Exact ordinary server Result count excluded from historical replay
+        required: true
+        type: string
       confirm_preparation_only:
         description: Build a source-minimized blocked packet without mutation or replay
         required: true
@@ -147,6 +155,8 @@ jobs:
           EXPECTED_COUNT: ${{ inputs.expected_delta_result_count }}
           EXPECTED_PUBLIC: ${{ inputs.expected_public_result_count }}
           EXPECTED_PRIVATE: ${{ inputs.expected_private_result_count }}
+          EXPECTED_LEGACY: ${{ inputs.expected_legacy_issue_result_count }}
+          EXPECTED_EXCLUDED: ${{ inputs.expected_excluded_server_result_count }}
         run: |
           set -euo pipefail
           for count in "$EXPECTED_COUNT" "$EXPECTED_PUBLIC" "$EXPECTED_PRIVATE"; do
@@ -194,6 +204,8 @@ jobs:
           counts = packet["classification_counts"]
           scope = packet["intake_scope"]
           full = packet["cutoff"]["delta_counts"]
+          assert scope["legacy_issue_result_count"] == int(os.environ["EXPECTED_LEGACY"])
+          assert scope["excluded_server_result_count"] == int(os.environ["EXPECTED_EXCLUDED"])
           assert full["result_count"] == int(os.environ["EXPECTED_COUNT"])
           assert full["public_source_probe_pending"] == int(os.environ["EXPECTED_PUBLIC"])
           assert full["private_archive_migration_pending"] == int(os.environ["EXPECTED_PRIVATE"])
@@ -209,6 +221,12 @@ jobs:
               assert counts[visibility]["total"] + scope["excluded_server_counts"][visibility] == full[full_key]
           assert all("source" not in entry for entry in packet["entries"] if entry["source_visibility"] == "private")
           PY
+          {
+            echo '## Final historical delta scope'
+            echo "Full append-only Result count: $EXPECTED_COUNT"
+            echo "Legacy Issue Results requiring classification: $EXPECTED_LEGACY"
+            echo "Ordinary server Results excluded from historical replay: $EXPECTED_EXCLUDED"
+          } >> "$GITHUB_STEP_SUMMARY"
           packet_sha=$(sha256sum "$output" | cut -d' ' -f1)
           {
             echo "sha256=$packet_sha"

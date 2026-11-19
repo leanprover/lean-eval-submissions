@@ -129,6 +129,7 @@
       }
     },
     "classification_counts": {
+      "description": "Legacy Issue Result classifications only; ordinary server Results are explicitly excluded in intake_scope.",
       "type": "object",
       "additionalProperties": false,
       "required": ["public", "private"],

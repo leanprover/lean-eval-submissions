@@ -39,7 +39,10 @@ crosswalk still binds the complete current private corpus; excluded server
 entries do not create archive-migration or replay work. Classification totals
 and packet `entries` therefore describe legacy Issue intake, while
 `cutoff.delta_counts` and the workflow's expected count inputs describe the
-complete append-only delta. A later execution binding must consume the legacy
+complete append-only delta. The workflow separately requires exact
+`expected_legacy_issue_result_count` and `expected_excluded_server_result_count`
+inputs and records both partitions alongside the full count in its summary.
+A later execution binding must consume the legacy
 partition and preserve the explicit server exclusion proof.
 
 The packet commit may be a documentation/data-only descendant of the cutoff
