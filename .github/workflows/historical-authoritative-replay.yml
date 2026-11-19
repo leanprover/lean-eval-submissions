@@ -492,9 +492,11 @@ jobs:
                   echo 'Consecutive deferral limit reached; stop for timing diagnosis.' >> "$GITHUB_STEP_SUMMARY"
                   exit 1
                 fi
-                echo "next_deferrals=$(( CONSECUTIVE_DEFERRALS + 1 ))" >> "$GITHUB_OUTPUT"
-                echo "deferred_task_id=$(jq -er .task.replay_task_id "$plan")" >> "$GITHUB_OUTPUT"
-                echo 'deferred=true' >> "$GITHUB_OUTPUT"
+                {
+                  echo "next_deferrals=$(( CONSECUTIVE_DEFERRALS + 1 ))"
+                  echo "deferred_task_id=$(jq -er .task.replay_task_id "$plan")"
+                  echo 'deferred=true'
+                } >> "$GITHUB_OUTPUT"
                 exit 0
               fi
             fi
