@@ -41,7 +41,7 @@ jobs:
       id-token: write
     outputs:
       preflight_kind: ${{ steps.preflight.outputs.kind }}
-      plan_kind: ${{ steps.plan.outputs.kind }}
+      plan_kind: ${{ steps.started.outputs.deferred == 'true' && 'deferred' || steps.plan.outputs.kind }}
     environment: replay-production
     runs-on: ubuntu-26.04
     timeout-minutes: 360
@@ -333,6 +333,7 @@ jobs:
 
       - name: Fetch exact public source and benchmark and build the runner handoff
         id: prepare
+        continue-on-error: true
         if: steps.reserve.outputs.reserved == 'true'
         timeout-minutes: 5
         run: |
@@ -404,14 +405,16 @@ jobs:
 
       - name: Append replay.started only after public preparation and capacity checks
         id: started
-        if: steps.prepare.outputs.ready == 'true'
+        if: ${{ !cancelled() && (steps.prepare.outputs.ready == 'true' || steps.prepare.outcome == 'failure') }}
         env:
+          PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
         run: |
           set -euo pipefail
           test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           published=false
+          case "$PREPARE_OUTCOME" in success|failure) ;; *) exit 1 ;; esac
           for cas_attempt in $(seq 1 4); do
             local_head=$(git -C state rev-parse HEAD)
             test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
@@ -440,10 +443,21 @@ jobs:
             git clone --quiet --no-hardlinks state "$publish_root"
             # Recheck after each potentially slow State refresh/clone and before
             # every CAS write. A cold setup that consumed the budget stays queued.
-            python scripts/historical_replay_job_budget.py \
-              --plan "$plan" \
-              --job-started-epoch "$HISTORICAL_REPLAY_JOB_STARTED_EPOCH" \
-              --phase before-start
+            if [ "$PREPARE_OUTCOME" = success ]; then
+              if python scripts/historical_replay_job_budget.py \
+                --plan "$plan" \
+                --job-started-epoch "$HISTORICAL_REPLAY_JOB_STARTED_EPOCH" \
+                --phase before-start; then
+                :
+              else
+                budget_status=$?
+                if [ "$budget_status" -ne 3 ]; then exit "$budget_status"; fi
+                # No start was published: a bounded successor may reuse this
+                # warmed image/reservation without consuming a task attempt.
+                echo 'deferred=true' >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
             if state_head=$(scripts/publish_replay_state_event \
               --environment production --root "$publish_root" --event "$event" \
               --expected-head "$expected" \
@@ -455,13 +469,19 @@ jobs:
             fi
           done
           test "$published" = true
-          echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
+          if [ "$PREPARE_OUTCOME" = failure ]; then
+            # Preserve the old bounded accounting for an unfetchable source,
+            # deterministic preparation refusal, or noncancelled step timeout.
+            echo source_fetch_failed > "$RUNNER_TEMP/failure-reason"
+          else
+            echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
+          fi
           echo 'appended=true' >> "$GITHUB_OUTPUT"
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
 
       - name: Invoke the exact executor without Cloudflare or State write authority
         id: execute
-        if: steps.started.outputs.appended == 'true'
+        if: steps.started.outputs.appended == 'true' && steps.prepare.outputs.ready == 'true'
         env:
           HISTORICAL_EXECUTOR_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay
         run: |
@@ -521,7 +541,7 @@ jobs:
           # the durable reservation through the exact cleanup route.
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
           touch "$RUNNER_TEMP/executor-start-attempted"
-          start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+          start_status=$(timeout --signal=TERM --kill-after=5s 300s curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 300 \
             --retry 3 \
             --retry-max-time 300 \
@@ -545,7 +565,10 @@ jobs:
           process_deadline=$(( $(date +%s) + 20100 ))
           job_deadline=$(( HISTORICAL_REPLAY_JOB_STARTED_EPOCH + 20880 ))
           deadline=$process_deadline
-          if [ "$job_deadline" -lt "$deadline" ]; then deadline=$job_deadline; fi
+          if [ "$job_deadline" -lt "$deadline" ]; then
+            echo '::warning title=Public replay poll budget clamped::Job deadline is earlier than the complete process poll window.'
+            deadline=$job_deadline
+          fi
           consecutive_executor_rpc_failures=0
           # Match the private replay lane's established tolerance: retry two
           # exact executor RPC/destruction failures, but treat a third without

@@ -113,6 +113,8 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_STATE_WRITE_KEY", prepare)
         self.assertIn('test -z "${STATE_WRITE_KEY:-}"', prepare)
         self.assertIn("steps.prepare.outputs.ready == 'true'", started)
+        self.assertIn("steps.prepare.outcome == 'failure'", started)
+        self.assertIn("continue-on-error: true", prepare)
         self.assertLess(WORKFLOW.index("historical_public_runner.py prepare"),
                         WORKFLOW.index("state-event started"))
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
@@ -128,7 +130,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
                            started.index("for cas_attempt in $(seq 1 4)"))
         executor = WORKFLOW.split("Invoke the exact executor", 1)[1]
         self.assertLess(executor.index("--phase before-execute"), executor.index("executor-start-attempted"))
-        self.assertLess(executor.index("--phase before-execute"), executor.index("start_status=$(curl"))
+        self.assertLess(executor.index("--phase before-execute"), executor.index("start_status=$(timeout"))
         self.assertIn("+ 20100", executor)
         self.assertIn("+ 20880", executor)
 
@@ -301,7 +303,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         )
         runner_lost = WORKFLOW.index('echo runner_lost > "$RUNNER_TEMP/failure-reason"')
         attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         status_accepted = WORKFLOW.index('test "$start_status" = 202')
         receipt_validated = WORKFLOW.index(
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, '
@@ -317,7 +319,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
 
     def test_lost_start_response_requires_cleanup_before_state_failure(self) -> None:
         attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         cleanup = WORKFLOW.index(
             "Confirm exact cleanup after any ambiguous executor start"
         )
@@ -353,7 +355,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", reservation)
 
     def test_timed_out_or_rejected_start_cannot_publish_without_cleanup(self) -> None:
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         status_rejected = WORKFLOW.index('test "$start_status" = 202')
         cleanup = WORKFLOW.index(
             "Confirm exact cleanup after any ambiguous executor start"

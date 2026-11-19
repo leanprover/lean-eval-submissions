@@ -14,9 +14,14 @@ import time
 JOB_TIMEOUT_SECONDS = 360 * 60
 CLEANUP_SECONDS = 12 * 60
 POLL_GRACE_SECONDS = 5 * 60
-# Reserve time between the State CAS and executor invocation. This is a
-# conservative allowance, not a guarantee against arbitrary network stalls.
-START_ALLOWANCE_SECONDS = 5 * 60
+# State publication/request/OIDC time is a conservative allowance rather than
+# a guarantee against arbitrary network stalls. POST time is separately
+# bounded by the workflow's outer timeout and forced-kill grace.
+STATE_START_ALLOWANCE_SECONDS = 60
+POST_TIMEOUT_SECONDS = 300
+POST_KILL_GRACE_SECONDS = 5
+POST_ALLOWANCE_SECONDS = 310
+DEFERRED_EXIT_STATUS = 3
 
 
 def capacity(
@@ -32,7 +37,9 @@ def capacity(
     ):
         raise ValueError("invalid replay budget clock or wall time")
     wall_seconds = (wall_time_limit_ms + 999) // 1000
-    startup_seconds = START_ALLOWANCE_SECONDS if phase == "before-start" else 0
+    startup_seconds = POST_ALLOWANCE_SECONDS
+    if phase == "before-start":
+        startup_seconds += STATE_START_ALLOWANCE_SECONDS
     poll_deadline = job_started_epoch + JOB_TIMEOUT_SECONDS - CLEANUP_SECONDS
     required = wall_seconds + POLL_GRACE_SECONDS + startup_seconds
     remaining = poll_deadline - now_epoch
@@ -73,7 +80,7 @@ def main() -> int:
     print(json.dumps(result, sort_keys=True))
     if not result["fits"]:
         print("historical replay budget: full reviewed execution budget no longer fits", file=sys.stderr)
-        return 1
+        return DEFERRED_EXIT_STATUS
     return 0
 
 
