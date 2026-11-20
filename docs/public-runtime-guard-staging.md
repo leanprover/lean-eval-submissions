@@ -65,8 +65,8 @@ by new Worker namespaces; each nonce is fresh. There are no workflow inputs.
 Cases `a-match`, `a-mismatch`, `b-match`, `b-mismatch` run serially. Each owns only
 Worker `lean-eval-public-guard-<case>`, application `le-pg-<case>` and its new
 ReplaySandbox/ReplayTerminalReceipt namespaces. Existing names are collisions,
-never adopted. Any failure stops later cases. Pinned Wrangler and its rollout
-helper run from `server/`, using the installed locked package.
+never adopted. Any failure stops later cases. Pinned Wrangler runs from
+`server/`, using the installed locked package.
 
 Wrangler's application list contains summaries, not full configuration. Ownership
 resolves the single exact-name summary by its canonical UUID using `containers
@@ -77,12 +77,30 @@ readback deadline. A detail lookup failure is retryable; only a fresh successful
 list without the named application proves absence. Name collisions are checked
 from the list before deployment and are never adopted.
 
-After strict rollout and ownership verification, the existing synthetic
-staging-acceptance route must report actual architecture/kernel/CPU, network
+After exact fresh-resource ownership and immutable image verification, the existing
+synthetic staging-acceptance route establishes per-instance execution readiness.
+It must report actual architecture/kernel/CPU, network
 blocked and exact marker-sandbox destruction. Observed drift stops before the
 public fixture. Observation and replay may use different hosts: the replay's
 own guard independently verifies its actual host against the bound profile.
 The artificial negative kernel is not inferred from the first host alone.
+
+This finite helper creates a new application and namespace for every case;
+there is no previous application image to replace. It does not wait for
+application-wide healthy counters before attempting the source-free marker.
+The recorded application uses the `default` scheduling policy, for which
+Cloudflare prepares capacity and applies application-wide image rollouts on
+updates. The `durable_object` policy's rollout exemption does not apply here.
+Pinned Wrangler 4.131.0 labels `starting`/`scheduling` counters as provisioning,
+and the pinned Sandbox SDK starts its container through a request. These facts
+do not prove that the earlier `starting=1` failure was a deadlock: provider
+provisioning or image preparation may still prevent the marker from starting.
+Any marker timeout, refusal, invalid identity, unconfirmed destruction or frozen
+host mismatch stops before Source and leaves the case incomplete. Only exact
+successful observation records `runtime_readiness`; cleanup remains required.
+The shared rollout helper and ordinary/private deployments retain their gates.
+See [Cloudflare's lifecycle](https://developers.cloudflare.com/containers/concepts/architecture/)
+and [rollout semantics](https://developers.cloudflare.com/containers/configuration/rollouts/).
 
 A positive case must validate an accepted nanoda verdict. A negative case must
 produce exactly `command_failed/runtime_profile_mismatch`. The reviewed Worker
@@ -108,11 +126,11 @@ a time. Ambiguous transport stays distinct from typed pre-Sandbox refusals;
 only exact known 400/401/503 refusal bodies establish that no Sandbox began.
 Tool diagnostics are bounded and redact credentials; requests/keys are not logged.
 Health, OIDC mint and status transport failures share the same two-failure poll
-allowance. A terminal poll failure records incomplete. Deployment uses bounded
-read-only ownership capture before waiting for rollout, so rollout failure
-retains IDs; an unrecorded creation has an explicit controlled-recovery notice.
-The deploy phase bounds preflight to 2.5 minutes, CLI to 3, ownership to 3 and rollout
-to 15, leaving 3.5 minutes within its 27-minute cap. Cleanup has no OIDC credential;
+allowance. A terminal poll failure records incomplete. Deployment records bounded
+read-only ownership before execution, so marker failure retains IDs; an unrecorded
+creation has an explicit controlled-recovery notice. Preflight stays bounded to
+2.5 minutes, CLI to 3 and ownership to 3 within the existing 27-minute deploy cap.
+No request or step timeout is widened. Cleanup has no OIDC credential;
 HTTP destruction is attempted only by the execution step without a CF token.
 
 Cleanup follows the [documented Container retirement order](https://developers.cloudflare.com/containers/guides/migrate-to-durable-object-scheduling-policy/#move-the-application).

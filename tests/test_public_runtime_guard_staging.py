@@ -435,18 +435,19 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 owner.assert_not_called()
             self.assertEqual(stage.load(directory/'receipt.json')['recovery_required'],'creation-ownership-unrecorded')
 
-    def test_deploy_records_ownership_before_bounded_rollout_timeout(self):
+    def test_fresh_deploy_records_ownership_without_waiting_for_application_health(self):
         with tempfile.TemporaryDirectory() as temp:
             directory=pathlib.Path(temp)
             _,_,receipt,_=self.fixture(directory)
             receipt['created']=False
             stage.save(directory/'receipt.json',receipt)
             captured={'worker_version':'new-recorded-version'}
-            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage,'wait_ownership',return_value=captured), mock.patch.object(stage.subprocess,'run',side_effect=stage.subprocess.TimeoutExpired('rollout',900)) as run:
-                with self.assertRaises(stage.subprocess.TimeoutExpired):stage.deploy('a-match',directory)
+            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage,'wait_ownership',return_value=captured), mock.patch.object(stage.subprocess,'run') as run, mock.patch.object(stage,'http') as http:
+                stage.deploy('a-match',directory)
                 self.assertEqual(stage.load(directory/'receipt.json')['worker_version'],'new-recorded-version')
-                self.assertEqual(run.call_args.kwargs['timeout'],900)
-                self.assertIn('--attempts',run.call_args.args[0])
+                self.assertNotIn('runtime_readiness',stage.load(directory/'receipt.json'))
+                run.assert_not_called()
+                http.assert_not_called()
 
     def test_known_intermediate_drift_stops_without_application_or_class_deletion(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -511,18 +512,73 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             self.assertEqual(request.call_count,1)
             self.assertTrue(request.call_args.args[1].startswith('https://token.example/'))
 
-    def test_rollout_uses_locked_server_cwd_and_relative_config(self):
+    def test_deploy_uses_locked_server_cwd_and_relative_config(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, _ = self.fixture(directory)
             receipt['created']=False
             stage.save(directory/'receipt.json',receipt)
-            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage.subprocess,'run') as run, mock.patch.object(stage,'ownership',return_value={}):
+            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command') as command, mock.patch.object(stage,'ownership',return_value={}):
                 stage.deploy('a-match',directory)
-                self.assertEqual(run.call_args.kwargs['cwd'],ROOT/'server')
-                args=run.call_args.args[0]
-                self.assertIn('../scripts/wait_replay_container_rollout.py',args)
+                self.assertEqual(command.call_args.kwargs['cwd'],ROOT/'server')
+                args=command.call_args.args
+                self.assertEqual(args[:3],('npx','wrangler','deploy'))
                 self.assertEqual(args[args.index('--config')+1],'.public-guard-a-match.json')
+
+    def test_fresh_recorded_provisioning_application_reaches_only_owned_source_free_marker(self):
+        config, summary, detail = self.recorded_application()
+        self.assertEqual(detail['health']['instances']['starting'],1)
+        self.assertEqual(detail['health']['instances']['healthy'],0)
+        ids={'REPLAY_SANDBOX':detail['durable_objects']['namespace_id'],
+             'REPLAY_TERMINAL_RECEIPT':'2ba29b2f501544e48e5846d7ce3459f5'}
+        rows=[{'id':ids[b['name']],'script':config['name'],'class':b['class_name']} for b in config['durable_objects']['bindings']]
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            for key in ('worker_version','namespaces','health','application_id','application_version','application_created_at'):
+                receipt.pop(key)
+            receipt['created']=False
+            stage.save(directory/'receipt.json',receipt)
+            calls=[]
+            def command(*args,**kwargs):
+                if 'deploy' in args:calls.append('deploy');return b''
+                if 'list' in args:return json.dumps(summary).encode()
+                if 'info' in args:return json.dumps(detail).encode()
+                if args[1]=='-o':pathlib.Path(args[2]).write_bytes(b'disposable test identity')
+                return b'age1synthetic'
+            def http(url,body=None,oidc=False,**kwargs):
+                if url.endswith('/healthz'):return 200,{'status':'ok'}
+                self.assertTrue(url.endswith('/staging-acceptance'))
+                self.assertNotIn('source_archive_base64',body)
+                captured=stage.load(directory/'receipt.json')
+                self.assertEqual(captured['application_id'],detail['id'])
+                self.assertEqual(captured['namespaces'],ids)
+                self.assertEqual(captured['worker_version'],'version')
+                calls.append('owned-marker')
+                return 401,{'error':'unauthorized'}
+            with mock.patch.dict(stage.os.environ,{'CLOUDFLARE_API_TOKEN':'','STATE_WRITE_KEY':''}), mock.patch.object(stage,'cf',side_effect=lambda path,**kw:None if kw.get('allow_missing') else {}), mock.patch.object(stage,'_active_version',return_value=('version',{})), mock.patch.object(stage,'_verify_worker',return_value=('version',ids)), mock.patch.object(stage,'namespaces',side_effect=[[],rows]), mock.patch.object(stage,'applications',side_effect=[[],summary]), mock.patch.object(stage,'command',side_effect=command), mock.patch.object(stage,'http',side_effect=http), mock.patch.object(stage.subprocess,'run',return_value=mock.Mock(stdout=b'ciphertext')) as run:
+                stage.deploy('a-match',directory)
+                run.assert_not_called()
+                with self.assertRaisesRegex(ValueError,'observation refused'):
+                    stage.run_case('a-match',directory)
+            self.assertEqual(calls,['deploy','owned-marker'])
+            final=stage.load(directory/'receipt.json')
+            self.assertEqual(final['outcome'],'incomplete')
+            self.assertNotIn('runtime_readiness',final)
+            self.assertNotIn('control_plane_cleanup',final)
+
+    def test_execution_requires_complete_recorded_ownership_before_marker(self):
+        for missing in ('created','worker_version','namespaces','health','application_id','application_version','application_created_at'):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as temp:
+                directory=pathlib.Path(temp)
+                _,_,receipt,_=self.fixture(directory)
+                del receipt[missing]
+                stage.save(directory/'receipt.json',receipt)
+                with mock.patch.object(stage,'command') as command, mock.patch.object(stage,'http') as http:
+                    with self.assertRaisesRegex(ValueError,'exact ownership'):
+                        stage.run_case('a-match',directory)
+                    command.assert_not_called()
+                    http.assert_not_called()
 
     def test_helper_and_all_finite_paths_do_not_match_normal_deploy_filters(self):
         import fnmatch,re
@@ -545,17 +601,26 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
     def test_guard_internal_error_is_not_accepted_as_negative_case(self): self.run_fixture('a-mismatch', False, 'runtime_profile_guard_failed')
 
     def test_typed_observation_refusal_does_not_claim_sandbox_destruction(self): self.run_fixture('a-match',False,refuse=(401,{'error':'unauthorized'}))
+    def test_all_exact_marker_refusals_stop_before_source(self):
+        for status,error in ((400,'invalid_request'),(401,'unauthorized'),(503,'staging_acceptance_disabled')):
+            with self.subTest(status=status):self.run_fixture('a-match',False,refuse=(status,{'error':error}))
     def test_ambiguous_observation_preserves_unknown_http_outcome(self): self.run_fixture('a-match',False,refuse=(503,{'error':'transport_response_invalid'}))
+    def test_marker_start_timeout_stops_before_source_and_remains_incomplete(self): self.run_fixture('a-match',False,marker_fault='timeout')
+    def test_marker_identity_drift_stops_before_source(self): self.run_fixture('a-match',False,marker_fault='identity')
+    def test_marker_unconfirmed_destruction_stops_before_source(self): self.run_fixture('a-match',False,marker_fault='destruction')
     def test_two_transient_status_rpcs_can_recover_to_actual_acceptance(self): self.run_fixture('a-match',False,rpc_failures=2)
     def test_health_and_mint_share_poll_allowance_and_recover(self): self.run_fixture('a-match',False,health_faults=1,mint_faults=1)
     def test_third_combined_health_mint_failure_is_incomplete(self): self.run_fixture('a-match',False,health_faults=2,mint_faults=1)
     def test_third_status_rpc_failure_stops_without_success(self): self.run_fixture('a-match',False,rpc_failures=3)
     def test_positive_deadline_is_incomplete_and_cleans_without_mathematical_timeout(self): self.run_fixture('a-match',False,expire=True)
 
-    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False, health_faults=0, mint_faults=0):
+    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False, health_faults=0, mint_faults=0, marker_fault=None):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, request = self.fixture(directory, case)
+            if marker_fault:
+                receipt['runtime_readiness']='source-free-marker-confirmed'
+                stage.save(directory/'receipt.json',receipt)
             from tests.test_historical_replay_controller import Fixture
             canonical = Fixture()
             request['handoff'] = {'request_id':canonical.task['request_id'], 'result':{'result_id':canonical.task['result_id']}}
@@ -580,11 +645,22 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 routes.append(url.rsplit('/', 1)[-1])
                 self.assertTrue(oidc)
                 if routes[-1] == 'staging-acceptance':
+                    persisted=stage.load(directory/'receipt.json')
+                    self.assertTrue(persisted['created'])
+                    for key in ('worker_version','namespaces','health','application_id','application_version','application_created_at'):
+                        self.assertEqual(persisted[key],receipt[key])
+                    self.assertNotIn('source_archive_base64',body)
+                    self.assertNotIn('handoff',body)
+                    self.assertEqual(persisted['outcome'],'incomplete')
                     if refuse:return refuse
+                    if marker_fault=='timeout':raise stage.TransportError('marker start timed out')
                     evidence = {k: body[k] for k in ('schema_version', 'request_id', 'runner_nonce', 'archive_ciphertext_sha256', 'marker_sha256')}
                     evidence.update(service='lean-eval-replay-executor', environment='staging', network_policy='disabled', network_probe='blocked', destruction='confirmed', staging_memory_limit_bytes=12*1024**3, production_memory_gate_bytes=12*1024**3)
                     evidence.update({k: observed[k] for k in ('architecture', 'kernel_release', 'cpu_model')})
+                    if marker_fault=='identity':evidence['runner_nonce']='foreign'
+                    if marker_fault=='destruction':evidence['destruction']='unconfirmed'
                     return 200, evidence
+                self.assertEqual(stage.load(directory/'receipt.json')['runtime_readiness'],'source-free-marker-confirmed')
                 binding = {k: body[k] for k in ('schema_version', 'replay_task_id', 'attempt')}
                 if routes[-1] == 'cleanup-reservation': return 200, {**binding, 'status': 'reserved'}
                 if routes[-1] == 'historical-public-replay':
@@ -602,11 +678,13 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 if routes[-1] == 'cleanup': return 200, {**binding, 'destruction': 'confirmed'}
                 raise AssertionError('unexpected route')
             with mock.patch.dict(stage.os.environ, {'CLOUDFLARE_API_TOKEN': '', 'STATE_WRITE_KEY': ''}), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage.subprocess, 'run', return_value=mock.Mock(stdout=b'ciphertext')), mock.patch.object(stage, 'http', side_effect=http), mock.patch.object(stage.time, 'sleep'), mock.patch.object(stage.time,'monotonic',side_effect=[0,3601] if expire else None, wraps=None if expire else stage.time.monotonic):
-                if refuse:
-                    with self.assertRaises(ValueError):stage.run_case(case,directory)
+                if refuse or marker_fault:
+                    with self.assertRaises((ValueError,stage.TransportError)):stage.run_case(case,directory)
                     self.assertEqual(routes,['staging-acceptance'])
                     final=stage.load(directory/'receipt.json')
-                    self.assertEqual(final['safe_to_delete'],refuse[0]==401)
+                    self.assertEqual(final['safe_to_delete'],bool(refuse and refuse[1] in ({'error':'invalid_request'},{'error':'unauthorized'},{'error':'staging_acceptance_disabled'})))
+                    self.assertEqual(final['outcome'],'incomplete')
+                    self.assertNotIn('runtime_readiness',final)
                     self.assertNotIn('observation_http_destruction',final)
                     return
                 if expire or rpc_failures+health_faults+mint_faults>2:
@@ -620,6 +698,9 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 if drift:
                     with self.assertRaisesRegex(ValueError, 'differs from the frozen profile'): stage.run_case(case, directory)
                     self.assertEqual(routes, ['staging-acceptance'])
+                    final=stage.load(directory/'receipt.json')
+                    self.assertEqual(final['outcome'],'incomplete')
+                    self.assertNotIn('runtime_readiness',final)
                 else:
                     if detail == 'runtime_profile_mismatch':
                         stage.run_case(case, directory)
