@@ -118,24 +118,6 @@ jobs:
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
 
-      - name: Install one temporary read-only State refresh identity
-        env:
-          STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
-        run: |
-          set -euo pipefail
-          umask 077
-          state_key="$RUNNER_TEMP/historical-public-state-reader"
-          state_hosts="$RUNNER_TEMP/historical-public-state-known-hosts"
-          test -n "$STATE_READ_KEY"
-          printf '%s\n' "$STATE_READ_KEY" > "$state_key"
-          printf '%s\n' \
-            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
-            > "$state_hosts"
-          chmod 0600 "$state_key" "$state_hosts"
-          ssh_command="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$state_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
-          git -C state config core.sshCommand "$ssh_command"
-          unset STATE_READ_KEY
-
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.22.0
@@ -279,13 +261,6 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
-          if [ -d state ]; then
-            git -C state config --unset-all core.sshCommand || true
-          fi
-          for path in "$RUNNER_TEMP/historical-public-state-reader" \
-            "$RUNNER_TEMP/historical-public-state-known-hosts"; do
-            if [ -f "$path" ]; then shred --remove "$path"; fi
-          done
           rm -rf state "$RUNNER_TEMP/state-views"
           rm -f "$RUNNER_TEMP/historical-replay-plan.json" "$RUNNER_TEMP/recovery.json"
 
@@ -331,7 +306,27 @@ jobs:
           fi
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
-          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          head=${branch%$'\t'*}
+          test "$branch" = "$head"$'\ttrue'
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            comparison=$(timeout 30s gh api \
+              "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$head")
+            jq -e --arg base "$GITHUB_SHA" --arg head "$head" '
+                  .status == "ahead" and .base_commit.sha == $base and
+                  .merge_base_commit.sha == $base and
+                  (.commits | length) > 0 and .commits[-1].sha == $head and
+                  .ahead_by > 0 and
+                  .ahead_by == .total_commits and
+                  .ahead_by == (.commits | length) and
+                  (.files | length) > 0 and (.files | length) < 300 and
+                  all(.files[];
+                    ((.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                     (.status == "added" or .status == "modified") or
+                     (.filename | test("^verification/r2_[0-9a-f]{64}[.]json$")) and
+                     .status == "added") and
+                    (has("previous_filename") | not))
+                ' <<< "$comparison" >/dev/null
+          fi
           if [ "$REPLENISH_LANE" = true ]; then
             [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
             if [ "$GITHUB_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
@@ -388,12 +383,6 @@ jobs:
           git -C state config core.sshCommand "$ssh_command"
           unset STATE_READ_KEY
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.22.0
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.18'
@@ -401,7 +390,6 @@ jobs:
       - name: Install exact controller dependencies
         run: |
           set -euo pipefail
-          npm --prefix server ci
           python -m pip install --disable-pip-version-check --only-binary=:all: \
             --require-hashes -r requirements-jsonschema-workflow.txt
 
@@ -722,8 +710,8 @@ jobs:
               else
                 budget_status=$?
                 if [ "$budget_status" -ne 3 ]; then exit "$budget_status"; fi
-                # No start was published: a bounded successor may reuse this
-                # warmed image/reservation without consuming a task attempt.
+                # No start was published. A bounded successor prepares the
+                # image again outside execution time, without a task attempt.
                 cat "$RUNNER_TEMP/historical-budget.json"
                 metrics=$(jq -r '"elapsed=\(.setup_elapsed_seconds)s required=\(.required_seconds)s remaining=\(.remaining_seconds)s"' \
                   "$RUNNER_TEMP/historical-budget.json")

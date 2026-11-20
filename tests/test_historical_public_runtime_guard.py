@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -22,6 +23,22 @@ def guard_code() -> str:
     text = COMMAND.read_text()
     # A JavaScript template literal containing only escaped backslashes.
     return text.split("PUBLIC_RUNTIME_GUARD = `", 1)[1].split("`;", 1)[0].replace("\\\\", "\\")
+
+
+def composed_command() -> str:
+    expression = COMMAND.read_text().split("export const HISTORICAL_PUBLIC_COMMAND =", 1)[1].split(";", 1)[0]
+    token = re.compile(r'`([^`]*)`|"(?:[^"\\]|\\.)*"', re.S)
+    parts = []
+    consumed = 0
+    for match in token.finditer(expression):
+        if expression[consumed:match.start()].strip(" +\n\t"):
+            raise AssertionError("unknown command expression")
+        value = match.group(1).replace("${PUBLIC_RUNTIME_GUARD}", guard_code()) if match.group(1) is not None else json.loads(match.group(0))
+        parts.append(value)
+        consumed = match.end()
+    if expression[consumed:].strip(" +\n\t"):
+        raise AssertionError("unknown command expression suffix")
+    return "".join(parts)
 
 
 class HistoricalPublicRuntimeGuardTests(unittest.TestCase):
@@ -77,7 +94,6 @@ class HistoricalPublicRuntimeGuardTests(unittest.TestCase):
 
     def test_composed_multiline_shell_command_stops_before_decode_on_mismatch(self) -> None:
         import base64
-        import shlex
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             module = root / "replay-authoritative"
@@ -90,9 +106,16 @@ class HistoricalPublicRuntimeGuardTests(unittest.TestCase):
             runner.chmod(0o700)
             observed = subprocess.check_output([sys.executable, "-I", "-S", "-B", "-c", f'import runpy,json; m=runpy.run_path({str(module)!r}); print(json.dumps(m["platform_evidence"]()))'], text=True)
             architecture, kernel, cpu = json.loads(observed)
-            code = guard_code().replace("/workspace/historical-public-runtime-profile.json", str(profile)).replace("/opt/lean-eval/replay-authoritative", str(module))
-            command = (f"{shlex.quote(sys.executable)} -I -S -B -c {shlex.quote(code)} "
-                       f"&& base64 --decode {encoded} > {decoded} && rm {encoded} && {runner}")
+            command = composed_command()
+            for before, after in {
+                "/usr/bin/python3": sys.executable,
+                "/workspace/historical-public-runtime-profile.json": str(profile),
+                "/opt/lean-eval/replay-authoritative": str(module),
+                "/workspace/historical-public-source.tar.gz.b64": str(encoded),
+                "/workspace/historical-public-source.tar.gz": str(decoded),
+                "/opt/lean-eval/historical-public-runner": str(runner),
+            }.items():
+                command = command.replace(before, after)
             for mismatch in (False, True):
                 decoded.unlink(missing_ok=True)
                 encoded.write_text(base64.b64encode(b"trusted tiny fixture").decode())
@@ -106,6 +129,16 @@ class HistoricalPublicRuntimeGuardTests(unittest.TestCase):
                     self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "trusted-runner-reached\n", ""))
                     self.assertFalse(encoded.exists())
                     self.assertEqual(decoded.read_bytes(), b"trusted tiny fixture")
+            # A semicolon regression in the actual prefix must be observable:
+            # the guard fails, but decoding/runner would still execute.
+            decoded.unlink(missing_ok=True)
+            encoded.write_text(base64.b64encode(b"trusted tiny fixture").decode())
+            profile.write_text(json.dumps({"architecture": architecture, "kernel_release": "wrong", "cpu_model": cpu}))
+            mutated = command.replace("&& base64", "; base64", 1)
+            self.assertNotEqual(mutated, command)
+            result = subprocess.run(["bash", "-c", mutated], text=True, capture_output=True)
+            self.assertEqual(result.stdout, "trusted-runner-reached\n")
+            self.assertTrue(decoded.exists())
 
     def test_controller_binds_full_profile_and_rejects_tampered_runtime(self) -> None:
         f = Fixture()

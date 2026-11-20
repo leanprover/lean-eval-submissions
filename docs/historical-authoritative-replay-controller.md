@@ -216,8 +216,9 @@ stops the workflow without starting or failing a task.
 
 The following fresh six-hour `replay-one` job validates State again, handles the
 existing busy/stale-recovery paths, and rederives the task and qualified inputs.
-Before reservation it compares a source-free prepared execution hash and exact
-implementation SHA, then repeats the complete exact-health check. The prepared
+Before reservation it compares a source-free prepared execution hash and the
+job SHA for consistency, then repeats exact health to bind the actual deployed
+Worker commit. The SHA job output alone is not deployment evidence. The prepared
 hash binds the entire validated plan except whole-State event count/digest,
 which may change through unrelated private-lane appends. A changed task,
 attempt, authority, image, profile, measurement or code fails closed. There is
@@ -240,3 +241,10 @@ accounting remain unchanged. A retryable State reason is not permission to
 silently retry a deterministic profile mismatch; diagnose the observed runtime
 before a deliberate new attempt. No permanent-unavailability event is inferred
 from a single guard failure.
+
+As verified by the operator on 2026-11-20, replay-production currently enforces
+branch policy with no required reviewers or wait timer. Both jobs retain that
+protected environment; future protection changes must be respected. Execution
+accepts current main only at the dispatch SHA or a completely proven Results-only
+descendant using the existing closed comparison filter. Code changes, divergent
+history, truncation, renamed or deleted files still stop before State mutation.

@@ -60,6 +60,9 @@ class HistoricalPublicDeployPreparationTests(unittest.TestCase):
         self.assertNotIn("render-executor-config", EXECUTION)
         self.assertNotIn("wait_replay_container_rollout.py", EXECUTION)
         self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", EXECUTION)
+        self.assertNotIn("actions/setup-node", EXECUTION)
+        self.assertNotIn("npm --prefix server ci", EXECUTION)
+        self.assertNotIn("Install one temporary read-only State refresh identity", PREPARATION)
         self.assertIn("Validate State and identify only one stale running attempt", EXECUTION)
         self.assertIn("Publish one destruction-confirmed stale-runner recovery and stop", EXECUTION)
         self.assertIn("Report a still-running controller and stop", EXECUTION)
@@ -74,6 +77,41 @@ class HistoricalPublicDeployPreparationTests(unittest.TestCase):
         self.assertIn('test "$actual" = "$PREPARED_IDENTITY"', EXECUTION)
         self.assertIn("--phase before-start", EXECUTION)
         self.assertIn("--phase before-execute", EXECUTION)
+
+    def test_execution_guard_accepts_only_complete_results_descendants(self) -> None:
+        import json
+        import os
+        import textwrap
+        block = EXECUTION.split("      - name: Require exact protected main and the explicit controller gate\n", 1)[1].split("      - uses:", 1)[0]
+        body = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        base, head = "1" * 40, "2" * 40
+        valid = {"status": "ahead", "base_commit": {"sha": base}, "merge_base_commit": {"sha": base},
+                 "commits": [{"sha": head}], "ahead_by": 1, "total_commits": 1,
+                 "files": [{"filename": "results/alice.json", "status": "modified"},
+                           {"filename": "verification/r2_" + "a" * 64 + ".json", "status": "added"}]}
+        cases = [(base, {}, True), (head, valid, True)]
+        for patch in ({"status": "diverged"},
+                      {"files": [{"filename": "server/src/replay-app.ts", "status": "modified"}]},
+                      {"files": [{"filename": "results/alice.json", "status": "removed"}]},
+                      {"ahead_by": 2}, {"merge_base_commit": {"sha": "3" * 40}}):
+            cases.append((head, {**valid, **patch}, False))
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            gh = root / "gh"
+            gh.write_text('#!/bin/sh\ncase "$*" in *branches/main*) cat "$FAKE_BRANCH" ;; *compare/*) cat "$FAKE_COMPARE" ;; *) exit 23 ;; esac\n')
+            gh.chmod(0o700)
+            for branch, comparison, expected in cases:
+                (root / "branch").write_text(branch + "\ttrue\n")
+                (root / "comparison").write_text(json.dumps(comparison))
+                result = subprocess.run(["bash", "-c", body], cwd=ROOT, capture_output=True, text=True,
+                    env={**os.environ, "PATH": str(root) + ":" + os.environ["PATH"], "GITHUB_ENV": str(root / "env"),
+                         "FAKE_BRANCH": str(root / "branch"), "FAKE_COMPARE": str(root / "comparison"),
+                         "GITHUB_SHA": base, "GITHUB_REPOSITORY": "leanprover/lean-eval-submissions",
+                         "GITHUB_REF": "refs/heads/main", "GITHUB_REF_PROTECTED": "true",
+                         "HISTORICAL_CONTROLLER_ENABLED": "true", "CONSECUTIVE_DEFERRALS": "0",
+                         "DEFERRED_TASK_ID": "", "REPLENISH_LANE": "false", "REVIEWED_IMPLEMENTATION_COMMIT": base})
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+        self.assertIn('test "$branch" = "$GITHUB_SHA"', PREPARATION)
 
     def test_runtime_guard_failure_notice_is_source_free_and_stops_execution(self) -> None:
         import json
