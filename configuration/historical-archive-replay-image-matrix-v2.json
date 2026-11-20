@@ -1,0 +1,135 @@
+{
+  "archive_capacity_class": "legacy_10mib",
+  "benchmark_repository": "leanprover/lean-eval",
+  "checker": "nanoda",
+  "historical_public_component_lock_sha256": "68b5a58cba2769aa757d397e02b52170539da4f7184fe57fa4fb6e16d5980c77",
+  "historical_public_profile_matrix_sha256": "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c",
+  "image_count": 2,
+  "images": [
+    {
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "benchmark_tree": "0074a0fc513fe20f15094a389efbbb056df82817",
+      "lean_toolchain_blob_sha256": "302cd63c54178885b89e669f33b38f12f4dd7ae7e5cac537b3203e3768d8fb2b",
+      "manifest_layout": "per_problem_v1",
+      "problem_ids": [
+        "annals_conjecture_of_marton",
+        "banach_alaoglu_bourbaki",
+        "brauer_character_in_cyclotomic",
+        "bvp_comparison",
+        "cubic_decay_asymptotic",
+        "dirichlet_eigenvalues_eq_nat_sq",
+        "finite_graph_ramsey_theorem",
+        "koszul_formula",
+        "mulCayley_connected_iff_closure_eq_top",
+        "posSemidef_map_exp",
+        "sturm_separation",
+        "substInv_X_sub_X_sq_eq_catalan",
+        "symplectic_matrix_det"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "15f6055e299ad5b89345e533cc2192f4cc00f659",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.33.0"
+      },
+      "result_count": 3,
+      "source_pin_origin": "reviewed_original_public_profile",
+      "toolchain": "leanprover/lean4:v4.33.0",
+      "workspace_count": 297
+    },
+    {
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "benchmark_tree": "f4d3e1343df467a06f040fa16347c31ed37e8371",
+      "lean_toolchain_blob_sha256": "302cd63c54178885b89e669f33b38f12f4dd7ae7e5cac537b3203e3768d8fb2b",
+      "manifest_layout": "per_problem_v1",
+      "problem_ids": [
+        "banach_alaoglu_bourbaki",
+        "bauer_extreme_point_uniqueness",
+        "brauer_character_in_cyclotomic",
+        "brouwer_fixed_point",
+        "bvp_comparison",
+        "chudnovsky_formula_for_pi_inv",
+        "compact_group_semisimple",
+        "cubic_decay_asymptotic",
+        "dirichlet_eigenvalues_eq_nat_sq",
+        "finite_graph_ramsey_theorem",
+        "kirk_normal_structure",
+        "koszul_formula",
+        "lp_maximum_principle",
+        "mulCayley_connected_iff_closure_eq_top",
+        "pell_solution_convergent",
+        "pi1_circle_mulEquiv_int",
+        "posSemidef_map_exp",
+        "sard_theorem",
+        "sturm_separation",
+        "substInv_X_sub_X_sq_eq_catalan",
+        "symplectic_matrix_det"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "15f6055e299ad5b89345e533cc2192f4cc00f659",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.33.0"
+      },
+      "result_count": 2,
+      "source_pin_origin": "reviewed_original_public_profile",
+      "toolchain": "leanprover/lean4:v4.33.0",
+      "workspace_count": 247
+    }
+  ],
+  "kind": "historical_archive_replay_image_matrix",
+  "qualification_status": "unqualified",
+  "result_count": 5,
+  "schema_version": 2,
+  "toolchain_count": 1
+}

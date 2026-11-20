@@ -270,6 +270,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "aws-key-adapter-staging-smoke.yml",
                 "aws-production-wrap-preflight.yml",
                 "historical-final-delta-packet.yml",
+                "historical-private-image-qualification.yml",
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",

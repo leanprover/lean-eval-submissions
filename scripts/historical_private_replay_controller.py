@@ -36,6 +36,8 @@ from historical_replay_controller import (
     RESULT_ID,
     RECOVERY_AFTER,
     RESULTS_PATH,
+    REQUEST_ID,
+    REPOSITORY,
     TOOLCHAIN,
     UUID7,
     HistoricalReplayControllerError,
@@ -46,6 +48,7 @@ from historical_replay_controller import (
     _integer,
     _load_canonical,
     _load_state_canonical,
+    _load_validated_state_event,
     _match,
     _object,
     _parse_canonical,
@@ -55,12 +58,19 @@ from historical_replay_controller import (
     _reject_nonfinite_constant,
     _reject_nonfinite_float,
     _timestamp,
+    _validate_public_authority_identity,
+    _validate_schema,
     _write,
     canonical_bytes,
     current_historical_running,
     load_v1_problem_set,
     sha256_bytes,
     state_canonical_bytes,
+)
+from historical_archive_recovery import (
+    validate_recovery_manifest,
+    validate_archive_crosswalk,
+    expected_crosswalk_entry,
 )
 from key_capability_contract import validate_envelope
 from prepare_historical_private_replay import (
@@ -265,6 +275,76 @@ TASK_FIELDS = {
     "qualification_sha256", "qualification_event_id", "qualified_at", "checker",
     "measurement_config_digest", "execution_profile_digest", "status", "attempt",
     "event_id", "occurred_at",
+}
+RECOVERED_TASK_FIELDS = {
+    'replay_task_id',
+    'result_id',
+    'request_id',
+    'historical_accepted_at',
+    'owner_login',
+    'declared_model',
+    'problem_id',
+    'statement_revision',
+    'results_repository',
+    'results_commit',
+    'results_path',
+    'result_file_sha256',
+    'result_tree_digest',
+    'source_kind',
+    'source_repository',
+    'source_commit',
+    'source_visibility',
+    'benchmark_repository',
+    'benchmark_commit',
+    'toolchain',
+    'lean_toolchain_blob_sha256',
+    'workflow_run_identity_sha256',
+    'authority_repository',
+    'authority_commit',
+    'authority_path',
+    'authority_sha256',
+    'authority_event_id',
+    'authorized_at',
+    'qualification_repository',
+    'qualification_commit',
+    'qualification_path',
+    'qualification_sha256',
+    'qualification_event_id',
+    'qualified_at',
+    'checker',
+    'measurement_config_digest',
+    'execution_profile_digest',
+    'status',
+    'attempt',
+    'event_id',
+    'occurred_at',
+    'crosswalk_repository',
+    'crosswalk_commit',
+    'crosswalk_path',
+    'crosswalk_sha256',
+    'crosswalk_entry_sha256',
+    'archive_plan_entry_sha256',
+    'archive_submission_id',
+    'archive_schema_version',
+    'archive_repository',
+    'archive_commit',
+    'archive_path',
+    'archive_sidecar_path',
+    'archive_ciphertext_sha256',
+    'archive_sidecar_sha256',
+    'archive_key_envelope_sha256',
+    'archive_plaintext_tar_sha256',
+    'archive_plaintext_tar_size',
+    'archive_capacity_class',
+    'archive_ciphertext_size',
+    'archive_result_evidence',
+    'archive_benchmark_relation',
+    'source_recovery_version',
+    'source_recovery_event_id',
+    'fetch_method',
+    'superseded_execution_profile_digest',
+    'superseded_enqueue_event_id',
+    'reconfiguration_entry_sha256',
 }
 RECONFIGURATION_FIELDS = {
     "reconfiguration_event_id", "reconfigured_at", "superseded_qualification_event_id",
@@ -552,13 +632,55 @@ def _state_environment(state_root: pathlib.Path) -> str:
     return environment
 
 
+ARCHIVE_STATE_CONTRACT_COMMIT = "351b1c409290516bfa379fc857908908e1d08932"
+ARCHIVE_STATE_COMPONENT_TREES = {
+    "scripts": "1f0173a9cf24d00e139c0c346500a2deef5c2453",
+    "schema": "f7efe29098882c33bba25b5dbbeba34bd981205d",
+}
+
+
+def _prove_archive_state_history(state_root: pathlib.Path, history_root: pathlib.Path, history_commit: str) -> None:
+    for component, expected in ARCHIVE_STATE_COMPONENT_TREES.items():
+        if _git_text(history_root, "rev-parse", history_commit + ":" + component) != expected:
+            raise HistoricalPrivateReplayControllerError("archive State program is not the reviewed v2 contract")
+    probe = """
+import pathlib,sys
+source=pathlib.Path(sys.argv[1]);sys.path.insert(0,str(source/'scripts'))
+from validate_state import load_tree,validate_source_recovery_closures,validate_source_recovery_commit_bindings
+_,events=load_tree(source)
+closures=validate_source_recovery_closures(events)
+validate_source_recovery_commit_bindings(pathlib.Path(sys.argv[2]),closures,True,sys.argv[3])
+"""
+    try:
+        subprocess.run(
+            [sys.executable, "-c", probe, str(state_root), str(history_root), history_commit],
+            check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HistoricalPrivateReplayControllerError("archive recovery State history proof failed") from error
+
+
 def _materialize_state_queue(
-    state_root: pathlib.Path, environment: str
+    state_root: pathlib.Path, environment: str, *,
+    history_root: pathlib.Path | None = None, history_commit: str | None = None,
 ) -> tuple[dict[str, Any], bytes]:
     if _state_environment(state_root) != environment:
         raise HistoricalPrivateReplayControllerError(
             "historical State environment changed across exact history"
         )
+    events = [_load_validated_state_event(path, "historical State event")[0] for path in sorted((state_root / "events").glob("*/*.json"))]
+    v2 = any(
+        "source_recovery_version" in event.get("payload", {})
+        or "archive_authority_version" in event.get("payload", {})
+        or event.get("payload", {}).get("reason_code") == "archive_permanently_unrecoverable"
+        for event in events
+    )
+    if v2:
+        proof_root = state_root if history_root is None else history_root
+        proof_commit = _git_text(proof_root, "rev-parse", "HEAD") if history_commit is None else history_commit
+        _match(COMMIT, proof_commit, "archive State history commit")
+        _prove_archive_state_history(state_root, proof_root, proof_commit)
     state_script = state_root / "scripts/state.py"
     if state_script.is_symlink() or not state_script.is_file():
         raise HistoricalPrivateReplayControllerError("protected State program is unavailable")
@@ -683,7 +805,9 @@ def load_state_queue_at_commit(
         exported = pathlib.Path(directory) / "state"
         exported.mkdir()
         _export_exact_commit(state_root, exact_commit, exported)
-        queue, raw = _materialize_state_queue(exported, environment)
+        queue, raw = _materialize_state_queue(
+            exported, environment, history_root=state_root, history_commit=exact_commit
+        )
     return queue, raw, current_head
 
 
@@ -732,10 +856,15 @@ def _model(value: Any, label: str) -> str:
 def _validate_task(value: Any, index: int) -> dict[str, Any]:
     label = f"historical private queue tasks[{index}]"
     task = _object(value, label)
-    expected = set(TASK_FIELDS)
+    if "archive_authority_version" in task:
+        raise HistoricalPrivateReplayControllerError("standalone archive authority v2 is not supported by this runtime")
+    recovered = "source_recovery_version" in task
+    if recovered and (type(task["source_recovery_version"]) is not int or task["source_recovery_version"] != 2):
+        raise HistoricalPrivateReplayControllerError("unsupported archived source recovery version")
+    expected = set(RECOVERED_TASK_FIELDS if recovered else TASK_FIELDS)
     if task.get("status") == "failed":
         expected |= {"reason_code", "retryable"}
-    if "reconfiguration_event_id" in task:
+    if recovered or "reconfiguration_event_id" in task:
         expected |= RECONFIGURATION_FIELDS
     _fields(task, expected, label)
 
@@ -771,7 +900,7 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
         "qualification_repository": "leanprover/lean-eval-submissions",
         "archive_repository": "leanprover/lean-eval-audit",
         "benchmark_repository": "leanprover/lean-eval",
-        "source_visibility": "private",
+        "source_visibility": "public" if recovered else "private",
         "archive_schema_version": 3,
         "checker": "nanoda",
     }
@@ -790,25 +919,49 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
         "archive_ciphertext_sha256", "archive_sidecar_sha256",
         "archive_key_envelope_sha256", "archive_plaintext_tar_sha256",
         "lean_toolchain_blob_sha256", "workflow_run_identity_sha256",
-        "authority_sha256", "authority_entry_sha256", "qualification_sha256",
+        "authority_sha256", "qualification_sha256",
         "measurement_config_digest", "execution_profile_digest",
-    ):
+    ) + (() if recovered else ("authority_entry_sha256",)):
         _match(DIGEST, task[field], f"{label}.{field}")
     _match(TOOLCHAIN, task["toolchain"], f"{label}.toolchain")
     results_path = _match(RESULTS_PATH, task["results_path"], f"{label}.results_path")
     if results_path != f"results/{owner}.json":
         raise HistoricalPrivateReplayControllerError(f"{label}.results_path differs from owner")
     if task["crosswalk_path"] != (
-        "evidence/historical-replay/private-crosswalks/"
-        f"{task['crosswalk_sha256']}.json"
+        ("evidence/historical-replay/archive-crosswalks/" if recovered else "evidence/historical-replay/private-crosswalks/")
+        + f"{task['crosswalk_sha256']}.json"
     ):
         raise HistoricalPrivateReplayControllerError(f"{label}.crosswalk_path differs from digest")
-    authority_path = _match(AUTHORITY_PATH, task["authority_path"], f"{label}.authority_path")
-    if authority_path != f"evidence/private-replay/plans/{task['authority_sha256']}.json":
+    authority_prefix = "evidence/public-replay/plans/" if recovered else "evidence/private-replay/plans/"
+    if task["authority_path"] != authority_prefix + task["authority_sha256"] + ".json":
         raise HistoricalPrivateReplayControllerError(f"{label}.authority_path differs from digest")
-    profile_path = _match(PROFILE_PATH, task["qualification_path"], f"{label}.qualification_path")
-    if profile_path != f"evidence/private-replay/profiles/{task['execution_profile_digest']}.json":
+    profile_prefix = "evidence/archive-replay/profiles/" if recovered else "evidence/private-replay/profiles/"
+    if task["qualification_path"] != profile_prefix + task["execution_profile_digest"] + ".json":
         raise HistoricalPrivateReplayControllerError(f"{label}.qualification_path differs from profile")
+    if recovered:
+        _match(REQUEST_ID, task["request_id"], f"{label}.request_id")
+        _match(REPOSITORY, task["source_repository"], f"{label}.source_repository")
+        _match(COMMIT, task["source_commit"], f"{label}.source_commit")
+        for field in ("source_recovery_event_id", "superseded_enqueue_event_id"):
+            _match(UUID7, task[field], f"{label}.{field}")
+        for field in ("superseded_execution_profile_digest", "reconfiguration_entry_sha256"):
+            _match(DIGEST, task[field], f"{label}.{field}")
+        if (
+            not isinstance(task["source_kind"], str) or task["source_kind"] not in {"github_repo", "gist"}
+            or task["fetch_method"] != "archive"
+            or task["archive_capacity_class"] != "legacy_10mib"
+            or not isinstance(task["archive_result_evidence"], str) or task["archive_result_evidence"] not in {"confirmed_pass", "legacy_unrecorded"}
+            or not isinstance(task["archive_benchmark_relation"], str) or task["archive_benchmark_relation"] not in {"same", "archive_recorded_different"}
+            or (task["archive_benchmark_relation"] == "archive_recorded_different" and task["archive_result_evidence"] != "confirmed_pass")
+            or task["source_recovery_event_id"] != task["reconfiguration_event_id"]
+            or task["superseded_execution_profile_digest"] == task["execution_profile_digest"]
+            or task["superseded_qualification_event_id"] == task["qualification_event_id"]
+        ):
+            raise HistoricalPrivateReplayControllerError(f"{label} archive source/class/evidence binding is unsupported")
+        cipher = _integer(task["archive_ciphertext_size"], f"{label}.archive_ciphertext_size", 1)
+        plaintext = _integer(task["archive_plaintext_tar_size"], f"{label}.archive_plaintext_tar_size", 1)
+        if cipher > MAX_ARCHIVE_BYTES or not plaintext < cipher:
+            raise HistoricalPrivateReplayControllerError(f"{label} archive capacity claims differ")
     archive_path = canonical_archive_path(submission)
     if (
         task["archive_path"] != archive_path
@@ -838,9 +991,10 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
         if task["reconfiguration_repository"] != "leanprover/lean-eval-submissions":
             raise HistoricalPrivateReplayControllerError(f"{label}.reconfiguration repository is invalid")
         _match(COMMIT, task["reconfiguration_commit"], f"{label}.reconfiguration_commit")
-        path = _match(RECONFIGURATION_PATH, task["reconfiguration_path"], f"{label}.reconfiguration_path")
+        path = task["reconfiguration_path"]
         digest = _match(DIGEST, task["reconfiguration_sha256"], f"{label}.reconfiguration_sha256")
-        if path != f"evidence/private-replay/reconfigurations/{digest}.json":
+        prefix = "evidence/historical-replay/source-recoveries/" if recovered else "evidence/private-replay/reconfigurations/"
+        if path != prefix + digest + ".json":
             raise HistoricalPrivateReplayControllerError(f"{label}.reconfiguration path differs")
     return task
 
@@ -852,13 +1006,15 @@ def validate_queue(value: Any) -> dict[str, Any]:
         {"schema_version", "environment", "source_event_count", "source_digest", "tasks"},
         "historical private replay queue",
     )
-    if queue["schema_version"] != 1 or queue["environment"] not in {"staging", "production"}:
+    if type(queue["schema_version"]) is not int or queue["schema_version"] not in {1, 2} or queue["environment"] not in {"staging", "production"}:
         raise HistoricalPrivateReplayControllerError("historical private queue identity is invalid")
     _integer(queue["source_event_count"], "historical private source_event_count", 1)
     _match(DIGEST, queue["source_digest"], "historical private source_digest")
     if not isinstance(queue["tasks"], list):
         raise HistoricalPrivateReplayControllerError("historical private queue tasks must be an array")
     tasks = [_validate_task(task, index) for index, task in enumerate(queue["tasks"])]
+    if queue["schema_version"] == 1 and any("source_recovery_version" in task for task in tasks):
+        raise HistoricalPrivateReplayControllerError("version-1 archive queue cannot contain recovered v2 tasks")
     identities = [task["replay_task_id"] for task in tasks]
     if identities != sorted(identities) or len(identities) != len(set(identities)):
         raise HistoricalPrivateReplayControllerError("historical private queue tasks are not unique and sorted")
@@ -868,6 +1024,8 @@ def validate_queue(value: Any) -> dict[str, Any]:
 def _validate_profile(value: Any, task: dict[str, Any]) -> dict[str, Any]:
     profile = _object(value, "private replay profile")
     _fields(profile, PROFILE_FIELDS, "private replay profile")
+    recovered = "source_recovery_version" in task
+    version = 2 if recovered else 1
     try:
         validate_execution_profile(profile["execution_profile"])
         validate_measurement_config(profile["measurement_config"])
@@ -881,11 +1039,14 @@ def _validate_profile(value: Any, task: dict[str, Any]) -> dict[str, Any]:
     expected_measurement = config_digest(
         "lean-eval-replay-measurement-config-v1", profile["measurement_config"]
     )
+    if recovered:
+        _validate_schema(profile, "historical-archive-profile-qualification-v2.schema.json", "archive qualification")
     if (
-        profile["schema_version"] != 1
-        or profile["kind"] != "historical_private_replay_profile_qualification"
+        type(profile["schema_version"]) is not int or profile["schema_version"] != version
+        or profile["kind"] != ("historical_archive_replay_profile_qualification" if recovered else "historical_private_replay_profile_qualification")
         or profile["qualification_status"] != "qualified"
-        or profile["image_family"] != "lean-eval-authoritative-private-replay-v1"
+        or profile["image_family"] != ("lean-eval-authoritative-archive-replay-v2" if recovered else "lean-eval-authoritative-private-replay-v1")
+        or profile["execution_profile"]["schema_version"] != version
         or profile["registry_repository"] != "lean-eval-authoritative"
         or profile["image_source_repository"] != "leanprover/lean-eval-submissions"
         or profile["registry_manifest_digest"]
@@ -907,7 +1068,14 @@ def _validate_profile(value: Any, task: dict[str, Any]) -> dict[str, Any]:
     _match(COMMIT, profile["image_source_commit"], "private replay image source commit")
     blobs = _object(profile["source_blobs"], "private replay source blobs")
     _fields(blobs, set(SOURCE_BLOB_PATHS), "private replay source blobs")
-    for name, expected_path in SOURCE_BLOB_PATHS.items():
+    source_paths = dict(SOURCE_BLOB_PATHS)
+    if recovered:
+        source_paths.update(
+            dockerfile="Dockerfile.historical-archive-replay-v2",
+            dockerignore="Dockerfile.historical-archive-replay-v2.dockerignore",
+            profile_matrix="configuration/historical-archive-replay-image-matrix-v2.json",
+        )
+    for name, expected_path in source_paths.items():
         blob = _object(blobs[name], f"private replay source_blobs.{name}")
         _fields(blob, {"path", "sha256"}, f"private replay source_blobs.{name}")
         if blob["path"] != expected_path:
@@ -922,7 +1090,7 @@ def _validate_profile(value: Any, task: dict[str, Any]) -> dict[str, Any]:
         or qualification["workflow_path"] != QUALIFICATION_WORKFLOW_PATH
         or qualification["offline_image_inspection"]
         != {
-            "archive_expectation_schema_version": 2,
+            "archive_expectation_schema_version": 3 if recovered else 2,
             "key_material_type": "age-file-key-v1",
             "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
             "official_entrypoint": "passed",
@@ -965,7 +1133,9 @@ def _verify_profile_provenance(
     *,
     profile_commit: str | None = None,
     upper_bound_commit: str | None = None,
+    runtime_reference_commit: str | None = None,
 ) -> None:
+    runtime_reference_commit = task["authority_commit"] if runtime_reference_commit is None else runtime_reference_commit
     image_commit = profile["image_source_commit"]
     workflow_commit = profile["qualification"]["workflow_commit"]
     profile_commit = (
@@ -995,7 +1165,7 @@ def _verify_profile_provenance(
         public_paths = subprocess.run(
             [
                 "git", "-C", str(repository_root), "ls-tree", "-r", "--name-only",
-                task["authority_commit"], "--", "evidence/public-replay/profiles",
+                runtime_reference_commit, "--", "evidence/public-replay/profiles",
             ],
             check=True,
             capture_output=True,
@@ -1019,7 +1189,7 @@ def _verify_profile_provenance(
     private_execution = _object(profile["execution_profile"], "private execution profile")
     for path in public_paths:
         public = _parse_canonical(
-            _git_blob(repository_root, task["authority_commit"], path),
+            _git_blob(repository_root, runtime_reference_commit, path),
             "committed public replay profile",
         )
         if public.get("registry_manifest_digest") == manifest:
@@ -1460,6 +1630,30 @@ def _validate_authority(value: Any, task: dict[str, Any], profile: dict[str, Any
     return authority
 
 
+def _load_recovered_reviewed_inputs(repository_root: pathlib.Path, task: dict[str, Any]):
+    for field in ("authority_commit", "qualification_commit", "reconfiguration_commit", "crosswalk_commit"):
+        _verify_ancestor_of_upstream(repository_root, task[field], field)
+    for field in ("authority_commit", "qualification_commit", "crosswalk_commit"):
+        _verify_ancestor(repository_root, task[field], task["reconfiguration_commit"])
+    authority_raw = _git_blob(repository_root, task["authority_commit"], task["authority_path"])
+    authority = _parse_canonical(authority_raw, "original public authority")
+    _validate_public_authority_identity(task, authority, authority_raw)
+    recovery_raw = _git_blob(repository_root, task["reconfiguration_commit"], task["reconfiguration_path"])
+    validate_recovery_manifest(_parse_canonical(recovery_raw, "archive recovery manifest"), recovery_raw, task)
+    profile_raw = _git_blob(repository_root, task["qualification_commit"], task["qualification_path"])
+    if sha256_bytes(profile_raw) != task["qualification_sha256"]:
+        raise HistoricalPrivateReplayControllerError("archive qualification bytes differ")
+    profile = _validate_profile(_parse_canonical(profile_raw, "archive qualification"), task)
+    for commit in (profile["image_source_commit"], profile["qualification"]["workflow_commit"]):
+        _verify_ancestor_of_upstream(repository_root, commit, "archive image/qualification source")
+    _verify_profile_provenance(
+        repository_root, task, profile,
+        upper_bound_commit=task["reconfiguration_commit"],
+        runtime_reference_commit=task["reconfiguration_commit"],
+    )
+    return authority, authority_raw, profile, profile_raw, task, profile
+
+
 def _load_reviewed_input_context(
     repository_root: pathlib.Path, task_value: Any
 ) -> tuple[
@@ -1467,6 +1661,8 @@ def _load_reviewed_input_context(
 ]:
     task = _validate_task(task_value, 0)
     _verify_checkout(repository_root, "leanprover/lean-eval-submissions")
+    if "source_recovery_version" in task:
+        return _load_recovered_reviewed_inputs(repository_root, task)
     for field in ("authority_commit", "qualification_commit"):
         _verify_ancestor_of_upstream(repository_root, task[field], field)
     authority_raw = _git_blob(repository_root, task["authority_commit"], task["authority_path"])
@@ -1577,6 +1773,156 @@ def load_reviewed_inputs(
     return authority, authority_raw, profile, profile_raw
 
 
+def _bounded_archive_blob(audit_root: pathlib.Path, commit: str, path: str, maximum: int) -> bytes:
+    size_text = _git_text(audit_root, "cat-file", "-s", commit + ":" + path)
+    if not size_text.isascii() or not size_text.isdigit() or not 0 < int(size_text) <= maximum:
+        raise HistoricalPrivateReplayControllerError("archive evidence Git blob exceeds its fixed limit")
+    raw = _git_blob(audit_root, commit, path)
+    if len(raw) != int(size_text):
+        raise HistoricalPrivateReplayControllerError("archive evidence Git blob size changed")
+    return raw
+
+
+def _results_store_digest_at_commit(repository_root: pathlib.Path, commit: str) -> str:
+    from results_schema import canonical_store_digest, validate_v2, canonical_file_bytes
+    names = _git_text(repository_root, "ls-tree", "-r", "--name-only", commit, "--", "results/").splitlines()
+    documents = []
+    for name in names:
+        if name == "results/.gitkeep":
+            continue
+        _match(RESULTS_PATH, name, "archive recovery Results store path")
+        raw = _bounded_archive_blob(repository_root, commit, name, 8 * 1024 * 1024)
+        try:
+            document = validate_v2(_parse_json_object(raw, "archive recovery Results document"))
+        except ResultsSchemaError as error:
+            raise HistoricalPrivateReplayControllerError("archive recovery Results store is invalid") from error
+        if canonical_file_bytes(document) != raw:
+            raise HistoricalPrivateReplayControllerError("archive recovery Results store is not canonical")
+        documents.append((name, document))
+    if not documents:
+        raise HistoricalPrivateReplayControllerError("archive recovery Results store is empty")
+    return canonical_store_digest(documents)
+
+
+def _load_recovered_crosswalk_entry(repository_root: pathlib.Path, audit_root: pathlib.Path, task: dict[str, Any]):
+    import migrate_archive_envelopes as migration
+    from classify_historical_private_archives import (
+        CrosswalkError, _validate_sidecar_metadata, _result_key, _archive_key,
+        classify_archive_for_visibility,
+    )
+    from results_schema import validate_v2, canonical_file_bytes
+    from build_result_receipt import result_tree_digest
+    from historical_archive_recovery import MIGRATION_PREFIX
+
+    _verify_ancestor(repository_root, task["crosswalk_commit"], task["reconfiguration_commit"])
+    raw = _git_blob(repository_root, task["crosswalk_commit"], task["crosswalk_path"])
+    crosswalk = _parse_canonical(raw, "archive source crosswalk")
+    entry = validate_archive_crosswalk(crosswalk, raw, task)
+    if _results_store_digest_at_commit(repository_root, task["results_commit"]) != crosswalk["results_store_sha256"]:
+        raise HistoricalPrivateReplayControllerError("archive crosswalk Results store digest differs")
+    locator = crosswalk["migration_plan"]
+    if locator["path"] != MIGRATION_PREFIX + locator["sha256"] + ".json":
+        raise HistoricalPrivateReplayControllerError("migration producer plan path differs")
+    _verify_ancestor_of_upstream(repository_root, locator["commit"], "migration producer plan")
+    _verify_ancestor(repository_root, locator["commit"], task["crosswalk_commit"])
+    plan_raw = _git_blob(repository_root, locator["commit"], locator["path"])
+    if sha256_bytes(plan_raw) != locator["sha256"]:
+        raise HistoricalPrivateReplayControllerError("migration producer plan bytes differ")
+    with tempfile.TemporaryDirectory() as directory:
+        path = pathlib.Path(directory) / "plan.json"
+        _write_bytes(path, plan_raw)
+        try:
+            plan = migration._load_plan(path)
+        except (migration.MigrationError, ValueError, TypeError, KeyError) as error:
+            raise HistoricalPrivateReplayControllerError("migration producer plan is invalid") from error
+    if (
+        plan["retained_count"] != 0
+        or {item["submission_id"] for item in plan["entries"]} != {item["submission_id"] for item in crosswalk["entries"]}
+        or plan["migration_count"] != crosswalk["archive_count"]
+    ):
+        raise HistoricalPrivateReplayControllerError("archive crosswalk does not conserve the exact migration selection")
+    selected = [item for item in plan["entries"] if item["submission_id"] == task["archive_submission_id"]]
+    if len(selected) != 1 or plan["inventory_digest"] != locator["inventory_digest"]:
+        raise HistoricalPrivateReplayControllerError("migration producer plan selection differs")
+    planned = selected[0]
+    plan_entry_sha = sha256_bytes(migration.PLAN_ENTRY_DIGEST_DOMAIN + migration._canonical_bytes(planned))
+    if plan_entry_sha != task["archive_plan_entry_sha256"] or planned["source_schema_version"] != entry["archive_schema_version"]:
+        raise HistoricalPrivateReplayControllerError("migration producer entry differs")
+    _verify_checkout(audit_root, "leanprover/lean-eval-audit")
+    _verify_ancestor_of_upstream(audit_root, plan["source_commit"], "migration source Audit")
+    _verify_ancestor(audit_root, plan["source_commit"], task["archive_commit"])
+    original_raw = _bounded_archive_blob(audit_root, plan["source_commit"], planned["source_path"].removesuffix(".tar.age") + ".json", MAX_PROVIDER_JSON_BYTES)
+    original_cipher = _bounded_archive_blob(audit_root, plan["source_commit"], planned["source_path"], MAX_ARCHIVE_BYTES)
+    if sha256_bytes(original_raw) != planned["source_sidecar_sha256"] or sha256_bytes(original_cipher) != planned["source_ciphertext_sha256"]:
+        raise HistoricalPrivateReplayControllerError("migration original Audit bytes differ")
+    original = _parse_json_object(original_raw, "migration original sidecar")
+    if planned["source_schema_version"] == 1 and migration.historical_submission_id(
+        planned["source_path"], planned["source_ciphertext_sha256"], original.get("archived_at")
+    ) != task["archive_submission_id"]:
+        raise HistoricalPrivateReplayControllerError("legacy archive UUID differs from original producer identity")
+    target_raw = _bounded_archive_blob(audit_root, task["archive_commit"], task["archive_sidecar_path"], MAX_PROVIDER_JSON_BYTES)
+    target_cipher = _bounded_archive_blob(audit_root, task["archive_commit"], task["archive_path"], MAX_ARCHIVE_BYTES)
+    target = _parse_json_object(target_raw, "migrated sidecar")
+    if (
+        original_cipher != target_cipher
+        or target.get("schema_version") != 3
+        or target.get("submission_id") != task["archive_submission_id"]
+        or sha256_bytes(target_raw) != task["archive_sidecar_sha256"]
+        or sha256_bytes(target_cipher) != task["archive_ciphertext_sha256"]
+        or len(target_cipher) != task["archive_ciphertext_size"]
+        or any(target.get(field) != original.get(field) for field in migration.PRESERVED_FIELDS)
+    ):
+        raise HistoricalPrivateReplayControllerError("migrated archive does not preserve exact original evidence")
+    results_raw = _git_blob(repository_root, task["results_commit"], task["results_path"])
+    try:
+        results = validate_v2(_parse_json_object(results_raw, "original canonical Results"), context="archive source recovery")
+    except ResultsSchemaError as error:
+        raise HistoricalPrivateReplayControllerError("original canonical Results are invalid") from error
+    if (
+        canonical_file_bytes(results) != results_raw
+        or sha256_bytes(results_raw) != task["result_file_sha256"]
+        or result_tree_digest(task["results_path"], results_raw) != task["result_tree_digest"]
+        or results["user"].lower() != task["owner_login"]
+    ):
+        raise HistoricalPrivateReplayControllerError("canonical Results bytes or owner differ")
+    matches = [record for record in results["results"] if record["result_id"] == task["result_id"]]
+    if len(matches) != 1 or matches[0]["intake"]["kind"] != "issue" or matches[0]["submission"]["public"] is not True:
+        raise HistoricalPrivateReplayControllerError("archive recovery requires the exact original public Issue Result")
+    record = matches[0]
+    if (
+        record["submission"]["kind"] != task["source_kind"]
+        or record["submission"]["repo"].casefold() != task["source_repository"].casefold()
+        or record["submission"]["ref"] != task["source_commit"]
+    ):
+        raise HistoricalPrivateReplayControllerError("canonical Result source differs from original public authority")
+    if any(record[field] != task[task_field] for field, task_field in (
+        ("declared_model", "declared_model"), ("problem_id", "problem_id"),
+        ("statement_revision", "statement_revision"), ("accepted_at", "historical_accepted_at"),
+        ("benchmark_commit", "benchmark_commit"),
+    )):
+        raise HistoricalPrivateReplayControllerError("canonical Result metadata differ")
+    try:
+        archive = _validate_sidecar_metadata(original, planned, ciphertext_size=len(original_cipher))
+        _validate_sidecar_metadata(target, planned, ciphertext_size=len(target_cipher))
+        if _result_key(results["user"], record) != _archive_key(archive):
+            raise HistoricalPrivateReplayControllerError("original archive/source/Issue identity differs")
+        relation = classify_archive_for_visibility(results["user"], record, [archive], source_public=True)
+    except CrosswalkError as error:
+        raise HistoricalPrivateReplayControllerError("archive source evidence is invalid") from error
+    if (
+        relation.get("classification") != "bound"
+        or any(relation.get(key) != entry.get(key) for key in relation)
+        or planned["plaintext_sha256"] != task["archive_plaintext_tar_sha256"]
+        or planned["plaintext_size_bytes"] != task["archive_plaintext_tar_size"]
+        or target.get("size_bytes_plaintext_tar") != task["archive_plaintext_tar_size"]
+        or target.get("sha256_plaintext_tar") != task["archive_plaintext_tar_sha256"]
+        or sha256_bytes(canonical_compact(validate_envelope(target.get("key_envelope")))) != task["archive_key_envelope_sha256"]
+        or validate_envelope(target.get("key_envelope"))["schema_version"] != 2
+    ):
+        raise HistoricalPrivateReplayControllerError("original/migrated archive relation or envelope differs")
+    return entry
+
+
 def load_reviewed_crosswalk_entry(
     repository_root: pathlib.Path,
     audit_root: pathlib.Path,
@@ -1589,6 +1935,8 @@ def load_reviewed_crosswalk_entry(
     _verify_ancestor_of_upstream(
         repository_root, task["crosswalk_commit"], "crosswalk_commit"
     )
+    if "source_recovery_version" in task:
+        return _load_recovered_crosswalk_entry(repository_root, audit_root, task)
     _verify_ancestor(
         repository_root, task["crosswalk_commit"], task["authority_commit"]
     )
@@ -1710,6 +2058,14 @@ def load_archive_inputs(
         "sha256_plaintext_tar": task["archive_plaintext_tar_sha256"],
         "size_bytes_plaintext_tar": task["archive_plaintext_tar_size"],
     }
+    if "source_recovery_version" in task and (
+        sidecar.get("submission_public") is not True
+        or len(ciphertext) != task["archive_ciphertext_size"]
+        or crosswalk_entry_value is None
+        or crosswalk_entry_value.get("archive_result_evidence") != task["archive_result_evidence"]
+        or crosswalk_entry_value.get("benchmark_relation") != task["archive_benchmark_relation"]
+    ):
+        raise HistoricalPrivateReplayControllerError("recovered public archive flags or exact evidence claims differ")
     if (
         any(sidecar.get(field) != value for field, value in expected.items())
         or sidecar.get("size_bytes_ciphertext") != len(ciphertext)
@@ -1738,12 +2094,14 @@ def load_archive_inputs(
 
 
 def _execution_plan(task: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    recovered = "source_recovery_version" in task
     request = {
-        "schema_version": 1,
+        "schema_version": 2 if recovered else 1,
         "replay_task_id": task["replay_task_id"],
         "attempt": task["attempt"] + 1,
         "source": {
-            "visibility": "private",
+            "visibility": task["source_visibility"],
+            **({"fetch_method": "archive"} if recovered else {}),
             "archive": {
                 "schema_version": 1,
                 "submission_id": task["archive_submission_id"],
@@ -1872,6 +2230,9 @@ def _plan_next(
     problem_members: frozenset[tuple[str, int]] | None = None,
     lane_index: int = 0,
     lane_count: int = 1,
+    *,
+    recovery_manifest_value: Any | None = None,
+    recovery_manifest_raw: bytes | None = None,
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
     lane_index, lane_count = _validate_lane(lane_index, lane_count)
@@ -1915,7 +2276,14 @@ def _plan_next(
     ):
         raise HistoricalPrivateReplayControllerError("reviewed private inputs differ from queue")
     profile = _validate_profile(profile_value, task)
-    if "reconfiguration_event_id" in task:
+    if "source_recovery_version" in task:
+        _validate_public_authority_identity(task, authority_value, authority_raw)
+        if recovery_manifest_raw is None or recovery_manifest_value is None:
+            raise HistoricalPrivateReplayControllerError(
+                "recovered task requires its exact reviewed recovery manifest"
+            )
+        validate_recovery_manifest(recovery_manifest_value, recovery_manifest_raw, task)
+    elif "reconfiguration_event_id" in task:
         if authority_profile_value is None:
             raise HistoricalPrivateReplayControllerError(
                 "reconfigured task lacks its reviewed superseded profile"
@@ -1995,6 +2363,13 @@ def plan_from_checkouts(
         problem_members,
         lane_index,
         lane_count,
+        **({
+            "recovery_manifest_raw": _git_blob(repository_root, task["reconfiguration_commit"], task["reconfiguration_path"]),
+            "recovery_manifest_value": _parse_canonical(
+                _git_blob(repository_root, task["reconfiguration_commit"], task["reconfiguration_path"]),
+                "archive recovery manifest",
+            ),
+        } if "source_recovery_version" in task else {}),
     )
 
 
@@ -2866,6 +3241,7 @@ def render_executor_config(
                 "measurement_config_digest"
             ],
             "REVIEWED_VM_IMAGE_DIGEST": manifest,
+            **({"REVIEWED_ARCHIVE_CAPACITY_CLASS": "legacy_10mib"} if "source_recovery_version" in task else {}),
             "EXPECTED_REPLAY_TASK_ID": task["replay_task_id"],
             "EXPECTED_REPLAY_ATTEMPT": str(attempt),
             "EXECUTOR_OWNERSHIP_TAG": ownership_tag,

@@ -836,47 +836,17 @@ def _find_plan_selection(
     return request, results[0]
 
 
-def _validate_cross_bindings(
-    task: dict[str, Any],
-    authority_plan: dict[str, Any],
-    authority_raw: bytes,
-    qualification: dict[str, Any],
-    qualification_raw: bytes,
-    matrix: dict[str, Any],
-    matrix_raw: bytes,
-    contract: dict[str, Any],
-    contract_raw: bytes,
+def _validate_public_authority_identity(
+    task: dict[str, Any], authority_plan: dict[str, Any], authority_raw: bytes
 ) -> None:
-    if (
-        canonical_bytes(authority_plan) != authority_raw
-        or canonical_bytes(matrix) != matrix_raw
-        or canonical_bytes(contract) != contract_raw
-    ):
+    """Prove original public provenance independently of its execution method."""
+    if canonical_bytes(authority_plan) != authority_raw:
         raise HistoricalReplayControllerError("reviewed controller input bytes differ")
-    _validate_schema(authority_plan, "historical-public-replay-plan-v1.schema.json", "authority plan")
-    _validate_schema(matrix, "historical-public-replay-profile-matrix-v1.schema.json", "profile matrix")
-    validate_contract(contract)
-    _validate_selected_matrix_entry(task, qualification, matrix)
-    authority_sha = sha256_bytes(authority_raw)
-    qualification_sha = sha256_bytes(qualification_raw)
-    matrix_sha = sha256_bytes(matrix_raw)
-    contract_sha = sha256_bytes(contract_raw)
-    if (
-        task["authority_sha256"] != authority_sha
-        or task["authority_commit"] != qualification["plan_commit"]
-        or task["authority_path"] != qualification["plan_path"]
-        or qualification["plan_sha256"] != authority_sha
-        or qualification["profile_matrix_sha256"] != matrix_sha
-        or qualification["runner_contract_sha256"] != contract_sha
-        or task["qualification_sha256"] != qualification_sha
-        or task["qualification_path"]
-        != f"evidence/public-replay/profiles/{qualification['execution_profile_digest']}.json"
-        or task["benchmark_commit"] != qualification["benchmark_commit"]
-        or task["toolchain"] != qualification["execution_profile"]["toolchain"]
-        or task["execution_profile_digest"] != qualification["execution_profile_digest"]
-        or task["measurement_config_digest"] != qualification["measurement_config_digest"]
-    ):
-        raise HistoricalReplayControllerError("queue, authority, and qualification bindings differ")
+    _validate_schema(
+        authority_plan, "historical-public-replay-plan-v1.schema.json", "authority plan"
+    )
+    if task["authority_sha256"] != sha256_bytes(authority_raw):
+        raise HistoricalReplayControllerError("queue and original public authority bytes differ")
     request, result = _find_plan_selection(authority_plan, task)
     source = request["source"]
     benchmark = request["benchmark"]
@@ -906,6 +876,49 @@ def _validate_cross_bindings(
     for field, expected_value in expected.items():
         if task[field] != expected_value:
             raise HistoricalReplayControllerError(f"queued {field} differs from authority plan")
+
+
+def _validate_cross_bindings(
+    task: dict[str, Any],
+    authority_plan: dict[str, Any],
+    authority_raw: bytes,
+    qualification: dict[str, Any],
+    qualification_raw: bytes,
+    matrix: dict[str, Any],
+    matrix_raw: bytes,
+    contract: dict[str, Any],
+    contract_raw: bytes,
+) -> None:
+    if (
+        canonical_bytes(authority_plan) != authority_raw
+        or canonical_bytes(matrix) != matrix_raw
+        or canonical_bytes(contract) != contract_raw
+    ):
+        raise HistoricalReplayControllerError("reviewed controller input bytes differ")
+    _validate_schema(matrix, "historical-public-replay-profile-matrix-v1.schema.json", "profile matrix")
+    validate_contract(contract)
+    _validate_selected_matrix_entry(task, qualification, matrix)
+    authority_sha = sha256_bytes(authority_raw)
+    qualification_sha = sha256_bytes(qualification_raw)
+    matrix_sha = sha256_bytes(matrix_raw)
+    contract_sha = sha256_bytes(contract_raw)
+    if (
+        task["authority_sha256"] != authority_sha
+        or task["authority_commit"] != qualification["plan_commit"]
+        or task["authority_path"] != qualification["plan_path"]
+        or qualification["plan_sha256"] != authority_sha
+        or qualification["profile_matrix_sha256"] != matrix_sha
+        or qualification["runner_contract_sha256"] != contract_sha
+        or task["qualification_sha256"] != qualification_sha
+        or task["qualification_path"]
+        != f"evidence/public-replay/profiles/{qualification['execution_profile_digest']}.json"
+        or task["benchmark_commit"] != qualification["benchmark_commit"]
+        or task["toolchain"] != qualification["execution_profile"]["toolchain"]
+        or task["execution_profile_digest"] != qualification["execution_profile_digest"]
+        or task["measurement_config_digest"] != qualification["measurement_config_digest"]
+    ):
+        raise HistoricalReplayControllerError("queue, authority, and qualification bindings differ")
+    _validate_public_authority_identity(task, authority_plan, authority_raw)
 
 
 def _transport() -> dict[str, Any]:
@@ -1816,9 +1829,11 @@ def _historical_replay_states(
         raise HistoricalReplayControllerError(
             "historical replay authority event type is invalid"
         )
-    event_prefix = authority_event_type.removesuffix("replay_authorized")
-    qualification_event_type = event_prefix + "replay_profile_qualified"
-    reconfiguration_event_type = event_prefix + "replay_reconfigured"
+    authority_types = {
+        "historical_result.replay_authorized": "git",
+        "historical_archive_result.replay_authorized": "archive",
+    }
+    selected_fetch = authority_types[authority_event_type]
     ordered: list[dict[str, Any]] = []
     event_ids: set[str] = set()
     for event in events:
@@ -1830,6 +1845,13 @@ def _historical_replay_states(
         ordered.append(event)
     ordered.sort(key=lambda event: (event["occurred_at"], event["event_id"]))
     by_id = {event["event_id"]: event for event in ordered}
+    origins: dict[str, dict[str, Any]] = {}
+    for event in ordered:
+        if event.get("event_type") in authority_types and event.get("subject_id") in authorities:
+            result_id = event["subject_id"]
+            if result_id in origins:
+                raise HistoricalReplayControllerError("historical replay has duplicate authority")
+            origins[result_id] = event
     historical_tasks: dict[str, str] = {}
     for event in ordered:
         if event.get("event_type") != "replay.enqueued":
@@ -1842,6 +1864,13 @@ def _historical_replay_states(
         if task_id in historical_tasks and historical_tasks[task_id] != result_id:
             raise HistoricalReplayControllerError("historical replay task changes result identity")
         historical_tasks[task_id] = result_id
+    fetch_methods = {
+        task_id: authority_types[origins[result_id]["event_type"]]
+        for task_id, result_id in historical_tasks.items()
+        if result_id in origins
+    }
+    if set(fetch_methods) != set(historical_tasks):
+        raise HistoricalReplayControllerError("historical replay task has no original authority")
 
     def parent(event: dict[str, Any], expected: set[str]) -> dict[str, Any]:
         cause_id = _match(
@@ -1861,6 +1890,9 @@ def _historical_replay_states(
         return cause
 
     states: dict[str, dict[str, Any]] = {}
+    recoveries: dict[str, dict[str, Any]] = {}
+    recovered_qualifications: dict[str, dict[str, Any]] = {}
+    current_qualifications: dict[tuple[str, str], str] = {}
     terminal_types = {
         "replay.accepted",
         "replay.rejected",
@@ -1873,12 +1905,74 @@ def _historical_replay_states(
         kind = event.get("event_type")
         subject = event.get("subject_id")
         payload_value = event.get("payload")
-        if kind == reconfiguration_event_type:
+        if kind == "historical_archive_result.replay_profile_qualified" and subject in recoveries:
+            recovery = recoveries[subject]
+            recovery_payload = recovery["payload"]
+            payload = _object(payload_value, "recovered archive qualification payload")
+            cause = parent(event, {"historical_result.replay_reconfigured"})
+            if (
+                cause["event_id"] != recovery["event_id"]
+                or subject in recovered_qualifications
+                or any(
+                    payload.get(field) != recovery_payload.get("candidate_" + field)
+                    for field in (
+                        "execution_profile_digest", "qualification_repository",
+                        "qualification_commit", "qualification_path", "qualification_sha256",
+                    )
+                )
+                or payload.get("measurement_config_digest") != recovery_payload["measurement_config_digest"]
+                or payload.get("checker") != recovery_payload["checker"]
+                or any(payload.get(field) != origins[subject]["payload"].get(field) for field in ("benchmark_commit", "toolchain"))
+            ):
+                raise HistoricalReplayControllerError("archive recovery qualification binding differs")
+            recovered_qualifications[subject] = event
+            continue
+        if kind in {
+            "historical_result.replay_profile_qualified",
+            "historical_archive_result.replay_profile_qualified",
+        }:
+            payload = _object(payload_value, "historical replay qualification payload")
+            key = (subject, payload.get("execution_profile_digest"))
+            current_qualifications[key] = event["event_id"]
+            continue
+        if kind in {
+            "historical_result.replay_reconfigured",
+            "historical_archive_result.replay_reconfigured",
+        }:
             payload = _object(payload_value, "historical replay reconfiguration payload")
             task_id = payload.get("replay_task_id")
             if task_id not in historical_tasks:
                 continue
             state = states.get(task_id)
+            result_id = historical_tasks[task_id]
+            origin = origins[result_id]
+            reconfiguration_event_type = origin["event_type"].removesuffix("replay_authorized") + "replay_reconfigured"
+            if "source_recovery_version" in payload:
+                cause = parent(event, {"replay.enqueued"})
+                if (
+                    type(payload["source_recovery_version"]) is not int
+                    or payload["source_recovery_version"] != 2
+                    or kind != "historical_result.replay_reconfigured"
+                    or fetch_methods[task_id] != "git"
+                    or state is None or state["status"] != "queued" or state["attempt"] != 0
+                    or state["event"]["event_id"] != cause["event_id"]
+                    or cause.get("subject_id") != task_id
+                    or subject != result_id
+                    or payload.get("original_authority_event_id") != origin["event_id"]
+                    or payload.get("superseded_enqueue_event_id") != cause["event_id"]
+                    or payload.get("superseded_qualification_event_id") != current_qualifications.get((result_id, cause["payload"].get("execution_profile_digest")))
+                    or payload.get("reason_code") != "accepted_source_archive_recovery"
+                    or payload.get("source_visibility") != "public"
+                    or any(payload.get(field) != cause["payload"].get(field) for field in ("checker", "measurement_config_digest"))
+                    or payload.get("superseded_execution_profile_digest") != cause["payload"].get("execution_profile_digest")
+                ):
+                    raise HistoricalReplayControllerError("historical queued-source recovery is invalid")
+                recoveries[result_id] = event
+                fetch_methods[task_id] = "archive"
+                states[task_id] = {"status": "reconfiguring", "attempt": 0, "event": event}
+                continue
+            if kind != reconfiguration_event_type or result_id in recoveries:
+                raise HistoricalReplayControllerError("historical source recovery cannot be withdrawn")
             cause = parent(
                 event,
                 {
@@ -1919,6 +2013,10 @@ def _historical_replay_states(
                 raise HistoricalReplayControllerError(
                     "historical replay enqueue changes result identity"
                 )
+            result_id = historical_tasks[task_id]
+            event_prefix = origins[result_id]["event_type"].removesuffix("replay_authorized")
+            qualification_event_type = event_prefix + "replay_profile_qualified"
+            reconfiguration_event_type = event_prefix + "replay_reconfigured"
             cause = parent(
                 event,
                 {
@@ -1942,6 +2040,17 @@ def _historical_replay_states(
                     and cause["payload"].get("replay_task_id") == task_id
                 )
                 attempt = previous["attempt"]
+                if result_id in recoveries:
+                    recovery = recoveries[result_id]
+                    qualification = recovered_qualifications.get(result_id)
+                    valid = valid and (
+                        cause["event_id"] == recovery["event_id"]
+                        and qualification is not None
+                        and (qualification["occurred_at"], qualification["event_id"])
+                        < (event["occurred_at"], event["event_id"])
+                        and all(payload.get(field) == recovery["payload"].get(field) for field in ("checker", "measurement_config_digest"))
+                        and payload.get("execution_profile_digest") == recovery["payload"]["candidate_execution_profile_digest"]
+                    )
             if not valid:
                 raise HistoricalReplayControllerError(
                     "historical replay enqueue or re-enqueue is invalid"
@@ -2025,7 +2134,7 @@ def _historical_replay_states(
             raise HistoricalReplayControllerError(
                 "historical replay transition type is not recognized"
             )
-    return states
+    return {task_id: state for task_id, state in states.items() if fetch_methods[task_id] == selected_fetch}
 
 
 def current_historical_running(
@@ -2053,7 +2162,10 @@ def current_historical_running(
         events.append(value)
     authorities = set()
     for event in events:
-        if event.get("event_type") == authority_event_type:
+        if event.get("event_type") in {
+            "historical_result.replay_authorized",
+            "historical_archive_result.replay_authorized",
+        }:
             authorities.add(
                 _match(RESULT_ID, event.get("subject_id"), "historical authority result_id")
             )
