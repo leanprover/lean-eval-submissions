@@ -52,6 +52,59 @@ QUALIFICATION_FIELDS = set(QUALIFICATION_FIXED) | {
     "lifecycle_callback_contract_files",
     "lifecycle_callback_contract_sha256",
 }
+REVIEWED_STATE_SOURCE_CONTRACTS = {
+    "351b1c409290516bfa379fc857908908e1d08932": {
+        "event_schema_sha256": "2b16ce492d30e80cd219f0432f93b4b0177d0560911d771f423c91d8724468a6",
+        "root_entries": {
+            "README.md": {
+                "mode": "100644",
+                "sha": "98dceb606e0f8e2c779fa54cd2a810cfb7c591ef",
+                "type": "blob"
+            },
+            "docs": {
+                "mode": "040000",
+                "sha": "7eff701f6cb2716092f2f13980354c3aec880373",
+                "type": "tree"
+            },
+            "schema": {
+                "mode": "040000",
+                "sha": "f7efe29098882c33bba25b5dbbeba34bd981205d",
+                "type": "tree"
+            },
+            "scripts": {
+                "mode": "040000",
+                "sha": "1f0173a9cf24d00e139c0c346500a2deef5c2453",
+                "type": "tree"
+            }
+        }
+    },
+    "e2dd6314f04df175966ff105709b855053949d97": {
+        "event_schema_sha256": "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e",
+        "root_entries": {
+            "README.md": {
+                "mode": "100644",
+                "sha": "1dd08b8569c1a3a8eadec72af96276f520d4afec",
+                "type": "blob"
+            },
+            "docs": {
+                "mode": "040000",
+                "sha": "27ab87708f95a4d919a63ae535b5b2ad6a21f88b",
+                "type": "tree"
+            },
+            "schema": {
+                "mode": "040000",
+                "sha": "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94",
+                "type": "tree"
+            },
+            "scripts": {
+                "mode": "040000",
+                "sha": "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df",
+                "type": "tree"
+            }
+        }
+    }
+}
+
 CALLBACK_CONTRACT_FILES = [
     "schemas/acceptance-measurement-v1.schema.json",
     "server/src/acceptance-measurement.ts",
@@ -244,10 +297,18 @@ def _validate_qualification_header(
     qualification: dict[str, Any],
     target_root: pathlib.Path,
 ) -> str:
-    if set(qualification) != QUALIFICATION_FIELDS:
+    fields = set(qualification)
+    if fields not in (QUALIFICATION_FIELDS, QUALIFICATION_FIELDS | {"supported_state_contracts"}):
         raise RollbackValidationError(
             "target commit does not carry a closed rollback qualification"
         )
+    if "supported_state_contracts" in qualification:
+        if qualification["supported_state_contracts"] != REVIEWED_STATE_SOURCE_CONTRACTS:
+            raise RollbackValidationError("target State source compatibility map is not the closed reviewed pair")
+        legacy = "e2dd6314f04df175966ff105709b855053949d97"
+        if (qualification["state_main_commit"] != legacy
+                or qualification["state_event_schema_sha256"] != REVIEWED_STATE_SOURCE_CONTRACTS[legacy]["event_schema_sha256"]):
+            raise RollbackValidationError("target State capability floor changed")
     for name, expected in QUALIFICATION_FIXED.items():
         if qualification.get(name) != expected:
             raise RollbackValidationError(
@@ -283,6 +344,45 @@ def _validate_qualification_header(
     return callback_digest
 
 
+def _qualification_state_contracts(qualification: dict[str, Any]) -> dict[str, Any]:
+    """Old targets retain their single contract; new targets declare the exact pair."""
+    declared = qualification.get("supported_state_contracts")
+    if declared is not None:
+        if declared != REVIEWED_STATE_SOURCE_CONTRACTS:
+            raise RollbackValidationError("target State source compatibility map is not reviewed")
+        return declared
+    anchor = qualification.get("state_main_commit")
+    digest = qualification.get("state_event_schema_sha256")
+    if (not isinstance(anchor, str) or COMMIT.fullmatch(anchor) is None
+            or not isinstance(digest, str) or DIGEST.fullmatch(digest) is None):
+        raise RollbackValidationError("target State contract identity is invalid")
+    return {anchor: {"event_schema_sha256": digest}}
+
+
+def select_declared_state_contract(
+    qualification: dict[str, Any], target_root: pathlib.Path,
+    state_main: dict[str, Any], live_commit: dict[str, Any], live_tree: dict[str, Any],
+) -> str:
+    _validate_qualification_header(qualification, target_root)
+    live = state_main.get("commit")
+    if (set(state_main) != {"commit", "protected"} or state_main.get("protected") is not True
+            or not isinstance(live, str) or COMMIT.fullmatch(live) is None):
+        raise RollbackValidationError("live State main is not an exact protected commit")
+    tree = _commit_tree(live_commit, live, "live")
+    actual = _root_entries(live_tree, tree, "live")
+    contracts = _qualification_state_contracts(qualification)
+    if "supported_state_contracts" not in qualification:
+        # The existing single-contract proof below remains authoritative; no
+        # new compatibility is inherited by an older rollback target.
+        return qualification["state_main_commit"]
+    matches = [anchor for anchor, entry in contracts.items()
+               if actual == {path: (value["mode"], value["type"], value["sha"])
+                             for path, value in entry["root_entries"].items()}]
+    if len(matches) != 1:
+        raise RollbackValidationError("live State roots do not match one target-supported contract")
+    return matches[0]
+
+
 def _validate_qualification(
     qualification: dict[str, Any],
     target_root: pathlib.Path,
@@ -297,7 +397,8 @@ def _validate_qualification(
         state_commit, str
     ) or COMMIT.fullmatch(state_commit) is None:
         raise RollbackValidationError("live State main is not an exact protected commit")
-    if qualification["state_main_commit"] != state_commit:
+    selected = _qualification_state_contracts(qualification).get(state_commit)
+    if selected is None:
         raise RollbackValidationError(
             "target qualification is not bound to current protected State main"
         )
@@ -308,13 +409,13 @@ def _validate_qualification(
     if not state_schema or len(state_schema) > MAX_CONTRACT_FILE_BYTES:
         raise RollbackValidationError("exact State event schema is empty or oversized")
     state_digest = hashlib.sha256(state_schema).hexdigest()
-    if qualification["state_event_schema_sha256"] != state_digest:
+    if selected["event_schema_sha256"] != state_digest:
         raise RollbackValidationError(
             "target qualification does not match exact protected State schema"
         )
     return {
         "repository": qualification["state_repository"],
-        "contract_commit": qualification["state_main_commit"],
+        "contract_commit": state_commit,
         "live_commit": state_commit,
         "path": qualification["state_event_schema_path"],
         "sha256": state_digest,
@@ -437,7 +538,12 @@ def _validate_descendant_qualification(
         raise RollbackValidationError(
             "live State main is not an exact protected commit"
         )
-    contract_sha = qualification["state_main_commit"]
+    contract_sha = contract_commit.get("commit")
+    if not isinstance(contract_sha, str) or COMMIT.fullmatch(contract_sha) is None:
+        raise RollbackValidationError("State contract commit identity is invalid")
+    selected = _qualification_state_contracts(qualification).get(contract_sha)
+    if selected is None:
+        raise RollbackValidationError("target does not support this State contract")
     if set(comparison) != {"base_commit", "merge_base_commit", "status", "url"}:
         raise RollbackValidationError("State ancestry proof is not closed")
     expected_url = (
@@ -460,6 +566,11 @@ def _validate_descendant_qualification(
     live_tree_sha = _commit_tree(live_commit, live_sha, "live")
     expected_roots = _root_entries(contract_tree, contract_tree_sha, "contract")
     current_roots = _root_entries(live_tree, live_tree_sha, "live")
+    if "root_entries" in selected:
+        reviewed = {path: (entry["mode"], entry["type"], entry["sha"])
+                    for path, entry in selected["root_entries"].items()}
+        if expected_roots != reviewed:
+            raise RollbackValidationError("State contract roots differ from the target's reviewed map")
     if current_roots != expected_roots:
         raise RollbackValidationError(
             "protected State descendant changed a reviewed contract root entry"
@@ -471,7 +582,7 @@ def _validate_descendant_qualification(
         live_sha,
     )
     state_digest = hashlib.sha256(state_schema_bytes).hexdigest()
-    if qualification["state_event_schema_sha256"] != state_digest:
+    if selected["event_schema_sha256"] != state_digest:
         raise RollbackValidationError(
             "protected State descendant does not match the reviewed event schema"
         )
@@ -1174,7 +1285,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         )
     if (
         owner_state_commit is not None
-        and owner_state_commit != state_contract["contract_commit"]
+        and owner_state_commit != qualification["state_main_commit"]
     ):
         raise RollbackValidationError(
             "result owner API contract is not bound to current protected State"
@@ -1195,7 +1306,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         )
     if (
         model_state_commit is not None
-        and model_state_commit != state_contract["contract_commit"]
+        and model_state_commit != qualification["state_main_commit"]
     ):
         raise RollbackValidationError(
             "model identity API contract is not bound to current protected State"
@@ -1957,8 +2068,17 @@ def parser() -> argparse.ArgumentParser:
     state_readiness = commands.add_parser("production-state-readiness")
     state_readiness.add_argument("--response", type=pathlib.Path, required=True)
     state_readiness.add_argument("--http-status", type=int, required=True)
-    state_readiness.add_argument("--expected-contract", required=True)
-    state_readiness.add_argument("--expected-schema", required=True)
+    state_readiness.add_argument("--expected-contract")
+    state_readiness.add_argument("--expected-schema")
+    state_readiness.add_argument("--qualification", type=pathlib.Path)
+    state_readiness.add_argument("--target-root", type=pathlib.Path)
+
+    source_contract = commands.add_parser("select-state-contract")
+    source_contract.add_argument("--qualification", type=pathlib.Path, required=True)
+    source_contract.add_argument("--target-root", type=pathlib.Path, required=True)
+    source_contract.add_argument("--state-main", type=pathlib.Path, required=True)
+    source_contract.add_argument("--state-live-commit", type=pathlib.Path, required=True)
+    source_contract.add_argument("--state-live-tree", type=pathlib.Path, required=True)
 
     all_false_health = commands.add_parser("all-false-production-health")
     all_false_health.add_argument("--response", type=pathlib.Path, required=True)
@@ -2016,11 +2136,26 @@ def main() -> int:
             value = json.loads(args.list.read_text(encoding="utf-8"))
             print(container_id(value, args.application))
         elif args.command == "production-state-readiness":
+            response = _object(args.response)
+            expected_contract, expected_schema = args.expected_contract, args.expected_schema
+            if args.qualification is not None:
+                if args.target_root is None or expected_contract is not None or expected_schema is not None:
+                    raise RollbackValidationError("State readiness needs either target qualification or one exact pair")
+                qualification = _object(args.qualification)
+                _validate_qualification_header(qualification, args.target_root)
+                supported = _qualification_state_contracts(qualification)
+                selected = response.get("state_contract_commit") if args.http_status == 200 else qualification["state_main_commit"]
+                if not isinstance(selected, str) or selected not in supported:
+                    raise RollbackValidationError("State readiness names an unsupported target contract")
+                expected_contract = selected
+                expected_schema = supported[selected]["event_schema_sha256"]
+            elif args.target_root is not None or expected_contract is None or expected_schema is None:
+                raise RollbackValidationError("State readiness needs one complete expectation")
             state_commit = classify_production_state_readiness(
-                _object(args.response),
+                response,
                 args.http_status,
-                args.expected_contract,
-                args.expected_schema,
+                expected_contract,
+                expected_schema,
             )
             if state_commit is None:
                 print(
@@ -2029,6 +2164,12 @@ def main() -> int:
                 )
                 return CONVERGENCE_RETRY_EXIT
             print(state_commit)
+        elif args.command == "select-state-contract":
+            print(select_declared_state_contract(
+                _object(args.qualification), args.target_root,
+                _object(args.state_main), _object(args.state_live_commit),
+                _object(args.state_live_tree),
+            ))
         elif args.command == "all-false-production-health":
             if not classify_all_false_production_health(
                 _object(args.response),

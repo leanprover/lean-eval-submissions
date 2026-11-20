@@ -156,23 +156,28 @@ jobs:
             echo "protected State main did not resolve to a full lowercase Git SHA" >&2
             exit 1
           fi
+          gh api "repos/$state_repository/git/commits/$state_live" \
+            --jq '{commit:.sha,tree:.tree.sha}' \
+            > "$plan_dir/state-live-commit.json"
+          state_live_tree=$(jq -er .tree "$plan_dir/state-live-commit.json")
+          gh api "repos/$state_repository/git/trees/$state_live_tree" \
+            --jq '{sha,truncated,tree:[.tree[]|{mode,path,sha,type}]}' \
+            > "$plan_dir/state-live-tree.json"
+          state_contract=$(python ../scripts/validate_cloudflare_rollback.py select-state-contract \
+            --qualification "$qualification" --target-root "$plan_dir/target" \
+            --state-main "$plan_dir/state-main.json" \
+            --state-live-commit "$plan_dir/state-live-commit.json" \
+            --state-live-tree "$plan_dir/state-live-tree.json")
           gh api "repos/$state_repository/compare/$state_contract...$state_live" \
             --jq '{base_commit:.base_commit.sha,merge_base_commit:.merge_base_commit.sha,status,url}' \
             > "$plan_dir/state-comparison.json"
           gh api "repos/$state_repository/git/commits/$state_contract" \
             --jq '{commit:.sha,tree:.tree.sha}' \
             > "$plan_dir/state-contract-commit.json"
-          gh api "repos/$state_repository/git/commits/$state_live" \
-            --jq '{commit:.sha,tree:.tree.sha}' \
-            > "$plan_dir/state-live-commit.json"
           state_contract_tree=$(jq -er .tree "$plan_dir/state-contract-commit.json")
-          state_live_tree=$(jq -er .tree "$plan_dir/state-live-commit.json")
           gh api "repos/$state_repository/git/trees/$state_contract_tree" \
             --jq '{sha,truncated,tree:[.tree[]|{mode,path,sha,type}]}' \
             > "$plan_dir/state-contract-tree.json"
-          gh api "repos/$state_repository/git/trees/$state_live_tree" \
-            --jq '{sha,truncated,tree:[.tree[]|{mode,path,sha,type}]}' \
-            > "$plan_dir/state-live-tree.json"
           gh api \
             "repos/$state_repository/contents/$state_schema_path?ref=$state_live" \
             --jq '{content,encoding,path,sha,type,url}' \
