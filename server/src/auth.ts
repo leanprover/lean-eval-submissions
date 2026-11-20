@@ -390,6 +390,7 @@ export async function lifecycleEventId(
     | "release.scheduled",
   subjectId: string,
   occurredAt: string,
+  payloadBinding?: string,
 ): Promise<string> {
   const submissionEvent = eventType.startsWith("archive.") || eventType.startsWith("evaluation.") ||
     eventType === "submission.result_identity_conflicted";
@@ -411,7 +412,9 @@ export async function lifecycleEventId(
   const bytes = new Uint8Array(await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      `lean-eval-lifecycle-event-v1\0${eventType}\0${subjectId}\0${occurredAt}`,
+      payloadBinding === undefined
+        ? `lean-eval-lifecycle-event-v1\0${eventType}\0${subjectId}\0${occurredAt}`
+        : `lean-eval-lifecycle-event-v2\0${eventType}\0${subjectId}\0${occurredAt}\0${payloadBinding}`,
     ),
   )).slice(0, 16);
   let milliseconds = date.valueOf();
