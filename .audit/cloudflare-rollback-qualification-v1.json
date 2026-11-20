@@ -18,7 +18,7 @@
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "f3b6c61ec4e563928942ed30361570b5d34352d63c4b118a391a01739a7277f1",
+  "lifecycle_callback_contract_sha256": "467a968152edfee4db9365fe1907872cb1d03923377d4acd760dab222e558ccb",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
@@ -30,5 +30,57 @@
   "state_event_schema_version": 1,
   "state_main_commit": "e2dd6314f04df175966ff105709b855053949d97",
   "state_repository": "leanprover/lean-eval-state",
+  "supported_state_contracts": {
+    "351b1c409290516bfa379fc857908908e1d08932": {
+      "event_schema_sha256": "2b16ce492d30e80cd219f0432f93b4b0177d0560911d771f423c91d8724468a6",
+      "root_entries": {
+        "README.md": {
+          "mode": "100644",
+          "sha": "98dceb606e0f8e2c779fa54cd2a810cfb7c591ef",
+          "type": "blob"
+        },
+        "docs": {
+          "mode": "040000",
+          "sha": "7eff701f6cb2716092f2f13980354c3aec880373",
+          "type": "tree"
+        },
+        "schema": {
+          "mode": "040000",
+          "sha": "f7efe29098882c33bba25b5dbbeba34bd981205d",
+          "type": "tree"
+        },
+        "scripts": {
+          "mode": "040000",
+          "sha": "1f0173a9cf24d00e139c0c346500a2deef5c2453",
+          "type": "tree"
+        }
+      }
+    },
+    "e2dd6314f04df175966ff105709b855053949d97": {
+      "event_schema_sha256": "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e",
+      "root_entries": {
+        "README.md": {
+          "mode": "100644",
+          "sha": "1dd08b8569c1a3a8eadec72af96276f520d4afec",
+          "type": "blob"
+        },
+        "docs": {
+          "mode": "040000",
+          "sha": "27ab87708f95a4d919a63ae535b5b2ad6a21f88b",
+          "type": "tree"
+        },
+        "schema": {
+          "mode": "040000",
+          "sha": "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94",
+          "type": "tree"
+        },
+        "scripts": {
+          "mode": "040000",
+          "sha": "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df",
+          "type": "tree"
+        }
+      }
+    }
+  },
   "wrangler_version": "4.131.0"
 }

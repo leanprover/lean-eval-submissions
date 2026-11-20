@@ -1,3 +1,4 @@
+import rollbackQualification from "../../.audit/cloudflare-rollback-qualification-v1.json";
 import { exports } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
@@ -292,15 +293,10 @@ describe("Worker routing", () => {
     upstream.mockRestore();
   });
 
-  it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "e2dd6314f04df175966ff105709b855053949d97";
+  it.each(Object.entries(rollbackQualification.supported_state_contracts))(
+    "returns a closed truthful production readiness proof for %s", async (contract, reviewed) => {
     const tree = "2".repeat(40);
-    const rootEntries = [
-      { path: "README.md", mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      { path: "docs", mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
-      { path: "schema", mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
-    ] as const;
+    const rootEntries = Object.entries(reviewed.root_entries).map(([path, entry]) => ({ path, ...entry }));
     const replies = [
       Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: contract } }),
@@ -342,8 +338,7 @@ describe("Worker routing", () => {
       state_commit: contract,
       state_contract_commit: contract,
       state_contract_verified: true,
-      state_event_schema_sha256:
-        "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e",
+      state_event_schema_sha256: reviewed.event_schema_sha256,
     });
     expect(upstream).toHaveBeenCalledTimes(7);
     upstream.mockRestore();

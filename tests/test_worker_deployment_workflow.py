@@ -41,6 +41,7 @@ QUALIFICATION = json.loads(
     )
 )
 WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
+WORKER_STATE = (ROOT / "server/src/github-state.ts").read_text(encoding="utf-8")
 WORKER_PROVIDER = (ROOT / "server/src/github-provider.ts").read_text(
     encoding="utf-8"
 )
@@ -75,7 +76,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
         expected = "e2dd6314f04df175966ff105709b855053949d97"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
-        self.assertGreaterEqual(DEPLOY.count(expected), 2)
+        self.assertEqual(set(QUALIFICATION["supported_state_contracts"]), {
+            expected, "351b1c409290516bfa379fc857908908e1d08932",
+        })
+        self.assertIn("--qualification ../.audit/cloudflare-rollback-qualification-v1.json", DEPLOY)
+        self.assertIn("select-state-contract", ROLLBACK)
         self.assertEqual(
             DEPLOY.count('body["model_identity_write_max_subrequests"] == 400'),
             4,
@@ -849,8 +854,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('--expected-expires-at "$INTAKE_LEASE_EXPIRES_AT"', production)
         self.assertIn('--state-proof-output "$plan_dir/post-smoke-state-proof.json"', production)
         self.assertNotIn("--retry 2 --retry-all-errors --retry-max-time 45", production)
-        self.assertIn(QUALIFICATION["state_main_commit"], production)
-        self.assertIn(QUALIFICATION["state_event_schema_sha256"], production)
+        self.assertIn("--qualification ../.audit/cloudflare-rollback-qualification-v1.json", production)
+        self.assertIn('--expected-contract "$QUALIFIED_STATE_CONTRACT"', production)
+        self.assertIn('--expected-schema "$QUALIFIED_STATE_SCHEMA"', production)
+        self.assertIn("QUALIFIED_STATE_CONTRACT: ${{ steps.production-state.outputs.contract }}", production)
+        self.assertIn("QUALIFIED_STATE_SCHEMA: ${{ steps.production-state.outputs.schema }}", production)
         self.assertIn("state_contract_verified", LEASE_SMOKE)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
         self.assertIn('INTAKE_LEASE_EXPIRES_AT - $(date +%s)))" -lt 240', production)
@@ -863,8 +871,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "- name: Verify exact protected State before production finalization",
             1,
         )[1].split("- name: Prepare the exact Worker-enforced intake lease", 1)[0]
-        self.assertIn(QUALIFICATION["state_main_commit"], state_gate)
-        self.assertIn(QUALIFICATION["state_event_schema_sha256"], state_gate)
+        self.assertIn("--qualification ../.audit/cloudflare-rollback-qualification-v1.json", state_gate)
+        self.assertIn("--target-root ..", state_gate)
+        self.assertIn('echo "contract=$(jq -er .state_contract_commit "$proof")"', state_gate)
+        self.assertIn('echo "schema=$(jq -er .state_event_schema_sha256 "$proof")"', state_gate)
         self.assertIn("production-state-readiness", state_gate)
         self.assertIn("--request POST", state_gate)
         self.assertIn("/readyz", state_gate)
@@ -890,8 +900,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         # projection at the current State commit (its schema bytes changed in
         # State #50, so the digest moved with the commit).
         self.assertEqual(QUALIFICATION["state_main_commit"], state_commit)
-        self.assertEqual(WORKER_APP.count(f'"{runtime_schema}"'), 1)
-        self.assertEqual(DEPLOY.count(runtime_schema), 2)
+        self.assertEqual(WORKER_STATE.count(f'"{runtime_schema}"'), 1)
+        self.assertIn("response.state_event_schema_sha256 = qualified.eventSchemaSha256", WORKER_APP)
+        self.assertNotIn(runtime_schema, DEPLOY)
+        self.assertEqual(QUALIFICATION["supported_state_contracts"][state_commit]["event_schema_sha256"], runtime_schema)
 
         # The offline finalizer remains bound to the reviewed historical
         # snapshot. Its commit is distinct from the rollback-qualified runtime

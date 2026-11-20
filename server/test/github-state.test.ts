@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import rollbackQualification from "../../.audit/cloudflare-rollback-qualification-v1.json";
 
 import {
   canonicalStateDocument,
@@ -697,11 +698,11 @@ function resultOwnerContractProofResponses(
   treeSha = TREE,
 ): Response[] {
   return [
+    resultOwnerContractRootTreeResponse(changedPath, treeSha),
     json({
       status: "ahead",
       merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
     }),
-    resultOwnerContractRootTreeResponse(changedPath, treeSha),
   ];
 }
 
@@ -724,11 +725,11 @@ function resultOwnerContractRootTreeResponse(
 function modelIdentityContractProofResponses(treeSha = TREE): Response[] {
   return [
     json({ name: "main", protected: true, commit: { sha: HEAD } }),
+    modelIdentityContractRootTreeResponse(treeSha),
     json({
       status: "ahead",
       merge_base_commit: { sha: MODEL_IDENTITY_CONTRACT_COMMIT },
     }),
-    modelIdentityContractRootTreeResponse(treeSha),
   ];
 }
 
@@ -935,6 +936,7 @@ describe("atomic Git State append", () => {
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       json({ name: "main", protected: true, commit: { sha: HEAD } }),
+      modelIdentityContractRootTreeResponse(),
       json({ status: "diverged", merge_base_commit: { sha: "0".repeat(40) } }),
     ]);
     await expect(repository(wrongAncestry).requestModelIdentity(request))
@@ -960,11 +962,11 @@ describe("atomic Git State append", () => {
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       json({ name: "main", protected: true, commit: { sha: HEAD } }),
+      modelIdentityContractRootTreeResponse(TREE, changedScripts),
       json({
         status: "ahead",
         merge_base_commit: { sha: MODEL_IDENTITY_CONTRACT_COMMIT },
       }),
-      modelIdentityContractRootTreeResponse(TREE, changedScripts),
     ]);
     await expect(repository(changedSource).requestModelIdentity(request))
       .rejects.toMatchObject({ status: 503 });
@@ -976,14 +978,14 @@ describe("atomic Git State append", () => {
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       json({ name: "main", protected: true, commit: { sha: HEAD } }),
-      json({
-        status: "ahead",
-        merge_base_commit: { sha: STAGING_MODEL_IDENTITY_CONTRACT_COMMIT },
-      }),
       modelIdentityContractRootTreeResponse(
         TREE,
         STAGING_MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES,
       ),
+      json({
+        status: "ahead",
+        merge_base_commit: { sha: STAGING_MODEL_IDENTITY_CONTRACT_COMMIT },
+      }),
       json({ message: "not found" }, 404),
       json({ message: "not found" }, 404),
       json({ sha: NEW_TREE }, 201),
@@ -2064,6 +2066,7 @@ describe("atomic Git State append", () => {
     const diverged = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      resultOwnerContractRootTreeResponse(),
       json({ status: "diverged", merge_base_commit: { sha: "0".repeat(40) } }),
     ]);
     await expect(repository(diverged).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
@@ -2094,11 +2097,11 @@ describe("atomic Git State append", () => {
       const hostile = sequence([
         json({ object: { sha: HEAD } }),
         json({ tree: { sha: TREE } }),
+        json({ sha: TREE, truncated: false, tree }),
         json({
           status: "ahead",
           merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
         }),
-        json({ sha: TREE, truncated: false, tree }),
       ]);
       await expect(repository(hostile).assertResultOwnerContract()).rejects.toMatchObject({
         status: 503,
@@ -2149,8 +2152,7 @@ describe("atomic Git State append", () => {
       const fetcher = sequence([
         json({ object: { sha: head } }),
         json({ tree: { sha: TREE } }),
-        json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
-        resultOwnerContractRootTreeResponse(),
+        ...resultOwnerContractProofResponses(),
       ]);
       await repository(fetcher).assertResultOwnerContract();
       expect(fetcher).toHaveBeenCalledTimes(4);
@@ -2158,8 +2160,7 @@ describe("atomic Git State append", () => {
     const evicted = sequence([
       json({ object: { sha: heads[0] } }),
       json({ tree: { sha: TREE } }),
-      json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
-      resultOwnerContractRootTreeResponse(),
+      ...resultOwnerContractProofResponses(),
     ]);
     await repository(evicted).assertResultOwnerContract();
     expect(evicted).toHaveBeenCalledTimes(4);
@@ -2205,6 +2206,65 @@ describe("atomic Git State append", () => {
     ).resolves.toBe(RESULT_OWNER_CONTRACT_COMMIT);
     const [, init] = fetcher.mock.calls.find(([, request]) => request?.method === "PATCH") ?? [];
     expect(init?.method).toBe("PATCH");
+  });
+
+  it("returns the actual protected old or archive source proof without adding requests", async () => {
+    for (const [anchor, contract] of Object.entries(rollbackQualification.supported_state_contracts)) {
+      const fetcher = sequence([
+        json({ permissions: { push: true } }),
+        json({ object: { sha: anchor } }),
+        json({ tree: { sha: TREE } }),
+        json({ name: "main", protected: true, commit: { sha: anchor } }),
+        json({ sha: TREE, truncated: false, tree: Object.entries(contract.root_entries).map(([path, entry]) => ({ path, ...entry })) }),
+        json({ ref: "refs/heads/main", object: { sha: anchor } }),
+        json({ name: "main", protected: true, commit: { sha: anchor } }),
+      ]);
+      await expect(productionRepository(fetcher).assertProductionQualifiedWritableProof()).resolves.toEqual({
+        stateCommit: anchor,
+        contractCommit: anchor,
+        eventSchemaSha256: contract.event_schema_sha256,
+      });
+      expect(fetcher).toHaveBeenCalledTimes(7);
+      const mutations = fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
+      expect(mutations).toHaveLength(1);
+      const body = mutations[0]?.[1]?.body;
+      if (typeof body !== "string") throw new TypeError("write probe body must be JSON");
+      expect(JSON.parse(body)).toEqual({ force: false, sha: anchor });
+    }
+  });
+
+  it("selects archive descendants by exact roots and proves that selected anchor only", async () => {
+    const anchor = "351b1c409290516bfa379fc857908908e1d08932";
+    const reviewed = rollbackQualification.supported_state_contracts[anchor];
+    const root = () => json({ sha: TREE, truncated: false, tree: Object.entries(reviewed.root_entries).map(([path, entry]) => ({ path, ...entry })) });
+    const valid = sequence([
+      json({ object: { sha: HEAD } }), json({ tree: { sha: TREE } }), root(),
+      json({ status: "ahead", merge_base_commit: { sha: anchor } }),
+    ]);
+    await expect(productionRepository(valid).assertResultOwnerContract()).resolves.toBe(HEAD);
+    expect(valid).toHaveBeenCalledTimes(4);
+    const comparisonUrl = valid.mock.calls[3]?.[0];
+    if (typeof comparisonUrl !== "string") throw new TypeError("comparison URL must be a string");
+    expect(comparisonUrl).toContain(`/compare/${anchor}...${HEAD}`);
+    clearResultOwnerContractProofCacheForTest();
+    const unrelated = sequence([
+      json({ object: { sha: HEAD } }), json({ tree: { sha: TREE } }), root(),
+      json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+    ]);
+    await expect(productionRepository(unrelated).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+    expect(unrelated.mock.calls.some(([, init]) => init?.method === "POST" || init?.method === "PATCH")).toBe(false);
+  });
+
+  it("rejects mixed old and archive roots before comparing or mutating", async () => {
+    const reviewed = rollbackQualification.supported_state_contracts["351b1c409290516bfa379fc857908908e1d08932"];
+    const entries = Object.entries(reviewed.root_entries).map(([path, entry]) => ({ path, ...entry }));
+    const mixed = entries.map((entry) => entry.path === "scripts" ? { ...entry, ...RESULT_OWNER_CONTRACT_ROOT_ENTRIES.scripts } : entry);
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }), json({ tree: { sha: TREE } }),
+      json({ sha: TREE, truncated: false, tree: mixed }),
+    ]);
+    await expect(productionRepository(fetcher).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("rejects protection or head drift after the production write probe", async () => {

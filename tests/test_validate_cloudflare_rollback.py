@@ -371,7 +371,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         )
         for name, expected in rollback.QUALIFICATION_FIXED.items():
             self.assertEqual(qualification[name], expected)
-        self.assertEqual(set(qualification), rollback.QUALIFICATION_FIELDS)
+        self.assertEqual(set(qualification), rollback.QUALIFICATION_FIELDS | {"supported_state_contracts"})
+        self.assertEqual(qualification["supported_state_contracts"], rollback.REVIEWED_STATE_SOURCE_CONTRACTS)
         self.assertEqual(
             qualification["lifecycle_callback_contract_files"],
             rollback.CALLBACK_CONTRACT_FILES,
@@ -419,6 +420,9 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
+        # The pre-existing synthetic cases exercise the original single-contract
+        # manifest and schema bytes, independently of the new closed pair.
+        qualification_value.pop("supported_state_contracts", None)
         state_schema_raw = b'{"fixture":"exact State schema"}\n'
         state_commit = PROTECTED_STATE_COMMIT
         qualification_value["state_main_commit"] = state_commit
