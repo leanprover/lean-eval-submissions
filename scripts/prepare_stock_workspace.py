@@ -10,9 +10,12 @@ from __future__ import annotations
 import hashlib
 import contextlib
 import copy
+import math
 import os
 from pathlib import Path
 import re
+import resource
+import select
 import shutil
 import signal
 import subprocess
@@ -32,6 +35,8 @@ CONFIG_FILES = ('lean-toolchain', 'lakefile.toml', 'lake-manifest.json')
 GENERATOR_COMMIT = '0b8cc2d141710a18515c53448f006c971dd8eeb4'
 PROBLEM = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z')
 GIT = str(Path(shutil.which('git')).resolve(strict=True))
+INVENTORY_CONCURRENCY = 2
+INVENTORY_ADDRESS_SPACE = 32 * 1024**3
 
 
 _GENERATION_SEAL = object()
@@ -227,6 +232,127 @@ def invoke(command, source, env, timeout):
     require(code == 0)
 
 
+def _original_inventory_modules(git):
+    """Original loadManifest/uniqueModules order: filename sort, first occurrence."""
+    paths = sorted(path for path in git.entries if path.startswith('manifests/problems/'))
+    require(0 < len(paths) <= 1001)
+    modules = []
+    for path in paths:
+        if Path(path).parts[2] == '.DS_Store':
+            continue
+        require(len(Path(path).parts) == 3 and path.endswith('.toml'))
+        entry = tomllib.loads(git.blob(path).decode())
+        require(isinstance(entry.get('id'), str) and entry['id'] == Path(path).stem and PROBLEM.fullmatch(entry['id']))
+        module = entry.get('module')
+        require(isinstance(module, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*', module))
+        git.blob(module.replace('.', '/') + '.lean')
+        if module not in modules:
+            modules.append(module)
+    require(modules)
+    return tuple(modules)
+
+
+def _inventory_remaining(deadline):
+    remaining = (deadline - time.monotonic_ns()) / 1_000_000_000
+    require(remaining > 0)
+    return remaining
+
+
+def _build_inventory_batch(modules, source, env, lake, deadline):
+    """Two trusted original single-module builds; no submitted Source runs.
+
+    WNOWAIT keeps each owned group leader unreaped until group termination,
+    preventing a completed leader's PID/group identity from being reused.
+    Every exit path terminates groups and waits all direct children. This is
+    trusted-build process-group ownership, not Source namespace qualification.
+    """
+    require(0 < len(modules) <= INVENTORY_CONCURRENCY and hasattr(os, 'WNOWAIT'))
+    children, descriptors, observed, cleanup_failed = [], [], {}, False
+    values = dict(env, LEAN_NUM_THREADS='1')
+    def limits():
+        def restrict(kind, maximum):
+            inherited = resource.getrlimit(kind)
+            limit = min([maximum] + [value for value in inherited if value != resource.RLIM_INFINITY])
+            resource.setrlimit(kind, (limit, limit))
+        restrict(resource.RLIMIT_AS, INVENTORY_ADDRESS_SPACE)
+        restrict(resource.RLIMIT_CPU, math.ceil(_inventory_remaining(deadline)))
+    with supervisor.termination_guard():
+        try:
+            for module in modules:
+                _inventory_remaining(deadline)
+                child = subprocess.Popen([str(lake), 'build', module], cwd=source, env=values,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True, preexec_fn=limits)
+                children.append(child)
+                descriptors.append(supervisor.pidfd_open(child.pid))
+            pending = set(range(len(children)))
+            while pending:
+                ready, _, _ = select.select([descriptors[index] for index in pending], [], [],
+                                             _inventory_remaining(deadline))
+                _inventory_remaining(deadline)
+                for index in tuple(pending):
+                    if descriptors[index] not in ready:
+                        continue
+                    status = os.waitid(os.P_PID, children[index].pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                    require(status is not None and status.si_code == os.CLD_EXITED and status.si_status == 0)
+                    observed[index] = time.monotonic_ns()
+                    pending.remove(index)
+        except (OSError, subprocess.SubprocessError):
+            raise Invalid('original inventory prebuild did not complete') from None
+        finally:
+            # All leaders are still owned/unreaped, even those already exited.
+            # Attempt every stop/wait before reporting any cleanup failure.
+            for child in children:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except OSError:
+                    cleanup_failed = True
+            for child in children:
+                try:
+                    child.wait(timeout=5)
+                except (OSError, subprocess.SubprocessError):
+                    cleanup_failed = True
+            for descriptor in descriptors:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    cleanup_failed = True
+            require(not cleanup_failed)
+    require(len(observed) == len(modules) and all(child.returncode == 0 for child in children))
+    return [{'module': module, 'exit_code': children[index].returncode,
+             'observed_finished_ns': observed[index],
+             'olean_sha256': supervisor.file_hash(Path(source) / '.lake/build/lib/lean' /
+                 (module.replace('.', '/') + '.olean'))['sha256']}
+            for index, module in enumerate(modules)]
+
+
+def _prepare_inventory(git, source, env, lake, timeout_seconds):
+    """One deadline covers original structure check, ALL builds and real inventory."""
+    started = time.monotonic_ns()
+    require(type(timeout_seconds) is int and 1 <= timeout_seconds <= 1200)
+    deadline = started + timeout_seconds * 1_000_000_000
+    modules = _original_inventory_modules(git)
+    invoke([str(lake), 'exe', 'lean-eval', 'validate-manifest', '--structure-only'],
+           source, env, _inventory_remaining(deadline))
+    builds = []
+    for offset in range(0, len(modules), INVENTORY_CONCURRENCY):
+        builds.extend(_build_inventory_batch(modules[offset:offset + INVENTORY_CONCURRENCY],
+                                             source, env, lake, deadline))
+    require(tuple(build['module'] for build in builds) == modules
+            and all(build['exit_code'] == 0 for build in builds))
+    argv = ['lake', 'exe', 'lean-eval', 'validate-manifest', '--assume-modules-built']
+    # Original supported optimization skips rebuilds only; the actual tool
+    # still imports EVERY original module and checks the full semantic inventory.
+    invoke([str(lake), *argv[1:]], source, env, _inventory_remaining(deadline))
+    _inventory_remaining(deadline)
+    return {'argv': argv, 'timeout_seconds': timeout_seconds, 'elapsed_ns': time.monotonic_ns() - started,
+            'module_plan_sha256': sha(supervisor.stock.canonical(modules)), 'module_builds': builds,
+            'concurrency': INVENTORY_CONCURRENCY, 'per_process_address_space_upper_bound_bytes': INVENTORY_ADDRESS_SPACE,
+            'lean_thread_hint': 1}
+
+
 def resolved_generator_argv(command, problem_statement_revisions):
     """Explicit inactive contract clarification, never a generic argv escape.
 
@@ -298,6 +424,17 @@ def _trusted_path(value, forbidden):
 
 def generate_original(repository, commit, toolchain, problem, session, *, toolchain_prefix,
                       dependency_repositories, timeout_seconds=300, inventory_timeout_seconds=1200, driver_path=None):
+    # The fixed synchronous preparer owns every trusted subprocess across its
+    # whole build/generation path, including normal termination signals.
+    with supervisor.termination_guard():
+        return _generate_original(repository, commit, toolchain, problem, session,
+            toolchain_prefix=toolchain_prefix, dependency_repositories=dependency_repositories,
+            timeout_seconds=timeout_seconds, inventory_timeout_seconds=inventory_timeout_seconds,
+            driver_path=driver_path)
+
+
+def _generate_original(repository, commit, toolchain, problem, session, *, toolchain_prefix,
+                      dependency_repositories, timeout_seconds=300, inventory_timeout_seconds=1200, driver_path=None):
     """Own the original build and generation, without accepting build receipts.
 
     Dependencies are fresh exact Git exports at the selected manifest's commits;
@@ -357,10 +494,7 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
     # validator builds every original statement module and runs eval_inventory;
     # this trusted PUBLIC preparation budget is separate from runtime M/T and
     # from the unchanged selected-generator timeout.
-    inventory_started = time.monotonic_ns()
-    inventory_argv = ['lake', 'exe', 'lean-eval', 'validate-manifest']
-    invoke([str(prefix / 'bin/lake'), *inventory_argv[1:]], source, env, inventory_timeout_seconds)
-    inventory_elapsed_ns = time.monotonic_ns() - inventory_started
+    inventory = _prepare_inventory(git, source, env, prefix / 'bin/lake', inventory_timeout_seconds)
     verify_inputs()
     invoke([str(prefix / 'bin/lake'), 'exe', 'lean-eval', 'validate-generated-catalog'], source, env, timeout_seconds)
     # Retained committed output is not selected generation evidence. Only the
@@ -396,8 +530,7 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
         'statement_revision': manifest['statement_revision'], 'workspace': str(workspace),
         'prepared_manifest': prepared, 'configuration_lock': lock, 'driver_environment': driver_environment,
         'resolved_generator_argv': argv,
-        'manifest_inventory_validation': {'argv': inventory_argv, 'timeout_seconds': inventory_timeout_seconds,
-                                          'elapsed_ns': inventory_elapsed_ns},
+        'manifest_inventory_validation': inventory,
         'qualification': 'not_established'}, _GENERATION_SEAL)
 
 
@@ -557,7 +690,7 @@ def finalize_public_context(request, generated, *, source_repository, benchmark_
         generated['configuration_lock']['generator_source_binding']['command'],
         generated['configuration_lock']['problem_statement_revisions']))
     inventory = generated['manifest_inventory_validation']
-    require(inventory['argv'] == ['lake', 'exe', 'lean-eval', 'validate-manifest']
+    require(inventory['argv'] == ['lake', 'exe', 'lean-eval', 'validate-manifest', '--assume-modules-built']
             and type(inventory['timeout_seconds']) is int and 1 <= inventory['timeout_seconds'] <= 1200
             and type(inventory['elapsed_ns']) is int and inventory['elapsed_ns'] >= 0)
     for field in ('benchmark_commit', 'toolchain'):

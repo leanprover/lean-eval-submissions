@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import shutil
+import time
+from unittest import mock
 from pathlib import Path
 import subprocess
 import sys
@@ -175,8 +179,210 @@ class GitObjectTests(unittest.TestCase):
         self.assertEqual(prepare._export_declarations(source.read_bytes(), config)[-1], 'an_original_definition')
 
 
+class InventoryPreparationTests(unittest.TestCase):
+    def fixture(self, root, modules):
+        files = {}
+        for index, module in enumerate(modules):
+            files['manifests/problems/problem' + str(index) + '.toml'] = (
+                'id = "problem' + str(index) + '"\nmodule = "' + module + '"\n').encode()
+            files[module.replace('.', '/') + '.lean'] = b'-- controlled ownership fixture; never Lean qualification\n'
+        repository = root / 'source'
+        commit = commit_files(repository, files)
+        executable = root / 'owned-lake-fixture'
+        executable.write_text('#!' + str(Path(sys.executable).resolve()) + '\n' + r'''import json,os,resource,sys,time,tomllib
+from pathlib import Path
+root=Path.cwd();args=sys.argv[1:]
+with(root/'events').open('a')as h:h.write(json.dumps({'argv':args,'pid':os.getpid(),'as_limit':resource.getrlimit(resource.RLIMIT_AS)[0],'threads':os.getenv('LEAN_NUM_THREADS')})+'\n')
+if args[0]=='build':
+ module=args[1]
+ if os.getenv('FIXTURE_FAILURE')==module:sys.exit(7)
+ time.sleep(float(os.getenv('FIXTURE_SLEEP','0')))
+ target=root/'.lake/build/lib/lean'/(module.replace('.','/')+'.olean');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'controlled artifact, not a Lean object')
+elif '--assume-modules-built'in args:
+ modules={tomllib.loads(p.read_text())['module']for p in(root/'manifests/problems').glob('*.toml')}
+ if not all((root/'.lake/build/lib/lean'/(m.replace('.','/')+'.olean')).is_file()for m in modules):sys.exit(8)
+else:
+ assert args==['exe','lean-eval','validate-manifest','--structure-only']
+''')
+        executable.chmod(0o700)
+        return prepare.Git(repository, commit), repository, executable
+
+    def test_original_ignored_entry_and_closed_module_operand_rules(self):
+        valid = {'manifests/problems/first.toml': b'id = "first"\nmodule = "Alpha"\n',
+                 'Alpha.lean': b'-- controlled public fixture\n'}
+        for ignored in ('manifests/problems/.DS_Store', 'manifests/problems/.DS_Store/ignored.toml'):
+            with tempfile.TemporaryDirectory() as directory:
+                repository = Path(directory) / 'repository'
+                commit = commit_files(repository, {**valid, ignored: b'not UTF8/TOML: \xff'})
+                self.assertEqual(prepare._original_inventory_modules(prepare.Git(repository, commit)), ('Alpha',))
+        for extra in ('manifests/problems/other.txt', 'manifests/problems/nested/other.toml',
+                      'manifests/problems/.not-DS_Store'):
+            with tempfile.TemporaryDirectory() as directory:
+                repository = Path(directory) / 'repository'
+                commit = commit_files(repository, {**valid, extra: b'not an original manifest'})
+                with self.assertRaises(prepare.Invalid):
+                    prepare._original_inventory_modules(prepare.Git(repository, commit))
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory) / 'repository'
+            commit = commit_files(repository, {'manifests/problems/first.toml': b'id = "first"\nmodule = "--help"\n',
+                                               '--help.lean': b'-- cannot become a command flag\n'})
+            with self.assertRaises(prepare.Invalid):
+                prepare._original_inventory_modules(prepare.Git(repository, commit))
+
+    def run_owned(self, operation):
+        real, children = subprocess.Popen, []
+        def launch(*args, **kwargs):
+            child = real(*args, **kwargs)
+            children.append(child)
+            return child
+        try:
+            with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch):
+                return operation()
+        finally:
+            self.assertTrue(children)
+            for child in children:
+                self.assertIsNotNone(child.returncode)
+                with self.assertRaises(ChildProcessError):
+                    os.waitpid(child.pid, os.WNOHANG)
+
+    def test_public_owner_guard_stops_and_reaps_real_child_on_sigterm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runner = root / 'owner.py'
+            runner.write_text("import json,os,signal,subprocess,sys\n" +
+                "sys.path.insert(0," + repr(str(ROOT / 'scripts')) + ")\n" +
+                "import prepare_stock_workspace as p\n" +
+                "real=subprocess.Popen;children=[]\n" +
+                "def launch(*a,**kw):\n c=real(*a,**kw);children.append(c);return c\n" +
+                "p.subprocess.Popen=launch\n" +
+                "def operation(*a,**kw):\n p.invoke([sys.executable,'-c'," +
+                repr('import os,signal,time;os.kill(os.getppid(),signal.SIGTERM);time.sleep(10)') +
+                "]," + repr(str(root)) + ",p.environment(" + repr(str(root)) + "),3)\n" +
+                "p._generate_original=operation\n" +
+                "try:p.generate_original(None,None,None,None,None,toolchain_prefix=None,dependency_repositories={})\n" +
+                "except p.supervisor.Interrupted:pass\n" +
+                "else:raise AssertionError('termination was not observed')\n" +
+                "assert len(children)==1 and children[0].returncode==-signal.SIGKILL\n" +
+                "try:os.waitpid(children[0].pid,os.WNOHANG)\n" +
+                "except ChildProcessError:pass\n" +
+                "else:raise AssertionError('owned child was not reaped')\n" +
+                "print(json.dumps({'interrupted':True,'reaped':True}))\n")
+            result = subprocess.run([sys.executable, '-I', str(runner)], capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(json.loads(result.stdout), {'interrupted': True, 'reaped': True})
+
+    def test_all_module_order_dedup_and_actual_child_exit_before_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git, source, lake = self.fixture(root, ('Beta', 'Alpha', 'Beta'))
+            self.assertEqual(prepare._original_inventory_modules(git), ('Beta', 'Alpha'))
+            observation = self.run_owned(lambda: prepare._prepare_inventory(git, source, prepare.environment(root), lake, 3))
+            self.assertEqual([entry['module'] for entry in observation['module_builds']], ['Beta', 'Alpha'])
+            self.assertTrue(all(entry['exit_code'] == 0 for entry in observation['module_builds']))
+            events = [json.loads(line) for line in (source / 'events').read_text().splitlines()]
+            self.assertEqual(events[-1]['argv'], ['exe', 'lean-eval', 'validate-manifest', '--assume-modules-built'])
+            builds = [entry for entry in events if entry['argv'][0] == 'build']
+            self.assertEqual({entry['argv'][1] for entry in builds}, {'Alpha', 'Beta'})
+            self.assertTrue(all(entry['as_limit'] == 32 * 1024**3 and entry['threads'] == '1' for entry in builds))
+
+    def test_partial_actual_build_failure_stops_and_reaps_all_owned_children(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git, source, lake = self.fixture(root, ('Slow', 'Bad', 'Unstarted'))
+            env = dict(prepare.environment(root), FIXTURE_FAILURE='Bad', FIXTURE_SLEEP='10')
+            started = time.monotonic()
+            with self.assertRaises(prepare.Invalid):
+                self.run_owned(lambda: prepare._prepare_inventory(git, source, env, lake, 3))
+            self.assertLess(time.monotonic() - started, 2)
+            events = [json.loads(line) for line in (source / 'events').read_text().splitlines()]
+            self.assertFalse(any('--assume-modules-built' in entry['argv'] for entry in events))
+            self.assertFalse(any(entry['argv'] == ['build', 'Unstarted'] for entry in events))
+
+    def test_one_shared_deadline_cannot_reset_between_batches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git, source, lake = self.fixture(root, ('One', 'Two', 'Three', 'Four', 'Five', 'Six'))
+            env = dict(prepare.environment(root), FIXTURE_SLEEP='0.45')
+            started = time.monotonic()
+            with self.assertRaises(prepare.Invalid):
+                self.run_owned(lambda: prepare._prepare_inventory(git, source, env, lake, 1))
+            self.assertLess(time.monotonic() - started, 2)
+            events = [json.loads(line) for line in (source / 'events').read_text().splitlines()]
+            self.assertFalse(any('--assume-modules-built' in entry['argv'] for entry in events))
+
+
 @unittest.skipUnless((BENCHMARK / '.git').exists(), 'existing offline public benchmark Git objects required')
 class OriginalStockTests(unittest.TestCase):
+    def test_controlled_original_cli_inventory_success_and_semantic_rejection(self):
+        # Small controlled PUBLIC fixture exercising the genuine original CLI,
+        # not a cold full-family preparer run or a historical task qualification.
+        donor = Path('/tmp/nix-shell.NgJZc4/lean-eval-stock-original-208-builder-2rbvrxx_/source')
+        prefix = Path('/tmp/lean-eval-435rc3-checker-compat/lean-4.35.0-rc3-linux')
+        compiler = Path('/tmp/lean-eval-stock-remaining-compat/435rc3/clang-host')
+        if not (donor / '.lake/build/bin/lean-eval').is_file() or not compiler.is_file():
+            self.skipTest('existing genuine offline original CLI/dependency cache required')
+        commit = '208b6b22d396f28771dba56414b19f47cae5f2a7'
+        git, _, selected, manifest = prepare.selection(BENCHMARK, commit, 'leanprover/lean4:v4.35.0-rc3', 'two_plus_two')
+        paths = [path for path in git.entries if path.startswith('EvalTools/') and path.endswith('.lean')]
+        manifest_path = 'manifests/problems/two_plus_two.toml'
+        paths += list(prepare.CONFIG_FILES) + [manifest['module'].replace('.', '/') + '.lean']
+        # The original module tags three declarations. Preserve every original
+        # manifest for that module; one-problem inventory would falsely narrow it.
+        paths += [path for path in git.entries if path.startswith('manifests/problems/') and path.endswith('.toml')
+                  and prepare.tomllib.loads(git.blob(path).decode())['module'] == manifest['module']]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / 'controlled-public-original-cli'
+            original = {path: git.blob(path) for path in paths}
+            original.update(selected)
+            fixture_commit = commit_files(project, original)
+            fixture_git = prepare.Git(project, fixture_commit)
+            self.assertIsNone(prepare._share_packages(project, donor / '.lake/packages'))
+            packages = json.loads(selected['lake-manifest.json'])['packages']
+            overrides = [{'type': 'path', 'name': item['name'],
+                'dir': str((project / '.lake/packages' / item['name'].strip('«»')).resolve()),
+                'manifestFile': item['manifestFile'], 'configFile': item['configFile'],
+                'inherited': item['inherited']} for item in packages]
+            (project / '.lake/package-overrides.json').write_bytes(prepare.supervisor.stock.canonical(
+                {'version': '1.2.0', 'packages': overrides}))
+            subprocess.run(['cp', '--reflink=auto', '-a', str(donor / '.lake/build'), str(project / '.lake/build')], check=True)
+            env = prepare.environment(root, prefix)
+            env['PATH'] = ':'.join(dict.fromkeys([str(prefix / 'bin')] + [str(Path(shutil.which(name)).resolve().parent)
+                for name in ('env', 'bash', 'git') if shutil.which(name)]))
+            env['LEAN_CC'] = str(compiler)
+            for name in ('NIX_LD', 'NIX_LD_LIBRARY_PATH', 'LD_LIBRARY_PATH'):
+                if name in os.environ:
+                    env[name] = os.environ[name]
+            real_popen = subprocess.Popen
+            with open('/tmp/lean-eval-stock-preparer-genuine-inventory-child.log', 'wb') as log:
+                def logged(*args, **kwargs):
+                    if args[0][0] == str(prefix / 'bin/lake'):
+                        kwargs.update(stdout=log, stderr=subprocess.STDOUT)
+                    return real_popen(*args, **kwargs)
+                with mock.patch.object(prepare.subprocess, 'Popen', side_effect=logged):
+                    observation = prepare._prepare_inventory(fixture_git, project, env, prefix / 'bin/lake', 120)
+            self.assertEqual([entry['module'] for entry in observation['module_builds']], [manifest['module']])
+            self.assertEqual(observation['argv'], ['lake', 'exe', 'lean-eval', 'validate-manifest', '--assume-modules-built'])
+            # A real original compiled inventory must reject changed manifest
+            # metadata; the assume flag cannot replace semantic validation.
+            path = project / manifest_path
+            lines = path.read_text().splitlines()
+            self.assertTrue(any(line.startswith('holes = ') for line in lines))
+            path.write_text('\n'.join('holes = ["missing_inventory_theorem"]' if line.startswith('holes = ') else line
+                                      for line in lines) + '\n')
+            with self.assertRaises(prepare.Invalid):
+                prepare.invoke([str(prefix / 'bin/lake'), *observation['argv'][1:]], project, env, 30)
+
+    def test_all_original_inventory_modules_conserved_in_original_order(self):
+        # Frozen independently from the three original Git catalogs and the
+        # pinned original Core.Manifest loadManifest/uniqueModules semantics.
+        expected = '7e84c623aa7ebab350a750882ceb620b110a5edda93761de9e673d6388a09202'
+        for commit, toolchain in prepare.contracts.SELECTIONS:
+            git, _, _, _ = prepare.selection(BENCHMARK, commit, toolchain, 'two_plus_two')
+            modules = prepare._original_inventory_modules(git)
+            self.assertEqual(len(modules), 296)
+            self.assertEqual(prepare.sha(prepare.supervisor.stock.canonical(modules)), expected)
+
     def test_all_four_actual_original_selections_are_bound(self):
         for commit, toolchain in prepare.contracts.SELECTIONS:
             with self.subTest(commit=commit, toolchain=toolchain):

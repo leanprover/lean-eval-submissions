@@ -38,12 +38,36 @@ does not perform the NONE branch's full-catalog inventory check, unknown-directo
 synchronization or index rewrite. Before it, the preparer executes original full
 validate-manifest (including validateManifestAgainstInventory) and
 validate-generated-catalog against the exact original Git snapshot. The full
-semantic validator builds every original problem module and runs the genuine
-original eval_inventory; no structural-only or selected-inventory substitute is
-accepted. This trusted public inventory/build phase has a separately recorded
-bound of at most1200 seconds. It changes no runtime M/T or selected-generator
-budget (at most300 seconds). Failure leaves generation unproved. Selected source/module/manifest/revision and all
-global catalog inputs are bound by that immutable tree. The full semantic guard
+semantic guard runs the genuine original eval_inventory; no structural-only or
+selected-inventory substitute is accepted. Before it, the preparer derives ALL
+original modules in original manifest filename/first-occurrence order and builds
+them in fixed batches of at most two original `lake build <module>` commands.
+Only successful real child exits plus original module artifacts allow the
+original supported `validate-manifest --assume-modules-built` invocation. That
+flag skips rebuilding only; every original module is still imported and the
+full semantic inventory is compared. No synthetic inventory is supplied.
+
+One monotonic deadline of at most1200 seconds covers plan loading, the original
+structural precheck, ALL batches and the final full validator. It is never reset
+per batch. The selected generator still has its independent at-most300-second
+bound, and runtime M/T are unchanged. Any partial failure, deadline or cleanup
+failure leaves generation/context unproved. A two-worker limit and
+LEAN_NUM_THREADS=1 hint apply to these trusted public builds. Each build child
+also inherits kernel CPU-time and at-most32GiB virtual-address-space limits;
+stricter inherited limits are preserved. The address limit is not physical RAM
+or aggregate VM memory enforcement. Actual provider resource qualification
+remains separate.
+
+Linux pidfds and WNOWAIT preserve owned leader identity until group termination
+and wait, including leaders that already exited. Failure/deadline/termination
+signals stop every owned group and wait every direct child before returning.
+This trusted-build ownership does not replace Source PID-namespace containment,
+provider destruction or job/scratch cleanup qualification. Selected source/module/manifest/revision and all
+global catalog inputs are bound by that immutable tree. The loader ignores only
+the original exact `.DS_Store` entry, rejects other stray files/directories, and
+conserves first-occurrence module order. Canonical dotted ASCII module operands
+are additionally required before process launch; all296 original modules in all
+four frozen configurations satisfy that grammar. No configuration is widened. The full semantic guard
 is preserved separately; selected generation still does not rewrite the entire
 generated catalog or index.
 
