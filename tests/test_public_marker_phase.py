@@ -201,6 +201,49 @@ class FiniteMarkerPhaseTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         marker.safe_journal(value, expected)
 
+    def test_shared_typescript_late_completion_survives_projection_and_fence_without_relaxing_grammar(self):
+        # The Worker test runs this exact fixture through the actual TS
+        # appendMarkerJournal transitions and fences the resulting journal.
+        events = json.loads((ROOT / "tests/fixtures/marker-phase-late-completion.json").read_bytes())
+        with tempfile.TemporaryDirectory() as temp:
+            root, env = self.fixture(temp)
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(marker, "ROOT", root):
+                directory = self.prepared(root)
+                scope = marker.campaign.load(marker.report_path())["scope"]
+                expected = marker.binding(scope, VERSION, self.observation(directory))
+                journal = self.journal(scope, expected, "fenced", events)
+                journal.update(operation_outcome="pending", destruction_outcome="succeeded")
+                for state in ("active", "fenced"):
+                    value = {**journal, "state": state}
+                    self.assertEqual(marker.safe_journal(self.envelope(value), expected)["events"], events)
+                marker.write(directory / "binding.json", expected)
+                with mock.patch.object(marker, "token", return_value=SECRET), \
+                     mock.patch.object(marker, "post", return_value=(200, self.envelope(journal))) as post:
+                    marker.fence(directory)
+                post.assert_called_once()
+                self.assertEqual(post.call_args.args[0], "/phase-fence")
+                report = marker.campaign.load(marker.report_path())
+                self.assertTrue(report["journal_fenced"])
+                self.assertEqual(report["journal"]["events"], events)
+                self.assertEqual(report["journal"]["operation_outcome"], "pending")
+                self.assertNotIn(SECRET, marker.report_path().read_text())
+
+                malformed = [
+                    events + [events[-1]],                         # duplicate application completion
+                    events + [events[-2]],                         # duplicate cleanup completion
+                    events + [{"operation": "write_identity", "state": "succeeded", "elapsed_ms": 1}],
+                    events + [{"operation": "write_identity", "state": "started"}],  # new work after cleanup
+                    events[:3] + [events[2]] + events[3:],          # repeated application start
+                    events[:4] + [events[3]] + events[4:],          # repeated cleanup start
+                    events[:3] + [{"operation": "write_identity", "state": "started"}] + events[3:],
+                ]
+                for index, bad in enumerate(malformed):
+                    with self.subTest(malformed=index), self.assertRaises(ValueError):
+                        marker.safe_journal(self.envelope({**journal, "events": bad}), expected)
+                for key, value in (("operation_outcome", "succeeded"), ("destruction_outcome", "pending")):
+                    with self.subTest(outcome=key), self.assertRaises(ValueError):
+                        marker.safe_journal(self.envelope({**journal, key: value}), expected)
+
     def test_identity_creation_failure_and_retirement_failure_still_allow_safe_scratch_removal(self):
         with tempfile.TemporaryDirectory() as temp:
             root, env = self.fixture(temp)

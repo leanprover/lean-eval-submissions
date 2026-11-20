@@ -1,0 +1,8 @@
+[
+  {"operation": "sandbox_handle", "state": "started"},
+  {"operation": "sandbox_handle", "state": "succeeded", "elapsed_ms": 0},
+  {"operation": "write_ciphertext", "state": "started"},
+  {"operation": "destroy", "state": "started"},
+  {"operation": "destroy", "state": "succeeded", "elapsed_ms": 1},
+  {"operation": "write_ciphertext", "state": "succeeded", "elapsed_ms": 1}
+]

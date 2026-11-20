@@ -8,6 +8,7 @@ import {
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
 import { ReplayTerminalReceipt } from "../src/replay-terminal-receipt";
 import type { ReplayAcceptanceRequest } from "../src/replay-contract";
+import lateCompletion from "../../tests/fixtures/marker-phase-late-completion.json";
 
 const NONCE = "1".repeat(64);
 const VERSION = "71d1eba9-a3eb-4361-ba60-e979fdc40999";
@@ -123,6 +124,17 @@ describe("finite source-free marker journal", () => {
     expect(f.values.get(MARKER_PHASE_KEY)).toMatchObject({ state: "expired", events: [] });
     await expect(f.store.prepareMarkerPhase(f.binding)).rejects.toThrow(MarkerPhaseError);
     await expect(f.store.appendMarkerPhase(f.binding, { operation: "sandbox_handle", state: "started" })).rejects.toThrow(MarkerPhaseError);
+    expect(f.sandboxAccess).not.toHaveBeenCalled();
+  });
+
+  it("accepts the shared late application completion after destruction fixture before fencing", async () => {
+    const f = await fixture();
+    await f.store.prepareMarkerPhase(f.binding);
+    await f.store.claimMarkerPhase(f.binding);
+    for (const event of lateCompletion) await f.store.appendMarkerPhase(f.binding, event as MarkerEvent);
+    const journal = await f.store.fenceMarkerPhase(f.binding);
+    expect(journal).toMatchObject({ state: "fenced", operation_outcome: "pending", destruction_outcome: "succeeded" });
+    expect(journal.events).toEqual(lateCompletion);
     expect(f.sandboxAccess).not.toHaveBeenCalled();
   });
 

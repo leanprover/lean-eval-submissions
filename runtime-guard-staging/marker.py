@@ -143,25 +143,28 @@ def safe_journal(value, expected):
             and journal["state"] in STATES and type(journal["claimed"]) is bool
             and journal["operation_outcome"] in OUTCOMES and journal["destruction_outcome"] in OUTCOMES
             and isinstance(journal["events"], list) and len(journal["events"]) <= 20)
-    events, completed, started = [], [], None
+    events, completed, pending, seen_starts = [], [], set(), set()
     operation_outcome, destruction_outcome = "pending" if journal["claimed"] else "not_attempted", "not_attempted"
     for event in journal["events"]:
         require(isinstance(event, dict) and set(event) <= {"operation", "state", "elapsed_ms", "code"}
                 and event.get("operation") in OPERATIONS and event.get("state") in {"started", "succeeded", "failed"})
         if event["state"] == "started":
-            require(set(event) == {"operation", "state"})
+            require(set(event) == {"operation", "state"} and event["operation"] not in seen_starts)
             if event["operation"] != "destroy":
-                require(started is None and operation_outcome == "pending" and destruction_outcome == "not_attempted"
+                require(not pending and operation_outcome == "pending" and destruction_outcome == "not_attempted"
                         and len(completed) < len(OPERATIONS) - 1 and event["operation"] == OPERATIONS[len(completed)])
             else:
                 require(destruction_outcome == "not_attempted" and any(item["operation"] == "sandbox_handle" for item in events))
                 destruction_outcome = "pending"
-            started = event["operation"]
+            # Cleanup is independent of the one sequential application call.
+            # Its completion must not erase an already-issued late append.
+            seen_starts.add(event["operation"])
+            pending.add(event["operation"])
         else:
             require(type(event.get("elapsed_ms")) is int and 0 <= event["elapsed_ms"] <= 600000
                     and ("code" not in event or event["state"] == "failed" and event["code"] in CODES)
-                    and started == event["operation"])
-            started = None
+                    and event["operation"] in pending)
+            pending.remove(event["operation"])
             if event["operation"] == "destroy":
                 destruction_outcome = event["state"]
             else:
