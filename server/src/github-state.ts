@@ -93,8 +93,6 @@ import {
   modelIdentityReverseImpactPath,
   modelIdentityReverseImpactView,
   MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS,
-  PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
-  STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
   type ModelAliasView,
   type ModelIdentityReverseImpactMember,
   type ModelIdentityReverseImpactView,
@@ -140,6 +138,7 @@ export const DISPATCH_OUTBOX_SCAN_LIMIT = 32;
 const DISPATCH_OUTBOX_READ_CONCURRENCY = 6;
 type ResultOwnerContract = Readonly<{
   commit: string;
+  eventSchemaSha256?: string;
   rootEntries: Readonly<Record<string, Readonly<{
     mode: string;
     type: string;
@@ -147,46 +146,45 @@ type ResultOwnerContract = Readonly<{
   }>>>;
 }>;
 type ModelIdentityContract = ResultOwnerContract;
-const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
-  [PRODUCTION_STATE_REPOSITORY]: {
-    commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
-    rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
-      schema: { mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
-      scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
-    },
-  },
-  [STAGING_STATE_REPOSITORY]: {
-    commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
-    rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
-      docs: { mode: "040000", type: "tree", sha: "6a13b8b4feee94d923c87bfa72bcef9e4bd91d67" },
-      schema: { mode: "040000", type: "tree", sha: "080f0c42ded00155b76ada937e3312d8591ee86f" },
-      scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
-    },
+const LEGACY_PRODUCTION_STATE_CONTRACT: ResultOwnerContract = {
+  commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
+  eventSchemaSha256: "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e",
+  rootEntries: {
+    "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
+    docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
+    schema: { mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
+    scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
   },
 };
-const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> = {
-  [PRODUCTION_STATE_REPOSITORY]: {
-    commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
-    rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
-      docs: { mode: "040000", type: "tree", sha: "27ab87708f95a4d919a63ae535b5b2ad6a21f88b" },
-      schema: { mode: "040000", type: "tree", sha: "2e83ec14e70ca6dd4bba1518c8a2ca28ee76be94" },
-      scripts: { mode: "040000", type: "tree", sha: "cf03bcfa56de6381f2d66a00b2547d4d9b46b0df" },
-    },
-  },
-  [STAGING_STATE_REPOSITORY]: {
-    commit: STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
-    rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
-      docs: { mode: "040000", type: "tree", sha: "6a13b8b4feee94d923c87bfa72bcef9e4bd91d67" },
-      schema: { mode: "040000", type: "tree", sha: "080f0c42ded00155b76ada937e3312d8591ee86f" },
-      scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
-    },
+const ARCHIVE_PRODUCTION_STATE_CONTRACT: ResultOwnerContract = {
+  commit: "351b1c409290516bfa379fc857908908e1d08932",
+  eventSchemaSha256: "2b16ce492d30e80cd219f0432f93b4b0177d0560911d771f423c91d8724468a6",
+  rootEntries: {
+    "README.md": { mode: "100644", type: "blob", sha: "98dceb606e0f8e2c779fa54cd2a810cfb7c591ef" },
+    docs: { mode: "040000", type: "tree", sha: "7eff701f6cb2716092f2f13980354c3aec880373" },
+    schema: { mode: "040000", type: "tree", sha: "f7efe29098882c33bba25b5dbbeba34bd981205d" },
+    scripts: { mode: "040000", type: "tree", sha: "1f0173a9cf24d00e139c0c346500a2deef5c2453" },
   },
 };
+const STAGING_STATE_CONTRACT: ResultOwnerContract = {
+  commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
+  rootEntries: {
+    "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
+    docs: { mode: "040000", type: "tree", sha: "6a13b8b4feee94d923c87bfa72bcef9e4bd91d67" },
+    schema: { mode: "040000", type: "tree", sha: "080f0c42ded00155b76ada937e3312d8591ee86f" },
+    scripts: { mode: "040000", type: "tree", sha: "7261fdd5a616800cd207ec44b05e982a296cd210" },
+  },
+};
+const RESULT_OWNER_CONTRACTS: Readonly<Record<string, readonly ResultOwnerContract[]>> = {
+  [PRODUCTION_STATE_REPOSITORY]: [LEGACY_PRODUCTION_STATE_CONTRACT, ARCHIVE_PRODUCTION_STATE_CONTRACT],
+  [STAGING_STATE_REPOSITORY]: [STAGING_STATE_CONTRACT],
+};
+const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, readonly ModelIdentityContract[]>> = RESULT_OWNER_CONTRACTS;
+export type ProductionStateQualification = Readonly<{
+  stateCommit: string;
+  contractCommit: string;
+  eventSchemaSha256: string;
+}>;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const resultOwnerContractProofCache = new Map<string, true>();
 const modelIdentityContractProofCache = new Map<string, true>();
@@ -384,7 +382,7 @@ export function clearResultOwnerContractProofCacheForTest(): void {
   modelIdentityContractProofCache.clear();
 }
 
-function resultOwnerContract(repository: string): ResultOwnerContract {
+function resultOwnerContracts(repository: string): readonly ResultOwnerContract[] {
   const key = repository.toLowerCase();
   const contract = RESULT_OWNER_CONTRACTS[key];
   if (!Object.hasOwn(RESULT_OWNER_CONTRACTS, key) || contract === undefined) {
@@ -393,7 +391,7 @@ function resultOwnerContract(repository: string): ResultOwnerContract {
   return contract;
 }
 
-function modelIdentityContract(repository: string): ModelIdentityContract {
+function modelIdentityContracts(repository: string): readonly ModelIdentityContract[] {
   const key = repository.toLowerCase();
   const contract = MODEL_IDENTITY_CONTRACTS[key];
   if (!Object.hasOwn(MODEL_IDENTITY_CONTRACTS, key) || contract === undefined) {
@@ -403,11 +401,11 @@ function modelIdentityContract(repository: string): ModelIdentityContract {
 }
 
 function resultOwnerContractProofCacheKey(repository: string, head: string): string {
-  const contract = resultOwnerContract(repository);
-  const proofId = Object.entries(contract.rootEntries)
-    .map(([path, entry]) => `${path}:${entry.mode}:${entry.type}:${entry.sha}`)
-    .join("|");
-  return `${repository.toLowerCase()}\0${head}\0${contract.commit}\0${proofId}`;
+  const proofId = resultOwnerContracts(repository).map((contract) =>
+    contract.commit + ":" + Object.entries(contract.rootEntries)
+      .map(([path, entry]) => `${path}:${entry.mode}:${entry.type}:${entry.sha}`)
+      .join("|")).join(";");
+  return `${repository.toLowerCase()}\0${head}\0${proofId}`;
 }
 
 function rememberResultOwnerContractProof(key: string): void {
@@ -419,11 +417,11 @@ function rememberResultOwnerContractProof(key: string): void {
 }
 
 function modelIdentityContractProofCacheKey(repository: string, head: string): string {
-  const contract = modelIdentityContract(repository);
-  const proofId = Object.entries(contract.rootEntries)
-    .map(([path, entry]) => `${path}:${entry.mode}:${entry.type}:${entry.sha}`)
-    .join("|");
-  return `${repository.toLowerCase()}\0${head}\0${contract.commit}\0${proofId}`;
+  const proofId = modelIdentityContracts(repository).map((contract) =>
+    contract.commit + ":" + Object.entries(contract.rootEntries)
+      .map(([path, entry]) => `${path}:${entry.mode}:${entry.type}:${entry.sha}`)
+      .join("|")).join(";");
+  return `${repository.toLowerCase()}\0${head}\0${proofId}`;
 }
 
 function rememberModelIdentityContractProof(key: string): void {
@@ -539,13 +537,13 @@ async function assertResultOwnerContractAt(
   fetcher: GitHubFetch,
   commit: string,
   treeSha: string,
-): Promise<void> {
-  await assertStateSourceContractAt(
+): Promise<ResultOwnerContract> {
+  return assertStateSourceContractAt(
     config,
     fetcher,
     commit,
     treeSha,
-    resultOwnerContract(config.repository),
+    resultOwnerContracts(config.repository),
     "result-owner",
   );
 }
@@ -555,13 +553,13 @@ async function assertModelIdentityContractAt(
   fetcher: GitHubFetch,
   commit: string,
   treeSha: string,
-): Promise<void> {
-  await assertStateSourceContractAt(
+): Promise<ResultOwnerContract> {
+  return assertStateSourceContractAt(
     config,
     fetcher,
     commit,
     treeSha,
-    modelIdentityContract(config.repository),
+    modelIdentityContracts(config.repository),
     "model-identity",
   );
 }
@@ -571,16 +569,35 @@ async function assertStateSourceContractAt(
   fetcher: GitHubFetch,
   commit: string,
   treeSha: string,
-  contract: ResultOwnerContract,
+  contracts: readonly ResultOwnerContract[],
   label: "result-owner" | "model-identity",
-): Promise<void> {
+): Promise<ResultOwnerContract> {
+  // Select by exact current roots before checking the selected anchor. Reading
+  // one tree and one ancestry proof keeps the existing subrequest ceiling.
+  const rawTree = object(
+    await jsonCall(config, fetcher, `/git/trees/${treeSha}`),
+    `State ${label} contract root tree`,
+  );
+  if (rawTree.sha !== treeSha || rawTree.truncated !== false || !Array.isArray(rawTree.tree)) {
+    throw new GitHubStateError(503, `protected State main ${label} contract root tree was incomplete`);
+  }
+  const entries = rawTree.tree;
+  const matches = contracts.filter((contract) =>
+    Object.entries(contract.rootEntries).every(([path, expected]) => {
+      const matching = entries.filter((value) =>
+        value !== null && typeof value === "object" && !Array.isArray(value) &&
+        (value as Record<string, unknown>).path === path);
+      if (matching.length !== 1) return false;
+      const entry = object(matching[0], `${path} contract root entry`);
+      return entry.mode === expected.mode && entry.type === expected.type && entry.sha === expected.sha;
+    }));
+  const contract = matches[0];
+  if (matches.length !== 1 || contract === undefined) {
+    throw new GitHubStateError(503, `protected State main ${label} contract root entries changed`);
+  }
   if (commit !== contract.commit) {
     const comparison = object(
-      await jsonCall(
-        config,
-        fetcher,
-        `/compare/${contract.commit}...${commit}`,
-      ),
+      await jsonCall(config, fetcher, `/compare/${contract.commit}...${commit}`),
       `State ${label} contract comparison`,
     );
     if (
@@ -590,29 +607,7 @@ async function assertStateSourceContractAt(
       throw new GitHubStateError(503, `protected State main does not descend from the reviewed ${label} contract`);
     }
   }
-  const rawTree = object(
-    await jsonCall(config, fetcher, `/git/trees/${treeSha}`),
-    `State ${label} contract root tree`,
-  );
-  if (rawTree.sha !== treeSha || rawTree.truncated !== false || !Array.isArray(rawTree.tree)) {
-    throw new GitHubStateError(503, `protected State main ${label} contract root tree was incomplete`);
-  }
-  for (const [path, expected] of Object.entries(contract.rootEntries)) {
-    const matches = rawTree.tree.filter((value) =>
-      value !== null && typeof value === "object" && !Array.isArray(value) &&
-      (value as Record<string, unknown>).path === path);
-    if (matches.length !== 1) {
-      throw new GitHubStateError(503, `protected State main ${label} contract root entries changed`);
-    }
-    const entry = object(matches[0], `${path} contract root entry`);
-    if (
-      entry.mode !== expected.mode ||
-      entry.type !== expected.type ||
-      entry.sha !== expected.sha
-    ) {
-      throw new GitHubStateError(503, `protected State main ${label} contract root entries changed`);
-    }
-  }
+  return contract;
 }
 
 function decodeInlineJson(value: unknown, path: string): unknown {
@@ -2585,11 +2580,15 @@ export class GitHubStateRepository {
   }
 
   async assertProductionQualifiedWritable(): Promise<string> {
+    return (await this.assertProductionQualifiedWritableProof()).stateCommit;
+  }
+
+  async assertProductionQualifiedWritableProof(): Promise<ProductionStateQualification> {
     if (this.#config.repository.toLowerCase() !== PRODUCTION_STATE_REPOSITORY) {
       throw new GitHubStateError(503, "production State qualification targeted the wrong repository");
     }
     const snapshot = await this.#authorizedSnapshot();
-    await Promise.all([
+    const [, contract] = await Promise.all([
       assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha),
       assertResultOwnerContractAt(
         this.#config,
@@ -2602,7 +2601,14 @@ export class GitHubStateRepository {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }
     await assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha);
-    return snapshot.headSha;
+    if (contract.eventSchemaSha256 === undefined) {
+      throw new GitHubStateError(503, "production State proof has no reviewed event schema");
+    }
+    return {
+      stateCommit: snapshot.headSha,
+      contractCommit: contract.commit,
+      eventSchemaSha256: contract.eventSchemaSha256,
+    };
   }
 
   async provePromotionCanaryContention(event: WritableStateEvent): Promise<{

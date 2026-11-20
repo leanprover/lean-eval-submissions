@@ -110,7 +110,6 @@ import {
   type SubmissionView,
 } from "./submission-view";
 import {
-  PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
   resultOwnerStateContractCommit,
 } from "./result-owner";
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
@@ -568,9 +567,11 @@ async function readiness(
     const repository = stateRepository(env);
     if (verifyWrite) {
       const production = env.DEPLOYMENT_ENVIRONMENT === "production";
-      const stateCommit = production
-        ? await repository.assertProductionQualifiedWritable()
-        : await repository.assertWritable();
+      const qualified = production
+        ? await repository.assertProductionQualifiedWritableProof()
+        : null;
+      const stateCommit = qualified !== null
+        ? qualified.stateCommit : await repository.assertWritable();
       const response: Record<string, unknown> = {
         status: "state_writer_ready",
         environment: env.DEPLOYMENT_ENVIRONMENT,
@@ -581,12 +582,11 @@ async function readiness(
         intake_lease_expires_at: intake.leaseExpiresAt,
         state_commit: stateCommit,
       };
-      if (production) {
+      if (qualified !== null) {
         response.state_branch_protected = true;
-        response.state_contract_commit = PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
+        response.state_contract_commit = qualified.contractCommit;
         response.state_contract_verified = true;
-        response.state_event_schema_sha256 =
-          "c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e";
+        response.state_event_schema_sha256 = qualified.eventSchemaSha256;
       }
       return json(response);
     }

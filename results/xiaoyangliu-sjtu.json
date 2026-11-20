@@ -944,6 +944,25 @@
         "ref": "479ce51483442451ee6585ccd0c32a589de1addc",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-20T04:40:40Z",
+      "benchmark_commit": "ddef5dec7c0b8a1481004728ac3632afac458bf8",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1f6f1-a129-7ec9-9d98-e5a10e6d3f6a"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {},
+      "result_id": "r2_60cd40fa3024c9114793c75ef9b33b04d6fe6133ea5ba1b3cbd43bcb493a9c5c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0107e917361a6e6679a19bebfb66a44c5f5b5184",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,

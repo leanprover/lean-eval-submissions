@@ -95,6 +95,13 @@ preflight uses `READINESS_TOKEN`, remains available while intake is disabled,
 and is invoked through `verify-state-writer.yml` so the State credential never
 leaves its Worker secret binding.
 
+The ordinary production State reader accepts only the closed legacy and
+archive-capable source contracts described in
+[`docs/ordinary-state-contract-compatibility.md`](../docs/ordinary-state-contract-compatibility.md).
+Production write readiness reports the contract and schema proven at that
+same protected head. Existing API capability floors and staging pins remain
+unchanged; they do not authorize unknown production source trees.
+
 Production enablement first deploys a finite `leased` configuration bound to
 the exact controller commit/run/attempt, target commit, State commit, event,
 and nonce digest. Every public API request recomputes effective state and fails

@@ -325,14 +325,19 @@ def deploy(case, directory):
     command("npx", "wrangler", "deploy", "--config", f".public-guard-{case}.json", "--env", "staging", cwd=ROOT / "server")
     receipt.update(wait_ownership(config))
     save(directory / "receipt.json", receipt)
-    subprocess.run([sys.executable, "../scripts/wait_replay_container_rollout.py", "--config", f".public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"], "--attempts", "40", "--interval-seconds", "10", "--command-timeout-seconds", "10"], cwd=ROOT / "server", check=True, timeout=900)
+    # These resources were absent before deployment and the exact new namespace,
+    # application and immutable image are now verified. There is no previous
+    # application image to roll out. run_case must establish execution readiness
+    # through the existing source-free marker before sending any public Source.
+    # Application-wide provisioning counters do not establish that readiness.
 
 
 def run_case(case, directory):
     if os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("STATE_WRITE_KEY"):
         raise ValueError("deployment or State writer credential reached execution")
     config, receipt, request = load(directory / "config.json"), load(directory / "receipt.json"), load(directory / "request.json")
-    if not receipt.get("worker_version"):
+    required = {"worker_version", "namespaces", "health", "application_id", "application_version", "application_created_at"}
+    if not receipt.get("created") or not required.issubset(receipt) or any(not receipt[k] for k in required):
         raise ValueError("exact ownership was not established")
     url = "https://" + config["name"] + ".lean-eval.workers.dev"
     # The existing synthetic route reports actual host identity and destroys
@@ -352,6 +357,8 @@ def run_case(case, directory):
     endpoint_health(url, receipt)
     receipt["safe_to_delete"] = False
     receipt["phase"] = "runtime-observation"
+    receipt["outcome"] = "incomplete"
+    receipt.pop("runtime_readiness", None)
     save(directory / "receipt.json", receipt)
     status, evidence = http(url + "/api/v1/staging-acceptance", observation, True)
     refusal = {401: {"error": "unauthorized"}, 400: {"error": "invalid_request"},
@@ -369,6 +376,8 @@ def run_case(case, directory):
     save(directory / "receipt.json", receipt)
     if any(evidence[k] != load(directory / "profile.json")[k] for k in receipt["observed_runtime"]):
         raise ValueError("observed runtime differs from the frozen profile; stop")
+    receipt["runtime_readiness"] = "source-free-marker-confirmed"
+    save(directory / "receipt.json", receipt)
     binding = {k: request[k] for k in ("schema_version", "replay_task_id", "attempt")}
     endpoint_health(url, receipt)
     status, response = http(url + "/api/v1/historical-public-replay/cleanup-reservation", binding, True)
