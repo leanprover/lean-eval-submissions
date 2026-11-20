@@ -28,7 +28,11 @@ wrappers retain the base's original prebuilt Python3.11.14 at
 `/usr/local/python/bin/python3.11`, selected through its existing
 `/usr/local/bin/python3.11` alternative. Build checks the realpath/version before
 apt, restores that exact alternative after any transitive distro Python install,
-and checks again. It installs no distro Python/pip or new interpreter/builder.
+and checks again. It explicitly installs no distro Python/pip or new
+interpreter/builder. Apt Meson uses its own transitive Ubuntu3.10 interpreter
+explicitly, so restoring the native3.11 alternative does not redirect that
+distro tool away from its `mesonbuild` packages. Instrumentation and pip retain
+the base's original native3.11 throughout.
 The same native Python/pip installs only the existing hash-locked requirements
 with isolated pip, no dependency resolution and a verified fixed native site
 directory. Named locked packages may replace existing versions; pip itself is

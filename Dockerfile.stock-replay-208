@@ -36,7 +36,7 @@ RUN curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
     && echo '9760d007363e3abba7c747489910f9f82d9fca53ba3bd3282e396fa3c97a3314  /tmp/bubblewrap.tar.xz' \
       | sha256sum --check --strict \
     && tar --extract --xz --no-same-owner --file /tmp/bubblewrap.tar.xz --directory /tmp \
-    && meson setup /tmp/bubblewrap-0.12.0/build /tmp/bubblewrap-0.12.0 \
+    && /usr/bin/python3.10 -I -B /usr/bin/meson setup /tmp/bubblewrap-0.12.0/build /tmp/bubblewrap-0.12.0 \
       -Dselinux=disabled -Dman=disabled -Dbash_completion=disabled \
       -Dzsh_completion=disabled -Dtests=false \
     && ninja -C /tmp/bubblewrap-0.12.0/build \
