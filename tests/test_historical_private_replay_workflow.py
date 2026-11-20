@@ -258,8 +258,8 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("body=redacted", start)
         self.assertNotIn('cat "$RUNNER_TEMP/executor-start-response.json"', start)
         self.assertLess(
+            start.index("echo 'accepted=true'"),
             start.index('shred --remove "$RUNNER_TEMP/executor-request.json"'),
-            start.index('if [ "$start_transport" != ok ]'),
         )
         self.assertIn("refresh_readiness", start)
         self.assertIn("prewarm-request.json", start)
