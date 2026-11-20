@@ -42,6 +42,14 @@ original receipt, completion callback, canonical events and release schedule.
 
 Before enabling a version 2 producer, enforce the compatible callback digest in
 the production rollback admission path and prove the retained receiver unit.
+The producer revision adds `evaluation-callback-floor` to the normal rollback
+workflow before Cloudflare access. It verifies the target's complete existing
+qualification and actual source digest against the reviewed v2 receiver digest;
+matching a State contract alone is insufficient. Later receiver source changes
+require explicit compatibility review and an updated digest. Run rollback from
+the current protected-main workflow; do not dispatch an obsolete workflow tag or
+rerun an earlier deployment to bypass that admission check. Older workflow
+history and privileged manual deployment are not constrained by a new validator.
 After any version 2 workflow has been dispatched, use that qualified receiver
 unit or a later independently qualified compatible unit for emergency rollback.
 An older version 1-only Worker cannot receive those in-flight callbacks, even

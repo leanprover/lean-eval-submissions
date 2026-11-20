@@ -45,6 +45,41 @@ def production_health(commit: str = COMMIT) -> dict[str, object]:
 
 
 class RollbackContractCoverageTests(unittest.TestCase):
+    def test_current_receiver_can_receive_inflight_v2_callbacks(self) -> None:
+        qualification = json.loads(
+            (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text()
+        )
+        self.assertEqual(
+            rollback.validate_evaluation_callback_floor(qualification, ROOT),
+            qualification["lifecycle_callback_contract_sha256"],
+        )
+
+    def test_self_consistent_unreviewed_receiver_cannot_bypass_v2_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = pathlib.Path(temporary)
+            for relative in [
+                *rollback.CALLBACK_CONTRACT_FILES,
+                "server/package.json", "server/package-lock.json",
+            ]:
+                destination = target / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            source = target / "server/src/api-contract.ts"
+            source.write_text(source.read_text() + "\n// Unreviewed receiver variant.\n")
+            qualification = json.loads(
+                (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text()
+            )
+            with self.assertRaisesRegex(rollback.RollbackValidationError, "differs"):
+                rollback.validate_evaluation_callback_floor(qualification, target)
+            qualification["lifecycle_callback_contract_sha256"] = (
+                rollback._callback_contract_digest(target)
+            )
+            # Exact source/qualification consistency alone does not establish
+            # protocol compatibility for an old or otherwise unreviewed target.
+            rollback._validate_qualification_header(qualification, target)
+            with self.assertRaisesRegex(rollback.RollbackValidationError, "in-flight v2"):
+                rollback.validate_evaluation_callback_floor(qualification, target)
+
     def test_qualifies_result_owner_runtime(self) -> None:
         self.assertIn("server/src/result-owner.ts", rollback.CALLBACK_CONTRACT_FILES)
 

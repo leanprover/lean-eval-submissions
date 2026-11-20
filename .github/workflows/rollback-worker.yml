@@ -100,6 +100,10 @@ jobs:
           git worktree add --detach "$plan_dir/target" "$EXPECTED_COMMIT"
           target="$plan_dir/target/server"
 
+          python ../scripts/validate_cloudflare_rollback.py evaluation-callback-floor \
+            --qualification "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json" \
+            --target-root "$plan_dir/target"
+
           npx wrangler deployments status --config wrangler.jsonc \
             --env production --json > "$plan_dir/original-intake-status.json"
           npx wrangler deployments status --config wrangler.broker.jsonc \

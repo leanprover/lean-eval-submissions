@@ -62,6 +62,13 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_rollback_enforces_v2_receiver_before_cloudflare_access(self) -> None:
+        self.assertLess(
+            ROLLBACK.index("evaluation-callback-floor"),
+            ROLLBACK.index("npx wrangler deployments status"),
+        )
+        self.assertIn('--target-root "$plan_dir/target"', ROLLBACK)
+
     def test_pull_request_checks_cannot_cancel_the_protected_main_deployment(self) -> None:
         self.assertIn(
             "format('submission-worker-pr-{0}', github.event.pull_request.number)",
