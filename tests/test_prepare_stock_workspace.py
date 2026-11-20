@@ -78,6 +78,60 @@ class GitObjectTests(unittest.TestCase):
             self.assertEqual((packages / 'library/Library.lean').read_bytes(), git.blob('Library.lean'))
             self.assertTrue((repository / '.git').is_dir())
 
+    def test_real_stock_lake_resolves_all_local_packages_after_git_scrub(self):
+        prefix = Path('/tmp/lean-eval-435rc3-checker-compat/lean-4.35.0-rc3-linux')
+        if not (prefix / 'bin/lake').is_file():
+            self.skipTest('existing offline official stock Lake required')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            packages = root / 'packages'
+            packages.mkdir()
+            entries, dependencies = [], []
+            for name in ('ordinary', 'lean-pool'):
+                repository = root / ('repository-' + name)
+                commit = commit_files(repository, {'lakefile.toml': ('name = "' + name + '"\n').encode(),
+                    'Original.lean': b'-- pinned original public fixture\n'})
+                git = prepare.Git(repository, commit)
+                destination = packages / name
+                url = 'https://github.com/fixture/' + name + '.git'
+                git.checkout_dependency(destination, url)
+                dependencies.append((git, destination))
+                entries.append({'type': 'git', 'name': '«lean-pool»' if name == 'lean-pool' else name, 'url': url, 'rev': commit,
+                    'inputRev': commit, 'scope': '', 'subDir': None, 'inherited': False,
+                    'manifestFile': 'lake-manifest.json', 'configFile': 'lakefile.toml'})
+            workspace = root / 'workspace'
+            workspace.mkdir()
+            requires = ''.join('\n[[require]]\nname = "' + item['name'].strip('«»') + '"\ngit = "' + item['url'] +
+                '"\nrev = "' + item['rev'] + '"\n' for item in entries)
+            (workspace / 'lakefile.toml').write_text('name = "workspace"\n' + requires)
+            (workspace / 'lean-toolchain').write_text('leanprover/lean4:v4.35.0-rc3\n')
+            manifest = {'version': '1.3.0', 'packagesDir': '.lake/packages', 'packages': entries,
+                        'name': 'workspace', 'lakeDir': '.lake', 'fixedToolchain': False}
+            manifest_raw = prepare.supervisor.stock.canonical(manifest) + b'\n'
+            (workspace / 'lake-manifest.json').write_bytes(manifest_raw)
+            self.assertIsNone(prepare._share_packages(workspace, packages))
+            with self.assertRaises(prepare.Invalid):
+                prepare._install_local_package_overrides(workspace, manifest, dependencies[:-1])
+            original = packages / 'ordinary/Original.lean'
+            original.write_text('-- changed unproved dependency\n')
+            with self.assertRaises(prepare.Invalid):
+                prepare._install_local_package_overrides(workspace, manifest, dependencies)
+            original.write_bytes(b'-- pinned original public fixture\n')
+            prepare._install_local_package_overrides(workspace, manifest, dependencies)
+            overrides = json.loads((workspace / '.lake/package-overrides.json').read_bytes())
+            self.assertEqual({item['name'].strip('«»') for item in overrides['packages']}, {'ordinary', 'lean-pool'})
+            self.assertEqual(next(item for item in overrides['packages'] if item['name'] == '«lean-pool»')['dir'],
+                             str(workspace / '.lake/packages/lean-pool'))
+            prepare._strip_owned_git_metadata(packages)
+            env = prepare.environment(root, prefix)
+            for _ in range(2):
+                result = subprocess.run([str(prefix / 'bin/lake'), 'env'],
+                    cwd=workspace, env=env, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertNotIn(b'fetching', result.stderr)
+                self.assertFalse(any(path.name == '.git' for path in packages.rglob('*')))
+                self.assertEqual((workspace / 'lake-manifest.json').read_bytes(), manifest_raw)
+
     def test_selected_generator_contract_resolves_only_the_bound_single_problem(self):
         command = ['lake', 'exe', 'lean-eval', 'generate']
         self.assertEqual(prepare.resolved_generator_argv(command, {'two_plus_two': 1}),

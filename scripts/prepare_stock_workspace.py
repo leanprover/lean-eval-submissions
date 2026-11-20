@@ -18,6 +18,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 
 import stock_replay_contract as contracts
@@ -241,6 +242,35 @@ def resolved_generator_argv(command, problem_statement_revisions):
     return [*command, '--problem', problem]
 
 
+def _install_local_package_overrides(workspace, manifest, dependencies):
+    """Resolve every exact-pin-verified dependency locally after Git scrub.
+
+    The original Git manifest remains unchanged. Lean Pool keeps the original
+    helper's private cache; other packages keep its read-only source aliases.
+    """
+    workspace = Path(workspace)
+    objects = {destination.name: (git, destination) for git, destination in dependencies}
+    packages = manifest['packages']
+    require(len(objects) == len(packages)
+            and set(objects) == {package['name'].strip('«»') for package in packages})
+    overrides = []
+    for package in sorted(packages, key=lambda value: value['name'].strip('«»')):
+        name = package['name'].strip('«»')
+        git, destination = objects[name]
+        require(git.commit == package['rev'])
+        git.verify_dependency_checkout(destination)
+        target = workspace / '.lake/packages' / name
+        require(target.is_dir())
+        resolved = target.resolve(strict=True)
+        require((name == 'lean-pool' and resolved == target and not target.is_symlink())
+                or (name != 'lean-pool' and resolved == destination.resolve(strict=True)))
+        overrides.append({'type': 'path', 'name': package['name'], 'dir': str(resolved),
+            'manifestFile': package['manifestFile'], 'configFile': package['configFile'],
+            'inherited': package['inherited']})
+    (workspace / '.lake/package-overrides.json').write_bytes(
+        supervisor.stock.canonical({'version': '1.2.0', 'packages': overrides}) + b'\n')
+
+
 def _strip_owned_git_metadata(packages):
     """Only fresh owned public dependency clones, after Git/source verification."""
     packages = Path(packages)
@@ -267,7 +297,7 @@ def _trusted_path(value, forbidden):
 
 
 def generate_original(repository, commit, toolchain, problem, session, *, toolchain_prefix,
-                      dependency_repositories, timeout_seconds=300, driver_path=None):
+                      dependency_repositories, timeout_seconds=300, inventory_timeout_seconds=1200, driver_path=None):
     """Own the original build and generation, without accepting build receipts.
 
     Dependencies are fresh exact Git exports at the selected manifest's commits;
@@ -280,7 +310,8 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
     session, prefix = supervisor.stock.absolute(str(session)), Path(toolchain_prefix)
     require(prefix.is_absolute() and prefix.resolve(strict=True) == prefix
             and session.resolve(strict=False) == session
-            and type(timeout_seconds) is int and 1 <= timeout_seconds <= 300)
+            and type(timeout_seconds) is int and 1 <= timeout_seconds <= 300
+            and type(inventory_timeout_seconds) is int and 1 <= inventory_timeout_seconds <= 1200)
     session.mkdir(mode=0o700)
     source, home = session / 'source', session / 'home'
     home.mkdir(mode=0o700)
@@ -322,7 +353,15 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
     verify_inputs()
     invoke([str(prefix / 'bin/lake'), 'build', 'lean-eval', 'extract_theorem', 'eval_inventory'], source, env, timeout_seconds)
     verify_inputs()
-    invoke([str(prefix / 'bin/lake'), 'exe', 'lean-eval', 'validate-manifest', '--structure-only'], source, env, timeout_seconds)
+    # Preserve the original unselected generator's semantic guard. The original
+    # validator builds every original statement module and runs eval_inventory;
+    # this trusted PUBLIC preparation budget is separate from runtime M/T and
+    # from the unchanged selected-generator timeout.
+    inventory_started = time.monotonic_ns()
+    inventory_argv = ['lake', 'exe', 'lean-eval', 'validate-manifest']
+    invoke([str(prefix / 'bin/lake'), *inventory_argv[1:]], source, env, inventory_timeout_seconds)
+    inventory_elapsed_ns = time.monotonic_ns() - inventory_started
+    verify_inputs()
     invoke([str(prefix / 'bin/lake'), 'exe', 'lean-eval', 'validate-generated-catalog'], source, env, timeout_seconds)
     # Retained committed output is not selected generation evidence. Only the
     # bound problem is deleted; other original/catalog data stay intact.
@@ -339,6 +378,7 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
     require((workspace / 'lean-toolchain').read_bytes() == configuration['lean-toolchain'])
     _install_root_manifest(workspace, source / 'lake-manifest.json')
     require(_share_packages(workspace, packages) is None)
+    _install_local_package_overrides(workspace, selected_manifest, dependency_objects)
     # WorkspaceTest imports only trusted Lean; never prime Challenge, Solution
     # or Submission. No submitter data has entered this workspace.
     invoke([str(prefix / 'bin/lake'), 'build', 'workspace_test'], workspace, env, timeout_seconds)
@@ -356,6 +396,8 @@ def generate_original(repository, commit, toolchain, problem, session, *, toolch
         'statement_revision': manifest['statement_revision'], 'workspace': str(workspace),
         'prepared_manifest': prepared, 'configuration_lock': lock, 'driver_environment': driver_environment,
         'resolved_generator_argv': argv,
+        'manifest_inventory_validation': {'argv': inventory_argv, 'timeout_seconds': inventory_timeout_seconds,
+                                          'elapsed_ns': inventory_elapsed_ns},
         'qualification': 'not_established'}, _GENERATION_SEAL)
 
 
@@ -514,6 +556,10 @@ def finalize_public_context(request, generated, *, source_repository, benchmark_
     require(generated['resolved_generator_argv'] == resolved_generator_argv(
         generated['configuration_lock']['generator_source_binding']['command'],
         generated['configuration_lock']['problem_statement_revisions']))
+    inventory = generated['manifest_inventory_validation']
+    require(inventory['argv'] == ['lake', 'exe', 'lean-eval', 'validate-manifest']
+            and type(inventory['timeout_seconds']) is int and 1 <= inventory['timeout_seconds'] <= 1200
+            and type(inventory['elapsed_ns']) is int and inventory['elapsed_ns'] >= 0)
     for field in ('benchmark_commit', 'toolchain'):
         require(generated[field] == request['benchmark']['commit' if field == 'benchmark_commit' else field])
     require(generated['problem_id'] == request['result']['problem_id']

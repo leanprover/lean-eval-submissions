@@ -35,11 +35,17 @@ permission or active consumer/admission follows from this clarification.
 
 The genuine original CLI supports --problem. Selected generation intentionally
 does not perform the NONE branch's full-catalog inventory check, unknown-directory
-synchronization or index rewrite. Before it, the preparer executes original
-validate-manifest --structure-only and validate-generated-catalog against the
-exact original Git snapshot. Selected source/module/manifest/revision and all
-global catalog inputs are bound by that immutable tree. This is selected-problem
-generation proof, not a claim of full-catalog semantic inventory regeneration.
+synchronization or index rewrite. Before it, the preparer executes original full
+validate-manifest (including validateManifestAgainstInventory) and
+validate-generated-catalog against the exact original Git snapshot. The full
+semantic validator builds every original problem module and runs the genuine
+original eval_inventory; no structural-only or selected-inventory substitute is
+accepted. This trusted public inventory/build phase has a separately recorded
+bound of at most1200 seconds. It changes no runtime M/T or selected-generator
+budget (at most300 seconds). Failure leaves generation unproved. Selected source/module/manifest/revision and all
+global catalog inputs are bound by that immutable tree. The full semantic guard
+is preserved separately; selected generation still does not rewrite the entire
+generated catalog or index.
 
 ## Original build, closure and C
 
@@ -70,8 +76,13 @@ extension or fake generation receipt does not repair it.
 
 The selected generated workspace retains every original trusted file, including
 README.md, holes.json, optional ChallengeDeps.lean and the unchanged WorkspaceTest.
-It uses the existing root-manifest and shared-package helpers, then primes only
-the trusted WorkspaceTest target. Challenge, Solution and Submission are never
+It uses the existing root-manifest and shared-package helpers, then installs
+deterministic trusted local-path overrides for every exact-pin-verified package
+before priming or Git metadata removal. The original Git manifest and pins are
+retained unchanged. Lean Pool retains its original private-cache overlay; all
+other packages retain original shared read-only source aliases. Stock Lake can
+resolve without rematerializing Git repositories or fetching HTTPS after scrub.
+It then primes only the trusted WorkspaceTest target. Challenge, Solution and Submission are never
 primed outside the original comparator sandbox. Fresh owned dependency Git
 metadata is removed only after actual source-pin verification/build, preserving
 all tracked originals before Source exposure and closure freeze.
