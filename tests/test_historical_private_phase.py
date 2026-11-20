@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import io
+import json
 import pathlib
 import sys
 import unittest
@@ -111,12 +113,13 @@ class PrivatePhaseTests(unittest.TestCase):
     def test_identity_cleanup_proof_needs_no_archive_or_full_plan(self):
         plan, _, envelope = self.start()
         arguments = dict(workflow=self.workflow, run_id=12, run_attempt=1,
-                         accepted_epoch=200, accepted_elapsed=100, now=300, lane=self.lane,
+                         lane=self.lane,
                          state=self.f.state, repository=self.f.repository)
         with mock.patch.object(phase, "plan_at_commit", side_effect=ValueError("Audit unavailable")):
             identity = phase.prove_identity(envelope, **arguments)
             with self.assertRaises(ValueError):
-                phase.resume(envelope, audit=self.f.audit, **arguments)
+                phase.resume(envelope, audit=self.f.audit, accepted_epoch=200,
+                             accepted_elapsed=100, now=300, **arguments)
         config = c.render_executor_config(plan, self.f.repository, "a" * 32, self.workflow)
         self.assertEqual(identity["worker"], config["name"])
         self.assertEqual(identity["application"], config["containers"][0]["name"])
@@ -134,15 +137,49 @@ class PrivatePhaseTests(unittest.TestCase):
             self.resume(envelope, accepted_elapsed=4000)
 
     def test_budget_preserves_post_and_cleanup_at_exact_boundaries(self):
-        phase.budget(100, 2670, 2670, admission=True)
+        phase.budget(100, 2850, 2850, admission=True)
         with self.assertRaises(ValueError):
-            phase.budget(100, 2671, 2671, admission=True)
-        phase.budget(100, 200, 2900)
+            phase.budget(100, 2851, 2851, admission=True)
+        phase.budget(100, 200, 2600)
         with self.assertRaises(ValueError):
-            phase.budget(100, 200, 2901)
+            phase.budget(100, 200, 2601)
         self.assertEqual(phase.SERVER_PROCESS_SECONDS, 330 * 60 + 300)
         self.assertLess(phase.SERVER_PROCESS_SECONDS + phase.RECEIPT_GRACE_SECONDS
                         + phase.CLEANUP_SECONDS, phase.OBSERVER_SECONDS)
+
+    def test_identity_cleanup_has_no_lifetime_dependency_but_resume_does(self):
+        _, _, envelope = self.start()
+        args = dict(workflow=self.workflow, run_id=12, run_attempt=1, lane=self.lane,
+                    state=self.f.state, repository=self.f.repository)
+        self.assertEqual(phase.prove_identity(envelope, **args)['status'], envelope['status'])
+        with self.assertRaises(ValueError):
+            phase.resume(envelope, audit=self.f.audit, accepted_epoch=999999,
+                         accepted_elapsed=999999, now=1, **args)
+
+    def test_health_retries_only_bounded_transport_failures(self):
+        response = io.BytesIO(json.dumps({'identity': 'exact'}).encode())
+        response.status = 200
+        request = phase.urllib.request.Request('https://example.test/healthz')
+        with mock.patch.object(phase.urllib.request, 'urlopen', side_effect=[
+            phase.urllib.error.URLError('temporary'), response]) as fetch, \
+             mock.patch.object(phase.time, 'sleep') as sleep:
+            phase.verify_health(request, {'identity': 'exact'})
+            self.assertEqual(fetch.call_count, 2)
+            self.assertEqual(fetch.call_args.kwargs['timeout'], 10)
+            sleep.assert_called_once_with(2)
+        response = io.BytesIO(b'{}')
+        response.status = 200
+        with mock.patch.object(phase.urllib.request, 'urlopen', return_value=response) as fetch:
+            with self.assertRaises(ValueError):
+                phase.verify_health(request, {'identity': 'exact'})
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_poll_timeout_limits_remote_overshoot_even_after_long_queue(self):
+        self.assertEqual(phase.poll_timeout_minutes(100, 100, 1000 + 337*60, 1000), 337)
+        self.assertEqual(phase.poll_timeout_minutes(100, 100, 1000 + 337*60, 1000 + 300*60), 37)
+        self.assertEqual(phase.poll_timeout_minutes(100, 100, 1061, 1000), 2)
+        with self.assertRaises(ValueError):
+            phase.poll_timeout_minutes(100, 100 + 340*60, 10000, 1000)
 
 
 if __name__ == "__main__":

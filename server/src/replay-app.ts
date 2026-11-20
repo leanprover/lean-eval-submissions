@@ -86,6 +86,7 @@ type TerminalReceiptStore = Pick<
   | "confirmReceipt"
 > & Partial<ArchiveUploadStore> & {
   destroyPrivateSandbox?: () => Promise<unknown>;
+  assertPrivateStatusAvailable?: () => Promise<void>;
 };
 
 function requireArchiveUploadStore(store: TerminalReceiptStore): ArchiveUploadStore {
@@ -2081,6 +2082,7 @@ export async function handleReplayRequest(
       requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
+      await store.assertPrivateStatusAvailable?.();
       sandbox = await dependencies.sandbox(env, input.runner_nonce);
       return await authoritativeProcessStatus(sandbox, store, input);
     } catch (error) {

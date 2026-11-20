@@ -175,6 +175,7 @@ export default {
         return {
           claimBinding: (binding: unknown) => store.claimReservedBinding(binding),
           readBinding: () => store.readBinding(),
+          assertPrivateStatusAvailable: () => store.assertPrivateStatusAvailable(),
           readReceipt: () => store.readReceipt(),
           prepareReceipt: (receipt: unknown) => store.prepareReceipt(receipt),
           confirmReceipt: () => store.confirmReceipt(),

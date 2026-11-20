@@ -927,6 +927,23 @@ describe("Cloudflare replay executor", () => {
     }
   });
 
+  it("refuses a closed private status before any Sandbox factory or process RPC", async () => {
+    const body = await authoritativeInput();
+    const sandbox = vi.fn(() => { throw new Error("sandbox must remain unreachable"); });
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(), sandbox,
+      receiptStore: () => ({
+        ...terminalReceiptStore(authoritativeStatusInput(body)),
+        assertPrivateStatusAvailable: () => Promise.reject(new Error("cleanup has begun")),
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(sandbox).not.toHaveBeenCalled();
+  });
+
   it("leaves a running process intact when a status RPC is transiently unavailable", async () => {
     const body = await authoritativeInput();
     let destroyed = false;

@@ -13,6 +13,7 @@ type StorageFixture = {
   put(key: string, value: unknown): Promise<void>;
   delete(key: string | string[]): Promise<void>;
   setAlarm(value: number): Promise<void>;
+  getAlarm(): Promise<number | null>;
   transaction<T>(callback: (transaction: StorageFixture) => Promise<T>): Promise<T>;
 };
 
@@ -31,6 +32,7 @@ function storageFixture(): StorageFixture {
       for (const item of Array.isArray(key) ? key : [key]) values.delete(item);
       return Promise.resolve();
     },
+    getAlarm: () => Promise.resolve(alarms.at(-1) ?? null),
     setAlarm: (value) => {
       alarms.push(value);
       return Promise.resolve();
@@ -388,7 +390,8 @@ describe("private pending cleanup barrier and fixed final sweep", () => {
     let alive = true;
     // SDK destroy does not delete its stored idle policy. Model an old RPC
     // restarting the same ID while the first physical destroy ACK is delayed.
-    const inheritedIdleSeconds = 21600;
+    // Persisted SDK configuration survives destroy and a new instance reads it.
+    const sdkStorage = new Map<string, number>([["sleepAfter", 21600]]);
     let calls = 0;
     const { storage, instance, binding, identity } = await admitted(() => {
       calls += 1;
@@ -414,7 +417,9 @@ describe("private pending cleanup barrier and fixed final sweep", () => {
     await expect(instance.commitArchiveUploadPart(upload, {})).rejects.toThrow("already finalized");
     await expect(instance.finalizeArchiveUpload(upload, "/assembled")).rejects.toThrow("already finalized");
     alive = true; // A key write/start already dispatched before the barrier.
-    expect(inheritedIdleSeconds).toBe(21600);
+    const currentInstanceIdle = sdkStorage.get("sleepAfter");
+    expect(currentInstanceIdle).toBe(21600);
+    expect(sdkStorage.has("sleepAfter")).toBe(true);
     acknowledge?.();
     expect(await cleanup).toMatchObject({ destruction_state: "confirmed" });
     expect(alive).toBe(true);
@@ -491,4 +496,64 @@ describe("private pending cleanup barrier and fixed final sweep", () => {
     expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
     expect(destroy).not.toHaveBeenCalled();
   });
+  it("does not reap a prewarmed admitted replay at its shorter upload lease", async () => {
+    const destroy = vi.fn(() => Promise.resolve());
+    const { storage, instance, binding } = await admitted(destroy);
+    await instance.claimArchiveUpload({
+      schema_version: 1, upload_kind: "authoritative-archive", runner_nonce: "1".repeat(64),
+      archive_sha256: "6".repeat(64), archive_bytes: 1, part_count: 1,
+    });
+    const uploadDeadline = storage.alarms.at(-1);
+    if (uploadDeadline === undefined) throw new Error("upload alarm missing");
+    expect(uploadDeadline).toBeLessThan(binding.cleanup_after_epoch_ms as number);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(uploadDeadline);
+    try {
+      await instance.alarm();
+      expect(destroy).not.toHaveBeenCalled();
+      expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+      expect(storage.alarms.at(-1)).toBe(binding.cleanup_after_epoch_ms);
+      clock.mockReturnValue(binding.cleanup_after_epoch_ms as number);
+      await instance.alarm();
+      expect(destroy).toHaveBeenCalledOnce();
+    } finally { clock.mockRestore(); }
+  });
+
+  it("keeps pending absent-binding cleanup closed until storage confirmation succeeds", async () => {
+    const storage = storageFixture();
+    const destroy = vi.fn(() => Promise.resolve());
+    const instance = receiptFixture(storage, destroy);
+    const binding = activeBinding();
+    const identity = { schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string, attempt: 1 };
+    await instance.reserveCleanupIdentity(identity);
+    storage.values.set(PRIVATE_CLEANUP_KEY, { ...identity, phase: "pending" });
+    const original = storage.put.bind(storage);
+    storage.put = (key, value) => key === CLEANUP_KEY
+      ? Promise.reject(new Error("storage unavailable")) : original(key, value);
+    await instance.alarm();
+    expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(true);
+    expect(storage.values.has(CLEANUP_KEY)).toBe(false);
+    await expect(instance.claimReservedBinding(binding)).rejects.toThrow("already finalized");
+    storage.put = original;
+    await instance.alarm();
+    expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+    expect(storage.values.get(CLEANUP_KEY)).toMatchObject({ destruction_state: "confirmed" });
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
+  it("private status refuses closed cleanup before sandbox lookup but preserves stored receipts", async () => {
+    const { storage, instance, identity } = await admitted(() => Promise.resolve());
+    await instance.assertPrivateStatusAvailable();
+    storage.values.set(PRIVATE_CLEANUP_KEY, { ...identity, phase: "pending" });
+    await expect(instance.assertPrivateStatusAvailable()).rejects.toThrow("cleanup has begun");
+    storage.values.set("authoritative-terminal-receipt:v1", {
+      retained_until_epoch_ms: Date.now() + 60000, destruction_state: "pending",
+    });
+    await instance.assertPrivateStatusAvailable();
+    storage.values.delete("authoritative-terminal-receipt:v1");
+    storage.values.delete(PRIVATE_CLEANUP_KEY);
+    storage.values.set(CLEANUP_KEY, { ...identity, destruction_state: "confirmed" });
+    await expect(instance.assertPrivateStatusAvailable()).rejects.toThrow("cleanup has begun");
+  });
+
 });

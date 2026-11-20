@@ -1553,20 +1553,6 @@ jobs:
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: leanprover/lean-eval-audit
-          filter: blob:limit=12m
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /*
-            !**/*.tar.age.parts/
-          ref: main
-          path: audit
-          fetch-depth: 0
-          persist-credentials: false
-          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
-
       - name: Install one temporary read-only State refresh identity
         env:
           STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
@@ -1585,12 +1571,6 @@ jobs:
           git -C state config core.sshCommand "$ssh_command"
           unset STATE_READ_KEY
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.22.0
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.18'
@@ -1598,7 +1578,6 @@ jobs:
       - name: Install exact source-only controller dependencies
         run: |
           set -euo pipefail
-          npm --prefix server ci
           python -m pip install --disable-pip-version-check --only-binary=:all: \
             --require-hashes -r requirements-jsonschema-workflow.txt
 
@@ -1607,8 +1586,6 @@ jobs:
         timeout-minutes: 5
         env:
           PRIVATE_HANDOFF: ${{ needs.start-one.outputs.handoff }}
-          PRIVATE_ACCEPTED_EPOCH: ${{ needs.start-one.outputs.accepted_epoch }}
-          PRIVATE_ACCEPTED_ELAPSED: ${{ needs.start-one.outputs.accepted_elapsed }}
         run: |
           set -euo pipefail
           umask 077
@@ -1617,6 +1594,29 @@ jobs:
             --state-root state --output "$RUNNER_TEMP/identity-state.json"
           python scripts/historical_private_phase.py identity --state-root state \
             --repository-root metadata
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          filter: blob:limit=12m
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
+          ref: main
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install exact disposable executor cleanup dependencies
+        run: npm --prefix server ci
 
       - name: Reconstruct admitted State history without source or AWS
         id: started
@@ -1705,7 +1705,7 @@ jobs:
           trap cleanup EXIT
           prove_running
           deadline=$PRIVATE_POLL_DEADLINE
-          job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 21600 - 1140 ))
+          job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 21600 - 1260 ))
           test "$deadline" -le "$job_deadline"
           while [ "$(date +%s)" -lt "$deadline" ]; do
             sleep 20
@@ -1760,15 +1760,16 @@ jobs:
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Confirm exact sandbox destruction after every attempted start
-        timeout-minutes: 4
+        timeout-minutes: 6
         id: cleanup
         if: always() && steps.identity.outputs.identity_ready == 'true'
         env:
           EXECUTOR_URL: ${{ steps.identity.outputs.url }}
           PRIVATE_HANDOFF: ${{ needs.start-one.outputs.handoff }}
-          PRIVATE_ACCEPTED_EPOCH: ${{ needs.start-one.outputs.accepted_epoch }}
-          PRIVATE_ACCEPTED_ELAPSED: ${{ needs.start-one.outputs.accepted_elapsed }}
         run: |
+          # Hard cap includes proofs, OIDC, retries and final readback. Never
+          # allow multiple 260s calls to consume an unbounded cleanup tail.
+          timeout --signal=TERM --kill-after=5s 335s bash <<'PRIVATE_CLEANUP'
           set -euo pipefail
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
@@ -1790,7 +1791,8 @@ jobs:
           trap 'unset token; rm -f "$RUNNER_TEMP/cleanup-oidc.json"' EXIT
           prove_cleanup_identity before-cleanup
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-            --max-time 120 --header "Authorization: Bearer $token" \
+            --max-time 260 --retry 2 --retry-all-errors --retry-delay 2 \
+            --retry-max-time 310 --header "Authorization: Bearer $token" \
             --header 'Content-Type: application/json' --request POST \
             --data-binary "@$RUNNER_TEMP/cleanup-request.json" \
             "$EXECUTOR_URL/api/v1/historical-private-replay/cleanup" \
@@ -1804,6 +1806,7 @@ jobs:
           ' "$RUNNER_TEMP/cleanup-confirmation.json" >/dev/null
           prove_cleanup_identity after-cleanup
           echo 'confirmed=true' >> "$GITHUB_OUTPUT"
+          PRIVATE_CLEANUP
 
       - name: Derive the exact terminal candidate after destruction
         timeout-minutes: 1

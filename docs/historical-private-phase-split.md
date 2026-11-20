@@ -10,9 +10,9 @@ protected source/State/Audit provenance, disposable resource ownership,
 cleanup reservation, source-free prewarm, State CAS admission, ten-minute
 one-use unwrap and reuse refusal. AWS authority is dropped before the
 key-bearing executor request. Before every replay.started State publication it
-reserves 45 minutes of remaining setup, 790 seconds for the 780-second POST, kill grace and rounding, and a
-19-minute cleanup tail. Every later private setup phase checks the absolute
-monotonic clock; the final POST must begin within 45 minutes of the first prewarm and
+reserves 40 minutes of remaining setup, 790 seconds for the 780-second POST, kill grace and rounding, and a
+21-minute cleanup tail. Every later private setup phase checks the absolute
+monotonic clock; the final POST must begin within 40 minutes of the first prewarm and
 still reserve its whole transport timeout and cleanup tail. Per-stage timeouts
 bound stalls. Wall-clock timestamps bind remote receipt horizons; monotonic
 clocks bound local job capacity against wall-clock corrections. No runtime allowance is shortened to make setup fit.
@@ -32,7 +32,8 @@ workflow/run/first-attempt identity, lane, original State parent and start event
 plan/candidate/status hashes, nonce and qualified profile/measurement/image
 identities. Archive locators, source, key material, capabilities and credentials
 are never outputs or artifacts. The observer checks out immutable workflow
-code, protected current metadata, State and encrypted Audit. It derives the
+code, protected current metadata and State. It proves cleanup identity before
+the optional encrypted Audit checkout, Node setup or npm install. It derives the
 unique lane's running event and its actual Git addition parent from protected
 State; re-materializes that exact parent; reconstructs the original canonical
 plan/candidate/status; verifies every handoff hash and current running binding.
@@ -42,10 +43,10 @@ non-running tasks are refused. Both jobs refuse workflow reruns.
 The observer never starts a process or unwraps; it polls the existing source-free
 status route, validates the exact response, confirms destruction, appends the
 truthful terminal outcome with CAS, and proves exact resource absence. Polling
-ends at accepted-202 time plus the server's 335-minute process window plus
+targets accepted-202 time plus the server's 335-minute process window plus
 120 seconds for delivery of its timeout receipt. Queue time consumes this
 remote window instead of restarting it. The polling step is capped by its own
-job clock minus nineteen minutes, rounded down, so even stalled State proofs
+job clock minus twenty-one minutes, rounded down, so even stalled State proofs
 cannot consume the reserved tail. The existing seven-hour cleanup alarm and
 stale recovery remain the fail-closed backstop after cancellation, missing
 handoff or incomplete cleanup. No fabricated terminal/destruction events are
@@ -69,11 +70,16 @@ observer is queued for hours or never arrives, the process/container may be
 lost before a full 330-minute execution finishes. It does not reduce the
 checker's immutable wall limit. A timely observer renews the normal short idle
 policy; an abandoned one returns to the existing cleanup/recovery path. With
-the 45-minute prewarm-to-POST bound and complete 13-minute POST, accepted 202
-arrives within 58 minutes and ten seconds of the original claim. The 337-minute observation
-horizon and 19-minute tail then end within 414 minutes and ten seconds, leaving over five
-minutes before the unchanged seven-hour durable alarm, before the permitted
-two-minute cross-host clock skew. The original DO alarm remains authoritative.
+the 40-minute prewarm-to-POST bound and 790 seconds of POST reserve, the nominal latest
+acceptance is 53m10s after prewarm. Adding 337 minutes of observation and a 21-minute tail gives
+411m10s, before cross-host clock skew (at most 120 seconds), poll-timeout rounding and
+step transitions. This is capacity arithmetic, not a promise that the final
+loop iteration ends immediately at its wall-clock deadline: a sleep, status
+RPC and State proofs can still be in flight. The polling step is additionally
+capped to its remaining remote horizon rounded up by at most one minute, and to the
+job clock rounded down minus 21 minutes. Queue delay never grants a fresh long polling
+window. The original seven-hour DO alarm remains the final independent bound;
+delayed providers or cleanup retries can still require stale recovery.
 
 Before a production pilot, independently review the exact source head, require
 all CI, repair and verify the dedicated AWS alias invocation authority, rerun
@@ -87,7 +93,8 @@ When full reconstruction refuses, an independent cleanup identity proof may
 confirm sandbox destruction only if the closed same workflow/run/event/task/
 attempt/nonce/profile binding matches the current protected lane admission and
 the exact derived Worker health, code, image and ownership tag. This proof
-needs no Audit checkout or archive plan. It never targets a newer lane attempt,
+needs no Audit checkout, archive plan or lifetime arithmetic; exact admitted
+cleanup remains safe regardless of accepted timestamp/elapsed fields. It never targets a newer lane attempt,
 writes no terminal State event and retains the Worker/receipt for existing
 stale recovery. An absent proof leaves the existing backstop untouched. All
 OIDC status/cleanup calls use only the identity-proved endpoint.
@@ -123,3 +130,19 @@ the exact owned application and Worker is the strongest resource fence. The
 final sweep assumes ordinary finite provider completion and eventual alarm /
 destroy success; it must not be described as defeating infinitely late RPCs.
 That residual must be reviewed independently before merge.
+
+The upload's 30-minute abandoned-upload lease can precede the prewarmed binding's seven-hour
+alarm. An early private alarm with no cleanup barrier/marker must reschedule
+the original binding deadline without destroying the running replay. Pending
+destruction retries remain immediate and are not deferred by that guard.
+Absent-binding pending cleanup is retained until actual storage confirmation
+succeeds. Private status refuses sandbox/process lookup after a cleanup barrier
+or marker unless a stored unexpired terminal receipt can still be recovered.
+
+Observer cleanup has a six-minute step and a hard 335-second shell cap including identity
+proofs, OIDC, HTTP retries and readback. Each cleanup POST allows 260 seconds (longer
+than the DO's 240-second destroy timeout), with at most two retries bounded by that outer
+cap. Health verification retries transport failures at most three times with 10-second
+per-call timeouts and two-second pauses, refusing a mismatched identity immediately. A
+timeout never fabricates confirmed destruction or a terminal State event. The
+21-minute tail reserves 20 timed minutes plus one orchestration minute.

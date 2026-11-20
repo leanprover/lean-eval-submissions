@@ -271,6 +271,17 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
     return this.claimBindingWithReservation(binding, true, true);
   }
 
+  async assertPrivateStatusAvailable(): Promise<void> {
+    await this.ctx.storage.transaction(async (transaction) => {
+      const receipt = await transaction.get(RECEIPT_KEY);
+      if (receipt !== undefined && retainedUntil(receipt) > Date.now()) return;
+      if (await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined
+        || await transaction.get(CLEANUP_KEY) !== undefined) {
+        throw new Error("historical private replay cleanup has begun");
+      }
+    });
+  }
+
   async readArchiveUpload(): Promise<unknown> {
     const upload = await this.ctx.storage.get(ARCHIVE_UPLOAD_KEY);
     return upload === undefined ? null : upload;
@@ -653,6 +664,14 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
           return;
         }
         if (Date.now() < cleanupAfter(binding)) return;
+      } else if (marker === undefined) {
+        try {
+          await this.confirmAbsentSandbox(cleanupIdentity(privateBarrier));
+        } catch {
+          // Failed storage confirmation must never reopen private admission.
+          await this.ctx.storage.setAlarm(Date.now() + CLEANUP_RETRY_MS);
+          return;
+        }
       }
       await this.ctx.storage.delete(PRIVATE_CLEANUP_KEY);
       // Continue through ordinary confirmed tombstone retention only after the
@@ -662,6 +681,12 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       && await this.ctx.storage.get(CLEANUP_KEY) === undefined) {
       const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);
       if (binding !== undefined) {
+        // Upload may have installed its shorter abandoned-upload lease after
+        // prewarm admitted this binding. Pending retries above are never deferred.
+        if (Date.now() < cleanupAfter(binding)) {
+          await this.ctx.storage.setAlarm(cleanupAfter(binding));
+          return;
+        }
         try {
           await this.destroyPrivateBoundSandbox(cleanupIdentity(binding));
         } catch {

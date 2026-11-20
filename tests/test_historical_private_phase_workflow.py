@@ -80,6 +80,22 @@ class PhaseWorkflowTests(unittest.TestCase):
         self.assertNotIn('upload-artifact', OBSERVE.split('Observe the exact blocked-network executor')[0])
         self.assertIn('historical-private-replay-redacted.json', OBSERVE)
 
+    def test_identity_cleanup_precedes_optional_audit_and_node_and_ignores_timing(self):
+        proof = OBSERVE.index('- name: Prove the exact admitted cleanup identity')
+        for optional in ['repository: leanprover/lean-eval-audit', 'uses: actions/setup-node@',
+                         'run: npm --prefix server ci']:
+            self.assertLess(proof, OBSERVE.index(optional))
+        identity = OBSERVE[proof:OBSERVE.index('repository: leanprover/lean-eval-audit')]
+        self.assertNotIn('PRIVATE_ACCEPTED_', identity)
+        cleanup = OBSERVE.split('- name: Confirm exact sandbox destruction', 1)[1].split('- name:', 1)[0]
+        self.assertIn('timeout-minutes: 6', cleanup)
+        self.assertIn('timeout --signal=TERM --kill-after=5s 335s bash', cleanup)
+        self.assertIn('--max-time 260 --retry 2', cleanup)
+        self.assertIn('--retry-max-time 310', cleanup)
+        self.assertNotIn('PRIVATE_ACCEPTED_', cleanup)
+        self.assertEqual(phase.CLEANUP_SECONDS, 21*60)
+        self.assertEqual(phase.PREWARM_MAX_AGE_SECONDS, 40*60)
+
 
 if __name__ == '__main__':
     unittest.main()

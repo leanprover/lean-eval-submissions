@@ -7,6 +7,7 @@ import json
 import os
 import pathlib
 import time
+import urllib.error
 import urllib.request
 from typing import Any
 
@@ -14,8 +15,8 @@ import historical_private_replay_controller as c
 
 START_JOB_SECONDS = 120 * 60
 POST_SECONDS = 790  # 780s outer timeout + 5s forced kill + clock rounding
-CLEANUP_SECONDS = 1140  # Eighteen timed tail minutes plus one orchestration minute.
-PREWARM_MAX_AGE_SECONDS = 45 * 60
+CLEANUP_SECONDS = 1260  # Twenty timed tail minutes plus one orchestration minute.
+PREWARM_MAX_AGE_SECONDS = 40 * 60
 SERVER_PROCESS_SECONDS = 20100
 RECEIPT_GRACE_SECONDS = 120
 OBSERVER_SECONDS = 360 * 60
@@ -28,7 +29,7 @@ def hash_value(value: Any) -> str:
 def budget(started: int, prewarm: int, now: int, *, admission: bool = False) -> None:
     if not 0 < started <= prewarm <= now:
         raise ValueError("private phase clock is invalid")
-    # Before State admission leave 45 minutes for all remaining private setup,
+    # Before State admission leave 40 minutes for all remaining private setup,
     # the complete POST and a destruction/State tail. Before POST enforce the
     # prewarm age and job deadline again. No process limit is shortened.
     remaining = PREWARM_MAX_AGE_SECONDS if admission else 0
@@ -74,8 +75,7 @@ def export(plan: dict[str, Any], candidate: dict[str, Any], status: dict[str, An
 
 
 def prove_identity(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
-           accepted_epoch: int, accepted_elapsed: int, now: int, lane: int,
-           state: pathlib.Path, repository: pathlib.Path) -> dict[str, Any]:
+           lane: int, state: pathlib.Path, repository: pathlib.Path) -> dict[str, Any]:
     value = c._object(envelope, "private handoff")
     c._fields(value, {"schema_version", "kind", "workflow_sha", "run_id", "run_attempt",
         "lane_index", "lane_count", "prestart_state_commit", "started_event_id",
@@ -85,12 +85,8 @@ def prove_identity(envelope: Any, *, workflow: str, run_id: int, run_attempt: in
         or value["workflow_sha"] != workflow or value["run_id"] != run_id
         or value["run_attempt"] != run_attempt or run_attempt != 1
         or value["lane_index"] != lane or value["lane_count"] != 4
-        or type(value["prewarm_epoch"]) is not int
-        or type(accepted_epoch) is not int or accepted_epoch < 1
-        or type(accepted_elapsed) is not int
-        or not 0 <= accepted_elapsed <= PREWARM_MAX_AGE_SECONDS + POST_SECONDS
-        or not accepted_epoch <= now + 120):
-        raise ValueError("private handoff workflow or lifetime differs")
+        or type(value["prewarm_epoch"]) is not int):
+        raise ValueError("private handoff workflow differs")
     c._match(c.COMMIT, workflow, "observer workflow SHA")
     c._verify_ancestor_of_upstream(repository, workflow, "observer workflow SHA")
     c.load_state_queue(state)  # Executes the exact protected State validator.
@@ -165,9 +161,13 @@ def prove_identity(envelope: Any, *, workflow: str, run_id: int, run_attempt: in
 def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
            accepted_epoch: int, accepted_elapsed: int, now: int, lane: int, state: pathlib.Path,
            repository: pathlib.Path, audit: pathlib.Path) -> dict[str, Any]:
+    if (type(accepted_epoch) is not int or accepted_epoch < 1
+        or type(accepted_elapsed) is not int
+        or not 0 <= accepted_elapsed <= PREWARM_MAX_AGE_SECONDS + POST_SECONDS
+        or not accepted_epoch <= now + 120):
+        raise ValueError("private handoff lifetime differs")
     identity = prove_identity(envelope, workflow=workflow, run_id=run_id, run_attempt=run_attempt,
-                              accepted_epoch=accepted_epoch, accepted_elapsed=accepted_elapsed,
-                              now=now, lane=lane, state=state, repository=repository)
+                              lane=lane, state=state, repository=repository)
     value = envelope
     prestart = identity["candidate"]["expected_head"]
     plan = plan_at_commit(state, repository, audit, prestart, lane)
@@ -192,6 +192,32 @@ def write_same(path: pathlib.Path, value: Any) -> None:
             raise ValueError("observer output identity changed")
     else:
         c._write(path, value)
+
+
+def poll_timeout_minutes(started: int, now_monotonic: int, deadline: int, now_wall: int) -> int:
+    remaining = started + OBSERVER_SECONDS - CLEANUP_SECONDS - now_monotonic
+    # A queued observer must not give a stuck final State proof a fresh 338m.
+    # Round the remote horizon up to minutes and job capacity down.
+    # An expired horizon gets one bounded minute to refuse safely.
+    minutes = min(338, remaining // 60, max(1, (max(0, deadline - now_wall) + 59) // 60))
+    if minutes < 1:
+        raise ValueError("observer setup exhausted its cleanup reserve")
+    return minutes
+
+
+def verify_health(request: urllib.request.Request, expected: dict[str, Any]) -> None:
+    # Retry transport failures only. A successful but different health response
+    # is an identity refusal, never a reason to send credentials and retry later.
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                if response.status != 200 or json.load(response) != expected:
+                    raise ValueError("admitted Worker health differs")
+            return
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == 2:
+                raise
+            time.sleep(2)
 
 
 def main() -> None:
@@ -227,8 +253,6 @@ def main() -> None:
         arguments = dict(workflow=os.environ["GITHUB_SHA"],
                         run_id=int(os.environ["GITHUB_RUN_ID"]),
                         run_attempt=int(os.environ["GITHUB_RUN_ATTEMPT"]),
-                        accepted_epoch=int(os.environ["PRIVATE_ACCEPTED_EPOCH"]),
-                        accepted_elapsed=int(os.environ["PRIVATE_ACCEPTED_ELAPSED"]), now=now,
                         lane=int(os.environ["PRIVATE_REPLAY_LANE_INDEX"]), state=args.state_root,
                         repository=args.repository_root)
         envelope = json.loads(os.environ["PRIVATE_HANDOFF"])
@@ -237,16 +261,17 @@ def main() -> None:
             url = f"https://{result['worker']}.lean-eval.workers.dev"
             request = urllib.request.Request(url + "/healthz", headers={
                 "User-Agent": "LeanEval private identity verification", "Cache-Control": "no-cache"})
-            with urllib.request.urlopen(request, timeout=30) as response:
-                if response.status != 200 or json.load(response) != result["expected_health"]:
-                    raise ValueError("admitted Worker health differs")
+            verify_health(request, result["expected_health"])
             write_same(temporary / "cleanup-request.json", {
                 "schema_version": 1, "replay_task_id": result["status"]["replay_task_id"],
                 "attempt": result["status"]["attempt"]})
             with open(os.environ["GITHUB_OUTPUT"], "a") as output:
                 output.write(f"identity_ready=true\nworker={result['worker']}\napplication={result['application']}\nurl={url}\n")
             return
-        result = resume(envelope, audit=args.audit_root, **arguments)
+        result = resume(envelope, audit=args.audit_root,
+                        accepted_epoch=int(os.environ["PRIVATE_ACCEPTED_EPOCH"]),
+                        accepted_elapsed=int(os.environ["PRIVATE_ACCEPTED_ELAPSED"]),
+                        now=now, **arguments)
         for name, value in [("private-replay-plan.json", result["plan"]),
                             ("started-candidate.json", result["candidate"]),
                             ("started-event.json", result["candidate"]["event"]),
@@ -257,11 +282,10 @@ def main() -> None:
             write_same(temporary / name, value)
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             # The step timeout is rounded DOWN so even stuck running proofs
-            # cannot consume the observer's separate nineteen-minute tail.
-            remaining = int(os.environ["REPLAY_JOB_STARTED_MONOTONIC"]) + OBSERVER_SECONDS - CLEANUP_SECONDS - int(time.monotonic())
-            minutes = min(338, remaining // 60)
-            if minutes < 1:
-                raise ValueError("observer setup exhausted its cleanup reserve")
+            # cannot consume the observer's separate twenty-one-minute tail.
+            minutes = poll_timeout_minutes(int(os.environ["REPLAY_JOB_STARTED_MONOTONIC"]),
+                                           int(time.monotonic()), result["poll_deadline_epoch"],
+                                           int(time.time()))
             output.write(f"appended=true\nstate_head={result['started_state_commit']}\npoll_timeout_minutes={minutes}\n")
         with open(os.environ["GITHUB_ENV"], "a") as output:
             output.write(f"PRIVATE_POLL_DEADLINE={result['poll_deadline_epoch']}\n")
