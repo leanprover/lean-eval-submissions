@@ -1653,14 +1653,28 @@ async function evaluationCompleted(
   if (Date.parse(completion.occurred_at) <= Date.parse(view.archive.occurred_at)) {
     throw new ApiDecodeError("evaluation completion must follow archive completion");
   }
+  // A v2 retry must bind its entire closed payload, including the original start.
+  // Use ordered scalar fields so JSON object key order cannot alter its identity.
+  const payloadBinding = completion.schema_version === 2 ? JSON.stringify([
+    2, completion.submission_id, completion.attempt, completion.occurred_at,
+    completion.completed_at, completion.benchmark_repository, completion.benchmark_commit,
+    completion.toolchain, completion.outcome.status,
+    ...(completion.outcome.status === "accepted" ? [completion.outcome.evaluator_version]
+      : completion.outcome.status === "failed"
+        ? [completion.outcome.reason_code, completion.outcome.retryable]
+        : [completion.outcome.reason_code]),
+  ]) : undefined;
   const startedId = await lifecycleEventId(
     "evaluation.started",
     view.submission_id,
     completion.occurred_at,
+    payloadBinding,
   );
-  const terminalAt = canonicalMilliseconds(Date.parse(completion.occurred_at) + 1);
+  const terminalAt = completion.schema_version === 2
+    ? completion.completed_at
+    : canonicalMilliseconds(Date.parse(completion.occurred_at) + 1);
   const terminalType = `evaluation.${completion.outcome.status}` as const;
-  const terminalId = await lifecycleEventId(terminalType, view.submission_id, terminalAt);
+  const terminalId = await lifecycleEventId(terminalType, view.submission_id, terminalAt, payloadBinding);
   const evaluationBase = {
     event_id: terminalId,
     occurred_at: terminalAt,
@@ -1679,8 +1693,16 @@ async function evaluationCompleted(
           reason_code: completion.outcome.reason_code,
           retryable: completion.outcome.retryable,
         };
+  if (view.evaluation.status !== "pending" && view.evaluation.event_id !== terminalId &&
+      !(view.evaluation.status === "failed" && view.evaluation.retryable &&
+        completion.attempt === view.evaluation.attempt + 1 &&
+        Date.parse(completion.occurred_at) > Date.parse(view.evaluation.occurred_at))) {
+    throw new StateEventConflictError(`evaluation completion ${terminalId}`);
+  }
   if (view.evaluation.status !== "pending" && view.evaluation.event_id === terminalId) {
-    if (JSON.stringify(view.evaluation) !== JSON.stringify(nextEvaluation)) {
+    const actualEvaluation: Record<string, unknown> = view.evaluation;
+    if (Object.keys(actualEvaluation).length !== Object.keys(nextEvaluation).length ||
+        Object.entries(nextEvaluation).some(([key, value]) => actualEvaluation[key] !== value)) {
       throw new StateEventConflictError(`evaluation completion ${terminalId}`);
     }
     return json({
