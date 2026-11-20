@@ -8,10 +8,12 @@ explicitly preserve the consecutive retryable-failure rule. Version 2 binds the 
 identity to its event IDs, uses the terminal time for the evaluation outcome,
 and rejects changed retries with HTTP 409.
 
-Deploy this receiver before changing the evaluation workflow or completion
-producer. This revision leaves both workflows and the Python completion
-producer unchanged, so submissions dispatched during deployment still send
-version 1. No existing State event or release schedule is rewritten.
+Deploy the receiver stage before changing the evaluation workflow or completion
+producer. The receiver-only revision leaves both workflows and the Python
+completion producer unchanged, so submissions dispatched during that first
+deployment still send version 1. The separate producer stage changes those
+workflows and emits version 2 only after receiver readiness is proved. Neither
+stage rewrites an existing State event or release schedule.
 
 ## Receiver deployment
 

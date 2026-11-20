@@ -63,11 +63,18 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_rollback_enforces_v2_receiver_before_cloudflare_access(self) -> None:
+        invocation = "python ../scripts/validate_cloudflare_rollback.py evaluation-callback-floor"
+        self.assertIn(invocation, ROLLBACK)
         self.assertLess(
-            ROLLBACK.index("evaluation-callback-floor"),
+            ROLLBACK.index(invocation),
             ROLLBACK.index("npx wrangler deployments status"),
         )
+        self.assertIn(
+            '--qualification "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json"',
+            ROLLBACK,
+        )
         self.assertIn('--target-root "$plan_dir/target"', ROLLBACK)
+        self.assertIn('if [ "$GITHUB_REF" != refs/heads/main ]; then', ROLLBACK)
 
     def test_pull_request_checks_cannot_cancel_the_protected_main_deployment(self) -> None:
         self.assertIn(
