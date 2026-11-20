@@ -75,6 +75,38 @@ class HistoricalPublicRuntimeGuardTests(unittest.TestCase):
             self.assertEqual((missing.returncode, missing.stdout, missing.stderr), (43, "", "historical-public-runtime: runtime_profile_guard_failed\n"))
             self.assertFalse((root / "__pycache__").exists())
 
+    def test_composed_multiline_shell_command_stops_before_decode_on_mismatch(self) -> None:
+        import base64
+        import shlex
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            module = root / "replay-authoritative"
+            module.write_bytes((ROOT / "server/replay-image/replay-authoritative").read_bytes())
+            profile = root / "profile.json"
+            encoded = root / "source.b64"
+            decoded = root / "source.tar.gz"
+            runner = root / "runner"
+            runner.write_text("#!/bin/sh\necho trusted-runner-reached\n")
+            runner.chmod(0o700)
+            observed = subprocess.check_output([sys.executable, "-I", "-S", "-B", "-c", f'import runpy,json; m=runpy.run_path({str(module)!r}); print(json.dumps(m["platform_evidence"]()))'], text=True)
+            architecture, kernel, cpu = json.loads(observed)
+            code = guard_code().replace("/workspace/historical-public-runtime-profile.json", str(profile)).replace("/opt/lean-eval/replay-authoritative", str(module))
+            command = (f"{shlex.quote(sys.executable)} -I -S -B -c {shlex.quote(code)} "
+                       f"&& base64 --decode {encoded} > {decoded} && rm {encoded} && {runner}")
+            for mismatch in (False, True):
+                decoded.unlink(missing_ok=True)
+                encoded.write_text(base64.b64encode(b"trusted tiny fixture").decode())
+                profile.write_text(json.dumps({"architecture": architecture, "kernel_release": "wrong" if mismatch else kernel, "cpu_model": cpu}))
+                result = subprocess.run(["bash", "-c", command], text=True, capture_output=True)
+                if mismatch:
+                    self.assertEqual((result.returncode, result.stdout, result.stderr), (42, "", "historical-public-runtime: runtime_profile_mismatch\n"))
+                    self.assertTrue(encoded.exists())
+                    self.assertFalse(decoded.exists())
+                else:
+                    self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "trusted-runner-reached\n", ""))
+                    self.assertFalse(encoded.exists())
+                    self.assertEqual(decoded.read_bytes(), b"trusted tiny fixture")
+
     def test_controller_binds_full_profile_and_rejects_tampered_runtime(self) -> None:
         f = Fixture()
         plan = f.plan()
