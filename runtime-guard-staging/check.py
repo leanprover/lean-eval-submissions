@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import uuid
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPT_DIRECTORY) not in sys.path:
@@ -135,10 +136,47 @@ def applications(timeout=180):
         raise TransientRpcError("container inventory temporarily unavailable") from None
 
 
-def wait_applications(deadline):
+def application_details(config, namespace_id, deadline):
+    """Resolve only the named summary to its account- and namespace-bound detail."""
+    rows = applications(timeout=remaining_timeout(deadline, 60))
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("container summary inventory is invalid")
+    name = config["containers"][0]["name"]
+    matches = [row for row in rows if row.get("name") == name]
+    if len(matches) > 1:
+        raise ValueError("container application identity is ambiguous")
+    if not matches:
+        return []  # Absence must come from a successful, fresh inventory read.
+    summary = matches[0]
+    identity = summary.get("id")
+    try:
+        if not isinstance(identity, str) or str(uuid.UUID(identity)) != identity:
+            raise ValueError
+    except ValueError:
+        raise ValueError("container summary identity is invalid") from None
+    try:
+        detail = json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "info", identity, "--json", timeout=remaining_timeout(deadline, 60)))
+    except (CommandFailure, subprocess.TimeoutExpired):
+        # An info failure, including disappearance between list and info, is
+        # never absence or deletion authority. Retry the bounded inventory read.
+        raise TransientRpcError("container detail temporarily unavailable") from None
+    if not isinstance(detail, dict):
+        raise ValueError("container application detail is invalid")
+    if any(detail.get(key) != summary.get(key) for key in ("id", "name", "version", "created_at")):
+        raise ValueError("container summary and detail identities disagree")
+    if (detail.get("account_id") != ACCOUNT
+            or detail.get("durable_objects") != {"namespace_id": namespace_id}):
+        raise ValueError("container application account or namespace differs")
+    configuration = detail.get("configuration")
+    if not isinstance(configuration, dict) or summary.get("image") != configuration.get("image"):
+        raise ValueError("container summary and detail images disagree")
+    return [detail]  # Preserve the full provider record for the strict verifier.
+
+
+def wait_applications(deadline, config, namespace_id):
     for retry in range(10):
         try:
-            return applications(timeout=remaining_timeout(deadline, 60))
+            return application_details(config, namespace_id, deadline)
         except (TransientRpcError, TransportError):
             if retry == 9:
                 raise ValueError("container inventory did not converge") from None
@@ -257,7 +295,7 @@ def ownership(config, deadline=None):
             raise TransientRpcError("created namespace listing has not converged")
         if row["script"] != worker or row["class"] != binding["class_name"]:
             raise ValueError("bound namespace belongs to a different script or class")
-    app = _verify_application(config, applications(timeout=remaining_timeout(deadline, 60)))
+    app = _verify_application(config, application_details(config, ids["REPLAY_SANDBOX"], deadline))
     if app is None:
         raise ValueError("owned staging container is missing")
     return {"worker_version": actual_version, "namespaces": ids, "health": health, **app}
@@ -523,7 +561,7 @@ def cleanup(case, directory):
             raise ValueError("disabled Worker changed before application deletion")
         # Official order: remove Container config, delete app/instances, THEN class.
         for retry in range(10):
-            app = _verify_application(config, wait_applications(deadline))
+            app = _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"]))
             if app is None:
                 break
             if app != {k: receipt[k] for k in app}:
@@ -554,7 +592,7 @@ def cleanup(case, directory):
         save(directory / "receipt.json", receipt)
     if receipt.get("retirement_phase") != "retired":
         raise ValueError("unknown retirement checkpoint; controlled recovery required")
-    if _verify_application(config, wait_applications(deadline)) is not None:
+    if _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"])) is not None:
         raise ValueError("application absence changed before Worker deletion")
     worker, stub_version = config["name"], receipt["stub_version"]
     for retry in range(5):
@@ -579,7 +617,7 @@ def cleanup(case, directory):
         if retry == 9:
             raise ValueError("temporary namespace absence did not converge")
         time.sleep(remaining_timeout(deadline, 3))
-    if _verify_application(config, wait_applications(deadline)) is not None:
+    if _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"])) is not None:
         raise ValueError("temporary application reappeared; refuse adoption")
     receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed")
     save(directory / "receipt.json", receipt)

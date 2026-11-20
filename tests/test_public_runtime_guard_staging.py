@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import contextlib
 import io
+import json
 import pathlib
 import tempfile
 import types
@@ -20,6 +21,148 @@ TASK = 'rt1_' + 'b' * 64
 
 
 class PublicRuntimeGuardStagingTests(unittest.TestCase):
+    def recorded_application(self):
+        # Actual pinned-Wrangler summary/detail shapes from the first staging
+        # deployment; provider metadata only, with no execution or credentials.
+        fixtures = ROOT / 'tests/fixtures/public-runtime-guard'
+        summary = stage.load(fixtures / 'application-summary.json')
+        detail = stage.load(fixtures / 'application-detail.json')
+        qualified = stage.load(ROOT / f'evidence/public-replay/profiles/{stage.FAMILIES["a"][0]}.json')
+        config, _ = stage.render('a-match', qualified, SHA, TASK)
+        return config, summary, detail
+
+    def test_recorded_summary_resolves_full_detail_for_real_strict_verifier(self):
+        config, summary, detail = self.recorded_application()
+        namespace = detail['durable_objects']['namespace_id']
+        self.assertNotIn('configuration', summary[0])
+        with mock.patch.object(stage, 'command', side_effect=[json.dumps(summary).encode(), json.dumps(detail).encode()]) as command, mock.patch.object(stage.time, 'monotonic', side_effect=[100, 107]):
+            candidates = stage.application_details(config, namespace, 120)
+            self.assertEqual(candidates, [detail])
+            self.assertEqual(stage._verify_application(config, candidates), {
+                'application_id': detail['id'], 'application_version': detail['version'],
+                'application_created_at': detail['created_at']})
+            self.assertEqual(command.call_args_list, [
+                mock.call('npx', '--prefix', 'server', 'wrangler', 'containers', 'list', '--json', timeout=20),
+                mock.call('npx', '--prefix', 'server', 'wrangler', 'containers', 'info', detail['id'], '--json', timeout=13)])
+
+    def test_detail_lookup_refuses_summary_identity_image_account_and_namespace_drift(self):
+        config, summary, original = self.recorded_application()
+        for path, changed in ((('id',), '11111111-1111-1111-1111-111111111111'),
+                              (('name',), 'foreign'), (('version',), 2),
+                              (('created_at',), '2026-11-20T03:14:23.000Z'),
+                              (('account_id',), 'foreign'),
+                              (('durable_objects', 'namespace_id'), 'foreign'),
+                              (('configuration', 'image'), 'foreign')):
+            detail = copy.deepcopy(original)
+            target = detail
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = changed
+            with self.subTest(path=path), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+                with self.assertRaises(ValueError):
+                    stage.application_details(config, original['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+
+    def test_detail_lookup_preserves_configuration_for_strict_rejection(self):
+        config, summary, original = self.recorded_application()
+        for path, changed in ((('configuration', 'command'), ['unexpected']),
+                              (('configuration', 'memory_mib'), 24576),
+                              (('max_instances',), 2)):
+            detail = copy.deepcopy(original)
+            target = detail
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = changed
+            with self.subTest(path=path), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+                candidates = stage.application_details(config, original['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+                with self.assertRaisesRegex(ValueError, 'rendered settings'):
+                    stage._verify_application(config, candidates)
+
+    def test_detail_lookup_refuses_ambiguous_or_invalid_summary_before_info(self):
+        config, summary, detail = self.recorded_application()
+        invalid_id = copy.deepcopy(summary)
+        invalid_id[0]['id'] = '--config'
+        for rows in (summary+summary, invalid_id, {}, [None]):
+            with self.subTest(rows=rows), mock.patch.object(stage, 'applications', return_value=rows), mock.patch.object(stage, 'command') as command:
+                with self.assertRaises(ValueError):
+                    stage.application_details(config, detail['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+                command.assert_not_called()
+
+    def test_detail_disappearance_requires_new_successful_inventory_for_absence(self):
+        config, summary, detail = self.recorded_application()
+        for error in (stage.CommandFailure('not found'), stage.subprocess.TimeoutExpired('wrangler', 1)):
+            with self.subTest(error=type(error).__name__), mock.patch.object(stage, 'applications', side_effect=[summary, []]) as inventory, mock.patch.object(stage, 'command', side_effect=error) as info, mock.patch.object(stage.time, 'sleep'):
+                self.assertEqual(stage.wait_applications(stage.time.monotonic()+120, config, detail['durable_objects']['namespace_id']), [])
+                self.assertEqual(inventory.call_count, 2)
+                info.assert_called_once()
+
+    def test_detail_failure_never_becomes_absence_when_inventory_keeps_application(self):
+        config, summary, detail = self.recorded_application()
+        with mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', side_effect=stage.CommandFailure('not found')) as info, mock.patch.object(stage.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'did not converge'):
+                stage.wait_applications(stage.time.monotonic()+120, config, detail['durable_objects']['namespace_id'])
+            self.assertEqual(info.call_count, 10)
+
+    def test_unrelated_applications_are_not_fetched_and_named_collision_is_not_adopted(self):
+        config, summary, detail = self.recorded_application()
+        unrelated = copy.deepcopy(summary)
+        unrelated[0]['name'] = 'unrelated'
+        with mock.patch.object(stage, 'applications', return_value=unrelated), mock.patch.object(stage, 'command') as info:
+            self.assertEqual(stage.application_details(config, detail['durable_objects']['namespace_id'], stage.time.monotonic()+120), [])
+            info.assert_not_called()
+        with tempfile.TemporaryDirectory() as temp:
+            directory = pathlib.Path(temp)
+            _, _, receipt, _ = self.fixture(directory)
+            receipt['created'] = False
+            stage.save(directory / 'receipt.json', receipt)
+            with mock.patch.object(stage, 'cf', return_value=None), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command') as command:
+                with self.assertRaisesRegex(ValueError, 'collision'):
+                    stage.deploy('a-match', directory)
+                command.assert_not_called()
+            self.assertFalse(stage.load(directory / 'receipt.json')['created'])
+
+    def test_detail_read_deadline_exhaustion_stops_before_info(self):
+        config, summary, detail = self.recorded_application()
+        with mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command') as info, mock.patch.object(stage.time, 'monotonic', side_effect=[100, 121]):
+            with self.assertRaisesRegex(stage.TransientRpcError, 'deadline expired'):
+                stage.application_details(config, detail['durable_objects']['namespace_id'], 120)
+            info.assert_not_called()
+
+    def test_real_ownership_consumes_recorded_detail_with_verified_worker_namespace(self):
+        config, summary, detail = self.recorded_application()
+        ids = {'REPLAY_SANDBOX': detail['durable_objects']['namespace_id'], 'REPLAY_TERMINAL_RECEIPT': '2ba29b2f501544e48e5846d7ce3459f5'}
+        rows = [{'id': ids[b['name']], 'script': config['name'], 'class': b['class_name']} for b in config['durable_objects']['bindings']]
+        with mock.patch.object(stage, 'cf', return_value={}), mock.patch.object(stage, '_active_version', return_value=('version', {})), mock.patch.object(stage, 'http', return_value=(200, {'status': 'ok'})), mock.patch.object(stage, '_verify_worker', return_value=('version', ids)), mock.patch.object(stage, 'namespaces', return_value=rows), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+            proof = stage.ownership(config)
+            self.assertEqual(proof['application_id'], detail['id'])
+            self.assertEqual(proof['namespaces'], ids)
+
+    def test_cleanup_resolves_recorded_detail_then_proves_fresh_application_absence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = pathlib.Path(temp)
+            self.fixture(directory)
+            config, summary, detail = self.recorded_application()
+            receipt = stage.load(directory / 'receipt.json')
+            receipt.update(application_id=detail['id'], application_version=detail['version'], application_created_at=detail['created_at'], retirement_phase='disabled', disabled_worker_version='disabled')
+            receipt['namespaces']['REPLAY_SANDBOX'] = detail['durable_objects']['namespace_id']
+            stage.save(directory / 'receipt.json', receipt)
+            (directory / 'server').mkdir()
+            present = True
+            calls = []
+            def command(*args, **kwargs):
+                nonlocal present
+                operation = next(item for item in ('list', 'info', 'delete', 'deploy') if item in args)
+                calls.append(operation)
+                if operation == 'list': return json.dumps(summary if present else []).encode()
+                if operation == 'info': return json.dumps(detail).encode()
+                if operation == 'delete':
+                    self.assertEqual(args[-1], detail['id'])
+                    present = False
+                return b''
+            def retired(rendered, *args, **kwargs):
+                return 'disabled' if rendered['durable_objects']['bindings'] else 'stub'
+            with mock.patch.object(stage, 'ROOT', directory), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage, 'wait_retired', side_effect=retired), mock.patch.object(stage, 'cf', return_value=None), mock.patch.object(stage, 'namespaces', return_value=[]), mock.patch.object(stage.time, 'sleep'):
+                stage.cleanup('a-match', directory)
+            self.assertEqual(calls, ['list', 'info', 'delete', 'list', 'deploy', 'list', 'list'])
+            self.assertEqual(stage.load(directory / 'receipt.json')['control_plane_cleanup'], 'confirmed')
+
     def fixture(self, directory, case='a-match'):
         qualified = stage.load(ROOT / f'evidence/public-replay/profiles/{stage.FAMILIES[case[0]][0]}.json')
         config, profile = stage.render(case, qualified, SHA, TASK)
@@ -195,8 +338,9 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
         for fault in (stage.CommandFailure('CLI unavailable'), stage.subprocess.TimeoutExpired('wrangler',1)):
             with self.subTest(fault=type(fault).__name__), mock.patch.object(stage,'command',side_effect=fault):
                 with self.assertRaises(stage.TransientRpcError):stage.applications(timeout=1)
+        config, _, detail = self.recorded_application()
         with mock.patch.object(stage,'applications',side_effect=[stage.TransientRpcError('edge unavailable'),[]]) as read, mock.patch.object(stage.time,'monotonic',return_value=100), mock.patch.object(stage.time,'sleep'):
-            self.assertEqual(stage.wait_applications(120),[])
+            self.assertEqual(stage.wait_applications(120, config, detail['durable_objects']['namespace_id']),[])
             self.assertEqual(read.call_args_list,[mock.call(timeout=20),mock.call(timeout=20)])
 
     def test_cleanup_ownership_reuses_shared_deadline_and_rejects_identity_drift(self):
