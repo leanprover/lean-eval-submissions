@@ -26,10 +26,12 @@ _SPEC.loader.exec_module(stock)
 
 CONTROL = Path('/run/lean-eval')
 INSTALL = Path('/opt/lean-eval')
-TRUSTED_FILES = ('Challenge.lean', 'WorkspaceTest.lean', 'config.json', 'lakefile.toml',
+TRUSTED_FILES = ('Challenge.lean', 'Solution.lean', 'WorkspaceTest.lean', 'config.json', 'lakefile.toml',
                  'lake-manifest.json', 'lean-toolchain', '.lake/build/bin/workspace_test')
 FRAME_LIMIT = 4096
 TEARDOWN_SECONDS = 5
+CUTOFF_RESERVE_MS = 2 * TEARDOWN_SECONDS * 1000 + 1001
+CONSUMED = '.stock-supervisor-consumed.json'
 
 
 class Invalid(stock.Invalid):
@@ -82,12 +84,74 @@ def file_hash(path, maximum=256 * 1024 * 1024):
         os.close(descriptor)
 
 
-def workspace_manifest(project):
-    return {'schema_version': 1, 'files': {name: file_hash(Path(project) / name) for name in TRUSTED_FILES}}
+def workspace_manifest(project, *, consumed=None):
+    """Commit all prepared non-Source state, including cache/dependency bytes.
+
+    The qualified preparer must establish its pristine origin; hashing an
+    arbitrary preseeded cache is not provenance. Source is exactly the original
+    Submission overlay grammar and has a separate byte commitment.
+    """
+    project = stock.absolute(str(project))
+    allowed = {name for name in TRUSTED_FILES if '/' not in name} | {'.lake', 'Submission.lean', 'Submission', CONSUMED}
+    require({path.name for path in project.iterdir()} <= allowed)
+    marker = project / CONSUMED
+    if consumed is None:
+        require(not marker.exists() and not marker.is_symlink())
+    else:
+        require(stock.decode(stock.read_file(marker)) == consumed)
+    trusted, source, count = hashlib.sha256(), hashlib.sha256(), 0
+    def walk(path, relative, ancestors):
+        nonlocal count
+        count += 1
+        require(count <= 1_000_000)
+        info = path.lstat()
+        is_source = relative == 'Submission.lean' or relative.startswith('Submission/')
+        if stat.S_ISLNK(info.st_mode):
+            # Shared package aliases are trusted preparer inputs, never Source.
+            require(not is_source and relative.startswith('.lake/packages/'))
+            target = path.resolve(strict=True)
+            require(not target.is_relative_to(project) and target.is_dir())
+            trusted.update(stock.canonical([relative, 'link', str(target)]) + b'\n')
+            walk(target, relative, ancestors)
+        elif stat.S_ISDIR(info.st_mode):
+            identity = (info.st_dev, info.st_ino)
+            require(identity not in ancestors and info.st_mode & 0o022 == 0)
+            if not is_source and relative != 'Submission':
+                trusted.update(stock.canonical([relative, 'directory', stat.S_IMODE(info.st_mode)]) + b'\n')
+            for child in sorted(path.iterdir()):
+                walk(child, relative + '/' + child.name, ancestors | {identity})
+        else:
+            require(stat.S_ISREG(info.st_mode))
+            if is_source:
+                require(relative.endswith('.lean'))
+            value = file_hash(path)
+            (source if is_source else trusted).update(stock.canonical([relative, value]) + b'\n')
+    for child in sorted(project.iterdir()):
+        if child.name != CONSUMED:
+            walk(child, child.name, set())
+    require((project / 'Submission.lean').is_file())
+    return {'schema_version': 2, 'files': {name: file_hash(project / name) for name in TRUSTED_FILES},
+            'prepared_tree_sha256': trusted.hexdigest(), 'source_sha256': source.hexdigest()}
+
+
+def policy_template_digest(policy):
+    value = copy.deepcopy(policy)
+    value['binding'].pop('generation')
+    value['binding'].pop('started_ms')
+    return sha(stock.canonical(value))
+
+
+def derived_manifest_digest(manifest):
+    return sha(stock.canonical({key: value for key, value in manifest.items() if key != 'source_sha256'}))
+
+
+def instrumentation_commitments(files):
+    return {str(target): file_hash(source) for source, target in sorted(files.items(), key=lambda pair: str(pair[1]))}
 
 
 def context_from_request(request, policy, *, benchmark_files, authority_raw,
-                         authority_commit, authority_path, driver_path, file_count, lines_of_code):
+                         authority_commit, authority_path, driver_path, file_count, lines_of_code,
+                         instrumentation=None, python='/usr/bin/python3'):
     """Trusted preparer only: request3 + original bytes + derived closure.
 
     Caller must independently prove Git origin/tree/modes and deterministic
@@ -103,7 +167,7 @@ def context_from_request(request, policy, *, benchmark_files, authority_raw,
     expected.update(problem_id=result['problem_id'], statement_revision=result['statement_revision'])
     require(all(policy['binding'][key] == value for key, value in expected.items()))
     manifest = workspace_manifest(policy['project'])
-    require(sha(stock.canonical(manifest)) == configuration['generator_source_binding']['derived_output_manifest_sha256'])
+    require(derived_manifest_digest(manifest) == configuration['generator_source_binding']['derived_output_manifest_sha256'])
     require(manifest['files']['WorkspaceTest.lean']['sha256'] == configuration['workspace_driver']['sha256'])
     names = {'lake': 'lake', 'leanexport': 'leanexport', 'leanchecker': 'leanchecker', 'nanoda_bin': 'nanoda'}
     for name, field in names.items():
@@ -118,17 +182,22 @@ def context_from_request(request, policy, *, benchmark_files, authority_raw,
         'benchmark_tree': configuration['benchmark_tree'], 'workspace_manifest': manifest,
         'measurement_config': copy.deepcopy(request['measurement_config']),
         'driver_path': driver_path,
+        'policy_template_sha256': policy_template_digest(policy),
+        'lean_sha256': file_hash(Path(policy['lean_prefix']) / 'bin/lean')['sha256'],
+        'instrumentation': instrumentation_commitments(runtime_files() if instrumentation is None else instrumentation),
+        'interpreter': {'path': str(Path(python).resolve(strict=True)), 'sha256': file_hash(Path(python).resolve(strict=True))['sha256']},
         'file_count': file_count, 'lines_of_code': lines_of_code}
     validate_context(context, policy)
     return context
 
 
-def validate_context(context, policy):
+def validate_context(context, policy, *, consumed=None, installed=False):
     stock.validate_policy(policy)
     require(policy['challenge_module'] == 'Challenge' and policy['solution_module'] == 'Solution')
     require(isinstance(context, dict) and set(context) == {'schema_version', 'binding', 'request_sha256',
         'benchmark', 'configuration_digest', 'benchmark_tree', 'workspace_manifest', 'measurement_config',
-        'driver_path', 'file_count', 'lines_of_code'} and type(context['schema_version']) is int and context['schema_version'] == 1)
+        'driver_path', 'file_count', 'lines_of_code', 'policy_template_sha256', 'lean_sha256',
+        'instrumentation', 'interpreter'} and type(context['schema_version']) is int and context['schema_version'] == 1)
     require(context['binding'] == policy['binding'])
     for name in ('request_sha256', 'configuration_digest'):
         require(isinstance(context[name], str) and stock.HASH.fullmatch(context[name]))
@@ -149,7 +218,7 @@ def validate_context(context, policy):
         and measurement['retired_instructions'].keys() == {'required', 'perf_event'}
         and type(measurement['retired_instructions']['required']) is bool
         and measurement['retired_instructions']['perf_event'] == 'instructions:u'
-        and stock.integer(measurement['wall_time_limit_ms'], 1, stock.MAX_WALL_MS)
+        and stock.integer(measurement['wall_time_limit_ms'], 1, stock.MAX_WALL_MS - CUTOFF_RESERVE_MS)
         and stock.integer(measurement['memory_limit_bytes'], 1))
     require(policy['binding']['measurement_config_digest'] == sha(
         b'lean-eval-replay-measurement-config-v1\0' + stock.canonical(measurement)))
@@ -161,7 +230,17 @@ def validate_context(context, policy):
                 and not path.is_relative_to(Path(policy['project']))
                 and not path.is_relative_to(Path(policy['temporary_directory'])))
     require(not Path(policy['project']).is_relative_to(Path(policy['lean_prefix'])))
-    require(context['workspace_manifest'] == workspace_manifest(policy['project']))
+    require(context['workspace_manifest'] == workspace_manifest(policy['project'], consumed=consumed))
+    require(context['policy_template_sha256'] == policy_template_digest(policy))
+    require(context['lean_sha256'] == file_hash(Path(policy['lean_prefix']) / 'bin/lean')['sha256'])
+    require(isinstance(context['interpreter'], dict) and set(context['interpreter']) == {'path', 'sha256'})
+    require(file_hash(context['interpreter']['path'])['sha256'] == context['interpreter']['sha256'])
+    require(isinstance(context['instrumentation'], dict) and 5 <= len(context['instrumentation']) <= 6)
+    expected_targets = {str(target) for target in runtime_files().values()}
+    require(expected_targets <= set(context['instrumentation'])
+            and set(context['instrumentation']) <= expected_targets | {'/lib64/ld-linux-x86-64.so.2'})
+    if installed:
+        require(context['instrumentation'] == instrumentation_commitments({Path(target): Path(target) for target in context['instrumentation']}))
     # A preprimed original driver is required; no substitute test target or
     # no-build flag is inserted into the original `lake test` command.
     import tomllib
@@ -223,13 +302,29 @@ class Frames:
     def read(self, deadline):
         while b'\n' not in self.pending:
             left = deadline - time.monotonic()
-            if left <= 0 or not select.select([self.descriptor], [], [], left)[0]:
+            # Drain already available data even after owner descheduling. The
+            # trusted frame timestamps, not read latency, decide M compliance.
+            if not select.select([self.descriptor], [], [], max(0, left))[0]:
                 raise TimeoutError()
             raw = os.read(self.descriptor, FRAME_LIMIT + 1)
             require(raw and len(self.pending) + len(raw) <= FRAME_LIMIT)
             self.pending += raw
         raw, self.pending = self.pending.split(b'\n', 1)
         return stock.decode(raw)
+
+
+def read_information(descriptor, deadline):
+    raw = b''
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0 or not select.select([descriptor], [], [], left)[0]:
+            raise TimeoutError()
+        chunk = os.read(descriptor, FRAME_LIMIT + 1 - len(raw))
+        if not chunk:
+            require(raw)
+            return stock.decode(raw)
+        raw += chunk
+        require(len(raw) <= FRAME_LIMIT)
 
 
 def frame(descriptor, value):
@@ -256,6 +351,7 @@ class NamespaceOwner:
             raise
 
     def bind(self, information):
+        require(not self.verified and self.init_fd is None and self.namespace_fd is None)
         require(isinstance(information, dict) and type(information.get('child-pid')) is int
                 and type(information.get('pid-namespace')) is int)
         require(not select.select([self.outer_fd], [], [], 0)[0])
@@ -350,8 +446,15 @@ def supervise(policy_template, context_template, *, control=CONTROL, python='/us
 def _supervise(policy_template, context_template, *, control, python, files, active):
     """Run one original per-problem driver. Never activates request/profile3."""
     validate_context(context_template, policy_template)
+    selected_files = runtime_files() if files is None else files
+    require(len(selected_files) == len(context_template['instrumentation']))
+    require(context_template['instrumentation'] == instrumentation_commitments(selected_files))
+    require(str(Path(python).resolve(strict=True)) == context_template['interpreter']['path'])
+    if files is None:
+        require(set(context_template['instrumentation']) == {str(target) for target in runtime_files().values()})
     control = stock.absolute(str(control))
     stock.secure_directory(control)
+    require({path.name for path in control.iterdir()} <= {'stock-supervisor-input.json'})
     require(not control.is_relative_to(Path(policy_template['project']))
             and not Path(policy_template['project']).is_relative_to(control)
             and not control.is_relative_to(Path(policy_template['temporary_directory']))
@@ -360,14 +463,14 @@ def _supervise(policy_template, context_template, *, control, python, files, act
     generation = secrets.token_hex(32)
     private_write(control / 'stock-supervisor-bootstrap.json', {'generation': generation})
     information_r = information_w = status_r = status_w = go_r = go_w = None
-    owner, stopped, driver, driver_started, failure = None, None, None, None, False
+    owner, stopped, driver, driver_started, driver_finished, failure = None, None, None, None, None, False
     started_ns, boundary = None, 'namespace_setup'
     timed_out = False
     try:
         information_r, information_w = os.pipe2(os.O_CLOEXEC)
         status_r, status_w = os.pipe2(os.O_CLOEXEC)
         go_r, go_w = os.pipe2(os.O_CLOEXEC)
-        command = outer_command(policy, control, runtime_files() if files is None else files,
+        command = outer_command(policy, control, selected_files,
                                 information_w, status_w, go_r, python)
         owner = NamespaceOwner(command, (information_w, status_w, go_r))
         for descriptor in (information_w, status_w, go_r):
@@ -376,8 +479,7 @@ def _supervise(policy_template, context_template, *, control, python, files, act
         frames = Frames(status_r)
         boundary = 'namespace_information'
         deadline = time.monotonic() + 10
-        require(select.select([information_r], [], [], 10)[0])
-        information = stock.decode(os.read(information_r, FRAME_LIMIT + 1))
+        information = read_information(information_r, deadline)
         boundary = 'namespace_ready'
         ready = frames.read(deadline)
         require(ready == {'kind': 'ready', 'generation': generation})
@@ -387,6 +489,7 @@ def _supervise(policy_template, context_template, *, control, python, files, act
         policy['binding'].update(generation=generation, started_ms=started_ns // 1_000_000)
         context['binding'] = copy.deepcopy(policy['binding'])
         boundary = 'control_initialize'
+        private_write(Path(policy['project']) / CONSUMED, policy['binding'])
         private_write(control / 'stock-measurement-policy.json', policy)
         private_write(control / 'stock-supervisor-context.json', context)
         stock.initialize(policy, control / 'stock-measurement.json', control / 'stock-measurement.clock')
@@ -398,29 +501,35 @@ def _supervise(policy_template, context_template, *, control, python, files, act
         require(os.write(go_w, b'1') == 1)
         os.close(go_w)
         go_w = None
-        deadline = started_ns / 1_000_000_000 + context['measurement_config']['wall_time_limit_ms'] / 1000
+        deadline_ns = started_ns + context['measurement_config']['wall_time_limit_ms'] * 1_000_000
+        deadline = deadline_ns / 1_000_000_000
         try:
             boundary = 'driver_spawn'
             started = frames.read(deadline)
             require(set(started) == {'kind', 'binding', 'pid', 'spawned_ns'} and started['kind'] == 'driver_started'
                     and started['binding'] == policy['binding'] and stock.integer(started['pid'], 2)
-                    and stock.integer(started['spawned_ns'], started_ns))
+                    and stock.integer(started['spawned_ns'], started_ns, time.monotonic_ns()))
             driver_started = started
             boundary = 'driver_exit'
             finished = frames.read(deadline)
             require(set(finished) == {'kind', 'binding', 'pid', 'finished_ns', 'termination'}
                     and finished['kind'] == 'driver_finished' and finished['binding'] == policy['binding']
                     and finished['pid'] == started['pid']
-                    and stock.integer(finished['finished_ns'], started['spawned_ns']))
+                    and stock.integer(finished['finished_ns'], started['spawned_ns'], time.monotonic_ns()))
             stock.termination_valid(finished['termination'])
+            driver_finished = finished
             passed = finished['termination'] == {'kind': 'exited', 'code': 0}
             # Same per-problem score rule as _run_preprimed_eval: actual lake
             # test status, never the outer Python/bwrap status or message text.
             driver = {'binding': copy.deepcopy(policy['binding']), 'termination': finished['termination'],
                       'passed': [policy['binding']['problem_id']] if passed else [],
                       'statement_revisions': {policy['binding']['problem_id']: policy['binding']['statement_revision']} if passed else {}}
+            timed_out = finished['finished_ns'] > deadline_ns
         except TimeoutError:
-            timed_out = True
+            if driver_started is None:
+                failure, boundary = True, 'driver_start_unproved'
+            else:
+                timed_out = True
     except BaseException:
         failure = True
     finally:
@@ -452,19 +561,22 @@ def _supervise(policy_template, context_template, *, control, python, files, act
                 timeout = {'binding': policy['binding'], 'cutoff_ns': stopped['cutoff_ns'], 'stopped': True}
                 if trace['active'] is not None and stock.BUCKET[trace['active']['stage']] is not None:
                     measurement_start = stock.read_start(policy, control / 'stock-measurement.clock', trace['active']['stage'])
-            verdict = stock.reduce_trace(policy, trace, driver, file_count=context['file_count'], lines_of_code=context['lines_of_code'],
+            verdict = stock.reduce_trace(policy, trace, None if timed_out else driver, file_count=context['file_count'], lines_of_code=context['lines_of_code'],
                                          timeout=timeout, measurement_start=measurement_start)
             if context['measurement_config']['retired_instructions']['required']:
-                if any(verdict['statistics'].get(name + '_retired_instructions', {}).get('status') != 'measured'
+                if not isinstance(verdict['statistics'], dict) or any(verdict['statistics'].get(name + '_retired_instructions', {}).get('status') != 'measured'
                        for name in ('build', 'checker')):
                     verdict = stock.failed_verdict(policy['binding'])
-        except (OSError, ValueError, TypeError, KeyError):
-            pass
+        except Exception:
+            verdict = stock.failed_verdict(policy['binding'])
     output = {'schema_version': 1, 'binding': policy['binding'], 'request_sha256': context['request_sha256'],
         'configuration_digest': context['configuration_digest'], 'benchmark': context['benchmark'],
         'benchmark_tree': context['benchmark_tree'], 'workspace_manifest_sha256': sha(stock.canonical(context['workspace_manifest'])),
-        'driver': driver, 'driver_started': driver_started, 'generation_stop': stopped,
+        'driver': driver, 'driver_started': driver_started, 'driver_finished': driver_finished, 'generation_stop': stopped,
         'generation_started_ns': started_ns,
+        'policy_template_sha256': context['policy_template_sha256'],
+        'policy_sha256': stock.policy_digest(policy), 'instrumentation_sha256': sha(stock.canonical(context['instrumentation'])),
+        'cutoff_representable': stopped is not None and started_ns is not None and stopped['cutoff_ns'] <= (policy['binding']['started_ms'] + stock.MAX_WALL_MS) * 1_000_000,
         'supervisor_failure': failure, 'failure_boundary': boundary if failure else None, 'timed_out': timed_out,
         'provider_destruction': 'not_established', 'runtime_qualification': 'not_established', 'verdict': verdict}
     require(len(stock.canonical(output)) <= stock.LIMIT)
@@ -485,8 +597,15 @@ def agent(status_fd, go_fd):
     os.close(go_fd)
     policy = stock.validate_policy(stock.decode(stock.read_file(CONTROL / 'stock-measurement-policy.json')))
     context = stock.decode(stock.read_file(CONTROL / 'stock-supervisor-context.json'))
-    validate_context(context, policy)
+    validate_context(context, policy, consumed=policy['binding'], installed=True)
     require(policy['binding']['generation'] == generation)
+    owner = stock.decode(stock.read_file(CONTROL / 'stock-generation-owner.json'))
+    require(isinstance(owner, dict) and set(owner) == {'binding', 'policy_sha256', 'context_sha256', 'namespace', 'started_ns'}
+            and owner['binding'] == policy['binding'] and owner['policy_sha256'] == stock.policy_digest(policy)
+            and owner['context_sha256'] == sha(stock.canonical(context))
+            and stock.integer(owner['started_ns'], policy['binding']['started_ms'] * 1_000_000,
+                              policy['binding']['started_ms'] * 1_000_000 + 999999))
+    require(time.monotonic_ns() <= owner['started_ns'] + context['measurement_config']['wall_time_limit_ms'] * 1_000_000)
     environment = {'PATH': context['driver_path'], 'TMPDIR': policy['temporary_directory'],
         'HOME': policy['temporary_directory'], 'ELAN_TOOLCHAIN': context['benchmark']['toolchain'],
         'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_CONFIG_NOSYSTEM': '1',

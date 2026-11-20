@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -32,6 +33,10 @@ class Fixture(Context):
         super().__init__(root, real=real, codes=codes)
         (self.project / 'WorkspaceTest.lean').write_bytes(ORIGINAL.read_bytes())
         (self.project / 'Challenge.lean').write_text('-- synthetic owner fixture\n')
+        (self.project / 'Solution.lean').write_text('-- trusted generated wrapper fixture\n')
+        (self.project / 'Submission.lean').write_text('-- untrusted fixture input\n')
+        (self.prefix / 'bin/lean').write_text('#!/bin/sh\nexit 0\n')
+        (self.prefix / 'bin/lean').chmod(0o700)
         (self.project / 'lean-toolchain').write_text('leanprover/lean4:v4.35.0\n')
         (self.project / 'lake-manifest.json').write_text('{}\n')
         (self.project / 'lakefile.toml').write_text('name = "fixture"\ntestDriver = "workspace_test"\n[[lean_exe]]\nname = "workspace_test"\nroot = "WorkspaceTest"\n')
@@ -71,7 +76,6 @@ raise SystemExit(1 if failed else 0)
         lake.chmod(0o700)
         self.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
         self.policy['inherited_path'] = self.policy['resolved_path'] = str(Path(PYTHON).parent)
-        self.context = context(self.policy)
         # Nix has no /usr/bin/python3. This test-only interpreter spelling is
         # outside all original comparator/bwrap argv and stock binary bytes.
         wrapper = root / 'measurement-entry'
@@ -87,12 +91,13 @@ raise SystemExit(1 if failed else 0)
         measurement.chmod(0o600)
         self.files.pop(ROOT / 'scripts/stock_replay_measurement.py')
         self.files[measurement] = supervisor.INSTALL / 'stock_replay_measurement.py'
+        self.context = context(self.policy, files=self.files)
 
 
-def context(policy, wall=20000):
+def context(policy, wall=20000, *, files=None, required=False):
     measurement = {'schema_version': 2, 'phase_semantics': 'stock_lake_solution_build_export_dual_kernel_v1',
         'wall_time_limit_ms': wall, 'memory_limit_bytes': 12 * 1024**3,
-        'retired_instructions': {'required': False, 'perf_event': 'instructions:u'},
+        'retired_instructions': {'required': required, 'perf_event': 'instructions:u'},
         'checker_sequence': ['bundled_nanoda', 'bundled_leanchecker']}
     policy['binding']['measurement_config_digest'] = supervisor.sha(b'lean-eval-replay-measurement-config-v1\0' + supervisor.stock.canonical(measurement))
     return {'schema_version': 1, 'binding': copy.deepcopy(policy['binding']), 'request_sha256': '7' * 64,
@@ -100,6 +105,10 @@ def context(policy, wall=20000):
         'configuration_digest': '8' * 64, 'benchmark_tree': 'e1d860fb72dc13bf5d15ed0fb29c49043aa3440b',
         'workspace_manifest': supervisor.workspace_manifest(policy['project']), 'measurement_config': measurement,
         'driver_path': policy['inherited_path'],
+        'policy_template_sha256': supervisor.policy_template_digest(policy),
+        'lean_sha256': supervisor.file_hash(Path(policy['lean_prefix']) / 'bin/lean')['sha256'],
+        'instrumentation': supervisor.instrumentation_commitments(supervisor.runtime_files() if files is None else files),
+        'interpreter': {'path': str(Path(PYTHON).resolve()), 'sha256': supervisor.file_hash(Path(PYTHON).resolve())['sha256']},
         'file_count': 1, 'lines_of_code': 2}
 
 
@@ -111,6 +120,120 @@ class StockSupervisorTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_buffered_real_completion_is_judged_by_trusted_finish_not_delivery(self):
+        for over_budget in (False, True):
+            with self.subTest(over_budget=over_budget), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                f = Fixture(Path(directory))
+                if over_budget:
+                    kernel = f.prefix / 'bin/leanchecker'
+                    kernel.write_text(f'#!{PYTHON}\nimport time;time.sleep(0.7)\n')
+                    f.policy['tools']['leanchecker']['sha256'] = supervisor.file_hash(kernel)['sha256']
+                locked_wall = 500 if over_budget else 1500
+                f.context = context(f.policy, files=f.files, wall=locked_wall)
+                original, calls = supervisor.Frames.read, [0]
+                def descheduled(frames, deadline):
+                    calls[0] += 1
+                    if calls[0] == 2:
+                        # Actual original agent runs on while the owner is not
+                        # scheduled. Both real trusted frames coalesce in pipe.
+                        time.sleep(2)
+                    return original(frames, deadline)
+                with mock.patch.object(supervisor.Frames, 'read', descheduled):
+                    result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+                self.assertFalse(result['supervisor_failure'], result)
+                self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0})
+                deadline = result['generation_started_ns'] + locked_wall * 1_000_000
+                self.assertEqual(result['driver_finished']['finished_ns'] > deadline, over_budget)
+                self.assertGreater(result['generation_stop']['cutoff_ns'], deadline)
+                self.assertEqual(result['timed_out'], over_budget)
+                self.assertEqual(result['verdict']['execution_outcome'], 'timed_out' if over_budget else 'completed')
+                self.assertEqual(result['verdict']['checker_outcome'], None if over_budget else 'accepted')
+                self.assertEqual(f.context['measurement_config']['wall_time_limit_ms'], locked_wall)
+
+    def test_required_counters_invalid_and_interrupted_evidence_keep_closed_envelope(self):
+        for timeout in (False, True):
+            with self.subTest(timeout=timeout), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                f = Fixture(Path(directory), sleep=5 if timeout else 0, driver_exit=1)
+                f.context = context(f.policy, files=f.files, wall=300 if timeout else 20000, required=True)
+                result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+                self.assertTrue(result['generation_stop']['stopped'])
+                self.assertEqual(result['verdict']['failure_reason'], 'verdict_invalid')
+                self.assertIsNone(result['verdict']['statistics'])
+
+    def test_startup_budget_exhaustion_never_launches_or_fabricates_execution(self):
+        f = Fixture(self.root)
+        f.context = context(f.policy, files=f.files, wall=100)
+        initialize = supervisor.stock.initialize
+        def slow_storage(*args):
+            time.sleep(0.3)
+            return initialize(*args)
+        with mock.patch.object(supervisor.stock, 'initialize', slow_storage):
+            result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+        self.assertTrue(result['supervisor_failure'])
+        self.assertFalse(result['timed_out'])
+        self.assertIsNone(result['driver_started'])
+        self.assertIsNone(result['driver'])
+        self.assertTrue(result['generation_stop']['stopped'])
+
+    def test_solution_alternative_config_cache_and_source_grammar_are_bound(self):
+        for name, contents in [('Solution.lean', 'changed trusted wrapper'), ('lakefile.lean', 'import Lean'),
+                               ('.lake/stale.olean', 'stale'), ('Submission/escape.py', 'wrong Source grammar')]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                f = Fixture(Path(directory))
+                path = f.project / name
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(contents)
+                with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(supervisor.Invalid):
+                    supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+                launch.assert_not_called()
+        f = Fixture(self.root)
+        original = f.context['workspace_manifest']
+        (f.project / 'Submission.lean').write_text('-- another untrusted Source\n')
+        changed = supervisor.workspace_manifest(f.project)
+        self.assertEqual(changed['prepared_tree_sha256'], original['prepared_tree_sha256'])
+        self.assertNotEqual(changed['source_sha256'], original['source_sha256'])
+        with self.assertRaises(supervisor.Invalid):
+            supervisor.validate_context(f.context, f.policy)
+
+    def test_policy_lean_and_instrumentation_cannot_be_repaired_under_unchanged_context(self):
+        for change in ('declarations', 'tool', 'lean', 'instrumentation'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                f = Fixture(Path(directory))
+                if change == 'declarations':
+                    f.policy['declarations'] = ['other']
+                else:
+                    path = Path(f.policy['tools']['leanexport']['path']) if change == 'tool' else (
+                        f.prefix / 'bin/lean' if change == 'lean' else f.root / 'measurement.py')
+                    path.write_text(path.read_text() + '\n# changed\n')
+                    if change == 'tool':
+                        f.policy['tools']['leanexport']['sha256'] = supervisor.file_hash(path)['sha256']
+                with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(supervisor.Invalid):
+                    supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+                launch.assert_not_called()
+
+    def test_consumed_workspace_is_refused_with_a_different_fresh_control(self):
+        f = Fixture(self.root, driver_exit=1)
+        first = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+        self.assertTrue(first['generation_stop']['stopped'])
+        other = self.root / 'another-control'
+        other.mkdir(mode=0o700)
+        with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(supervisor.Invalid):
+            supervisor.supervise(f.policy, f.context, control=other, python=PYTHON, files=f.files)
+        launch.assert_not_called()
+
+    def test_unrepresentable_measurement_limits_refuse_without_rewriting_M(self):
+        f = Fixture(self.root)
+        unmodified_fixture = json.loads((ROOT / 'tests/fixtures/stock-replay-contract-v1.json').read_bytes())['request']['measurement_config']
+        for wall in (supervisor.stock.MAX_WALL_MS, unmodified_fixture['wall_time_limit_ms']):
+            with self.subTest(wall=wall):
+                proposed = context(f.policy, files=f.files, wall=wall)
+                with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(supervisor.Invalid):
+                    supervisor.supervise(f.policy, proposed, control=f.control, python=PYTHON, files=f.files)
+                launch.assert_not_called()
+                self.assertEqual(proposed['measurement_config']['wall_time_limit_ms'], wall)
+        proposed = context(f.policy, files=f.files, wall=supervisor.stock.MAX_WALL_MS - supervisor.CUTOFF_RESERVE_MS)
+        supervisor.validate_context(proposed, f.policy)
 
     def namespace(self, body='import time;time.sleep(30)'):
         reader, writer = os.pipe2(os.O_CLOEXEC)
@@ -175,6 +298,10 @@ class StockSupervisorTests(unittest.TestCase):
             self.assertFalse(owned.stop()['stopped'])
             self.assertFalse(select.select([unrelated.outer_fd], [], [], 0)[0])
             unrelated.bind(information)
+            descriptor = unrelated.init_fd
+            with self.assertRaises(supervisor.Invalid):
+                unrelated.bind(information)
+            self.assertEqual(unrelated.init_fd, descriptor)
         finally:
             owned.stop()
             owned.close()
@@ -214,7 +341,7 @@ if sys.argv[1:]==['env']:
  pathlib.Path('.lake/owner-probe.json').write_text(json.dumps({'blocked':blocked,'descriptors':descriptors}))
 ''')
         f.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
-        f.context = context(f.policy)
+        f.context = context(f.policy, files=f.files)
         before = set(os.listdir('/proc/self/fd'))
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertEqual(set(os.listdir('/proc/self/fd')), before)
@@ -228,7 +355,7 @@ if sys.argv[1:]==['env']:
         driver = f.project / '.lake/build/bin/workspace_test'
         driver.write_text(driver.read_text().replace('time.sleep(30)',
             "pathlib.Path(p['temporary_directory']+'/driver-alive').touch();time.sleep(30)"))
-        f.context = context(f.policy)
+        f.context = context(f.policy, files=f.files)
         input_file = self.root / 'owner-input.json'
         supervisor.private_write(input_file, {'policy': f.policy, 'context': f.context,
             'files': {str(source): str(target) for source, target in f.files.items()}})
@@ -305,7 +432,7 @@ if sys.argv[1:]==['env']:
         lake = f.prefix / 'bin/lake'
         lake.write_text(lake.read_text() + '\nif sys.argv[1:]==["build","Solution"]:__import__("time").sleep(30)\n')
         f.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
-        f.context = context(f.policy, wall=1200)
+        f.context = context(f.policy, files=f.files, wall=1200)
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertTrue(result['timed_out'], result)
         trace = json.loads((f.control / 'stock-measurement.json').read_bytes())
@@ -320,7 +447,7 @@ if sys.argv[1:]==['env']:
     def test_reused_control_and_temporary_control_alias_refuse_before_launch(self):
         f = Fixture(self.root, driver_exit=1)
         supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
-        with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(FileExistsError):
+        with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises((FileExistsError, supervisor.Invalid)):
             supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         launch.assert_not_called()
         with mock.patch.object(supervisor.subprocess, 'Popen') as launch, self.assertRaises(supervisor.Invalid):
@@ -329,7 +456,7 @@ if sys.argv[1:]==['env']:
 
     def test_timeout_requires_actual_generation_teardown_and_no_fabricated_driver_exit(self):
         f = Fixture(self.root, sleep=5)
-        f.context = context(f.policy, wall=150)
+        f.context = context(f.policy, files=f.files, wall=150)
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertTrue(result['timed_out'], result)
         self.assertTrue(result['generation_stop']['stopped'])
@@ -395,13 +522,14 @@ if sys.argv[1:]==['env']:
         for field, variable in (('resolved_path', 'PATH'), ('lean_path', 'LEAN_PATH')):
             f.policy[field] = subprocess.check_output([str(prefix / 'bin/lake'), 'env', 'printenv', variable],
                 cwd=f.project, env=resolve_environment, text=True).strip()
-        f.context = context(f.policy, wall=120000)
+        f.context = context(f.policy, files=f.files, wall=120000)
         f.context['driver_path'] = environment['PATH']
         # The host is Nix, the future image is conventional Linux. Supply only
         # its existing glibc loader at the conventional ABI location, outside
         # all original argv/tool bytes. No NIX_LD env is inserted into them.
         loader = Path('/nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/ld-linux-x86-64.so.2')
         f.files[loader] = Path('/lib64/ld-linux-x86-64.so.2')
+        f.context['instrumentation'] = supervisor.instrumentation_commitments(f.files)
         command = supervisor.outer_command
         def conventional_abi(*args, **kwargs):
             result = command(*args, **kwargs)
@@ -421,6 +549,28 @@ if sys.argv[1:]==['env']:
 
 
 class SupervisorSourceTests(unittest.TestCase):
+    def test_info_pipe_accumulates_fragments_through_eof_and_refuses_truncation(self):
+        for pieces, valid in (([b'{"child-', b'pid":42}'], True), ([b'{"child-'], False), ([b'x' * 4097], False)):
+            reader, writer = os.pipe2(os.O_CLOEXEC)
+            def send():
+                try:
+                    for piece in pieces:
+                        os.write(writer, piece)
+                        time.sleep(0.01)
+                finally:
+                    os.close(writer)
+            thread = threading.Thread(target=send)
+            thread.start()
+            try:
+                if valid:
+                    self.assertEqual(supervisor.read_information(reader, time.monotonic() + 1), {'child-pid': 42})
+                else:
+                    with self.assertRaises(ValueError):
+                        supervisor.read_information(reader, time.monotonic() + 1)
+            finally:
+                thread.join()
+                os.close(reader)
+
     def test_original_driver_fixture_is_exact_and_no_active_reader_is_changed(self):
         self.assertEqual(hashlib.sha256(ORIGINAL.read_bytes()).hexdigest(), SOURCE_SHA)
         self.assertNotIn('stock_replay_supervisor', (ROOT / 'scripts/evaluate_submission.py').read_text())
@@ -439,8 +589,7 @@ class SupervisorSourceTests(unittest.TestCase):
             files['templates/WorkspaceTest.lean'] = ORIGINAL.read_bytes()
             configuration = request['benchmark']['configuration_lock']
             configuration['workspace_driver'].update(blob(ORIGINAL.read_bytes()))
-            configuration['generator_source_binding']['derived_output_manifest_sha256'] = supervisor.sha(
-                supervisor.stock.canonical(supervisor.workspace_manifest(f.project)))
+            configuration['generator_source_binding']['derived_output_manifest_sha256'] = supervisor.derived_manifest_digest(supervisor.workspace_manifest(f.project))
             for name, field in {'lake': 'lake', 'leanexport': 'leanexport', 'leanchecker': 'leanchecker', 'nanoda_bin': 'nanoda'}.items():
                 request['execution_profile']['binary_sha256'][field] = f.policy['tools'][name]['sha256']
             request['execution_profile']['binary_sha256'].update(lean=supervisor.file_hash(lean)['sha256'],
@@ -454,7 +603,8 @@ class SupervisorSourceTests(unittest.TestCase):
             authority = request['benchmark']['configuration_authority']
             arguments = {'benchmark_files': files, 'authority_raw': fixture['authority_raw_utf8'].encode(),
                 'authority_commit': authority['commit'], 'authority_path': authority['path'],
-                'driver_path': f.context['driver_path'], 'file_count': 1, 'lines_of_code': 2}
+                'driver_path': f.context['driver_path'], 'file_count': 1, 'lines_of_code': 2,
+                'instrumentation': f.files, 'python': PYTHON}
             context_value = supervisor.context_from_request(request, f.policy, **arguments)
             self.assertEqual(context_value['binding'], f.policy['binding'])
             self.assertEqual(context_value['benchmark_tree'], configuration['benchmark_tree'])
