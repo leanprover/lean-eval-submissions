@@ -58,11 +58,28 @@ stricter inherited limits are preserved. The address limit is not physical RAM
 or aggregate VM memory enforcement. Actual provider resource qualification
 remains separate.
 
-Linux pidfds and WNOWAIT preserve owned leader identity until group termination
-and wait, including leaders that already exited. Failure/deadline/termination
-signals stop every owned group and wait every direct child before returning.
-This trusted-build ownership does not replace Source PID-namespace containment,
-provider destruction or job/scratch cleanup qualification. Selected source/module/manifest/revision and all
+All actual preparation subprocess sites share scoped ownership: build/generator
+commands, short Git/selector/version commands and captured Lake environment
+probes. Linux pidfds and WNOWAIT retain every owned leader through the last group
+kill, including leaders that already exited. Success, nonzero exit, deadline and
+termination signals all stop and reap owned groups BEFORE returning or accepting
+the original real leader exit status. A temporary process-local child-subreaper
+setting makes orphan descendants in those groups reapable; the previous setting
+is restored on every path. Every group is reserved before any reaping. Only
+reserved groups are waited/signalled; unrelated live or exited children are not
+consumed. There is no waitpid(-1) or broad process scan/kill.
+
+This assumes a dedicated synchronous preparation process with default SIGCHLD,
+not a shared threaded server or external child reaper. Incompatible automatic
+reaping is refused before launch, because it could release leader identity.
+Cancellation is recorded while teardown runs, and handlers/settings are restored
+before cancellation propagates. Captured stdout is drained without blocking,
+limited to the existing16MiB bound, and requires EOF after owned writers stop;
+existing smaller checks (such as8192-byte environment probes) remain in force.
+Original argv, timeout caps and successful output bytes are retained. This
+trusted-public-build ownership does not replace untrusted Source PID-namespace
+containment, physical/aggregate provider resource qualification, provider
+destruction or job/scratch cleanup qualification. Selected source/module/manifest/revision and all
 global catalog inputs are bound by that immutable tree. The loader ignores only
 the original exact `.DS_Store` entry, rejects other stray files/directories, and
 conserves first-occurrence module order. Canonical dotted ASCII module operands

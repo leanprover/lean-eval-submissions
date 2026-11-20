@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import contextlib
 import copy
+import ctypes
 import math
 import os
 from pathlib import Path
@@ -98,13 +99,13 @@ class Git:
 
     def run(self, *arguments):
         try:
-            result = subprocess.run([GIT, '--no-replace-objects', '-c', 'core.fsmonitor=false',
+            raw = _capture_preparation([GIT, '--no-replace-objects', '-c', 'core.fsmonitor=false',
                 '-c', 'core.hooksPath=/dev/null', '-C', str(self.repository), *arguments],
-                env=environment('/nonexistent'), capture_output=True, check=True, timeout=30)
+                None, environment('/nonexistent'), 30)
         except (OSError, subprocess.SubprocessError):
             raise Invalid('required original Git object is unavailable') from None
-        require(len(result.stdout) <= MAX_BLOB)
-        return result.stdout
+        require(len(raw) <= MAX_BLOB)
+        return raw
 
     def blob(self, path, *, symlink=False):
         entry = self.entries.get(path)
@@ -142,10 +143,9 @@ class Git:
         command = [GIT, '-c', 'core.hooksPath=/dev/null', 'clone', '--local', '--no-hardlinks',
                    '--no-checkout', '--', str(self.repository), str(destination)]
         try:
-            subprocess.run(command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
+            invoke(command, None, env, 60)
             for arguments in (['config', 'remote.origin.url', public_url], ['-c', 'core.hooksPath=/dev/null', 'checkout', '--detach', self.commit]):
-                subprocess.run([GIT, '-C', str(destination), *arguments], env=env,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
+                invoke([GIT, '-C', str(destination), *arguments], None, env, 60)
         except (OSError, subprocess.SubprocessError):
             raise Invalid('fresh original dependency checkout is unavailable') from None
         self.verify_dependency_checkout(destination)
@@ -191,10 +191,8 @@ def export_original(repository, commit, toolchain, problem, destination):
     git.export(destination)
     if directory != '.':
         # Execute the exact Git-verified original selector, not a reimplementation.
-        result = subprocess.run([sys.executable, '-I', str(destination / 'scripts/prepare_toolchain.py'),
-            toolchain, '--apply'], cwd=destination, env=environment(destination.parent),
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-        require(result.returncode == 0)
+        invoke([sys.executable, '-I', str(destination / 'scripts/prepare_toolchain.py'),
+            toolchain, '--apply'], destination, environment(destination.parent), 30)
     require(all((destination / name).read_bytes() == raw for name, raw in configuration.items()))
     return {'schema_version': 1, 'benchmark_commit': commit, 'benchmark_tree': git.tree,
             'toolchain': toolchain, 'problem_id': problem, 'statement_revision': manifest['statement_revision'],
@@ -210,26 +208,152 @@ def verify_checkout(git, source, configuration, *, selected_problem=None):
                 and target.read_bytes() == configuration.get(path, git.blob(path)))
 
 
-def invoke(command, source, env, timeout):
-    # This phase executes only verified original public benchmark/generator code.
-    # No submitter Source is supplied; output is discarded and never classified.
-    try:
-        process = subprocess.Popen(command, cwd=source, env=env, stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+def _stop_preparation_groups(children, descriptors):
+    """Signal only unreaped owned groups, then reap only those groups."""
+    failed, reserved = False, []
+    deadline = time.monotonic_ns() + 5_000_000_000
+    # Reserve EVERY group until its last required kill: no leader is reaped
+    # before all group signals have been issued.
+    for child in children:
+        if child.returncode is not None:
+            failed = True  # identity was unexpectedly released; never signal it
+            continue
+        reserved.append(child)
         try:
-            code = process.wait(timeout=timeout)
-        except BaseException:
-            # This is the unreaped owned group leader, not a reported PID. All
-            # children here are the trusted original build tools; Source never
-            # runs in this phase. Runtime Source containment uses the separate
-            # namespace supervisor, not this trusted-builder process group.
-            if process.returncode is None:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait(timeout=5)
-            raise
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            failed = True
+    for child in reserved:
+        try:
+            child.wait(timeout=max(0, (deadline - time.monotonic_ns()) / 1_000_000_000))
+        except (OSError, subprocess.SubprocessError):
+            failed = True
+    for child in reserved:
+        while True:
+            try:
+                pid, _status = os.waitpid(-child.pid, os.WNOHANG)
+            except ChildProcessError:
+                break
+            except OSError:
+                failed = True
+                break
+            if pid:
+                continue
+            if time.monotonic_ns() >= deadline:
+                failed = True
+                break
+            time.sleep(0.01)
+    for descriptor in descriptors:
+        try:
+            os.close(descriptor)
+        except OSError:
+            failed = True
+    require(not failed)
+
+
+@contextlib.contextmanager
+def _owned_preparation_groups():
+    """Dedicated synchronous trusted-preparer scope, never a shared job server.
+
+    The process-local subreaper flag is restored on every path. Only this
+    scope's reserved process groups are signalled/reaped; no waitpid(-1).
+    Signals record cancellation rather than interrupting teardown/restoration.
+    """
+    # An auto-reaping SIGCHLD policy could release PID identity before WNOWAIT.
+    # This entry is a dedicated synchronous preparation process, not a server.
+    require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL)
+    children, descriptors = [], []
+    cancelled = [False]
+    previous, setting = {}, None
+    libc = ctypes.CDLL(None, use_errno=True)
+    def cancel(_number, _frame):
+        cancelled[0] = True
+    try:
+        for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            previous[number] = signal.signal(number, cancel)
+        value = ctypes.c_int()
+        require(libc.prctl(37, ctypes.byref(value), 0, 0, 0) == 0)
+        setting = value.value  # restore even if SET or later setup is interrupted
+        require(libc.prctl(36, 1, 0, 0, 0) == 0)
+        yield children, descriptors, cancelled
+    finally:
+        try:
+            _stop_preparation_groups(children, descriptors)
+        finally:
+            blocked = signal.pthread_sigmask(signal.SIG_BLOCK, set(previous))
+            try:
+                restored = setting is None or libc.prctl(36, setting, 0, 0, 0) == 0
+                for number, handler in previous.items():
+                    signal.signal(number, handler)
+                require(restored)
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
+        if cancelled[0]:
+            raise supervisor.Interrupted()
+
+
+def _preparation_command(command, source, env, timeout, *, capture=False):
+    """Exact original command, bounded optional stdout, complete owned teardown."""
+    require(type(timeout) in (int, float) and math.isfinite(timeout) and timeout > 0)
+    deadline = time.monotonic_ns() + int(timeout * 1_000_000_000)
+    code, process, output, eof = None, None, bytearray(), not capture
+    def drain():
+        nonlocal eof
+        while not eof:
+            try:
+                chunk = os.read(process.stdout.fileno(), 65536)
+            except BlockingIOError:
+                return
+            if not chunk:
+                eof = True
+                return
+            require(len(output) + len(chunk) <= MAX_BLOB)
+            output.extend(chunk)
+    try:
+        with _owned_preparation_groups() as (children, descriptors, cancelled):
+            process = subprocess.Popen(command, cwd=source, env=env, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True)
+            children.append(process)
+            descriptor = supervisor.pidfd_open(process.pid)
+            descriptors.append(descriptor)
+            if capture:
+                os.set_blocking(process.stdout.fileno(), False)
+            while code is None:
+                if cancelled[0]:
+                    raise supervisor.Interrupted()
+                readers = [descriptor] + ([process.stdout.fileno()] if not eof else [])
+                ready, _, _ = select.select(readers, [], [], min(0.05, _inventory_remaining(deadline)))
+                _inventory_remaining(deadline)
+                if capture and process.stdout.fileno() in ready:
+                    drain()
+                if descriptor in ready:
+                    status = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                    require(status is not None)
+                    code = status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
+        # Every owned writer is stopped/reaped before the final bounded drain.
+        # An inherited pipe held outside the owned group is not accepted as EOF.
+        if capture:
+            drain()
+            require(eof)
+        require(process.returncode == code and code == 0)
+        return bytes(output)
     except (OSError, subprocess.SubprocessError):
         raise Invalid('original stock builder/generator did not complete') from None
-    require(code == 0)
+    finally:
+        if process is not None and process.stdout is not None:
+            process.stdout.close()
+
+
+def invoke(command, source, env, timeout):
+    # All exits quiesce/reap owned groups before accepting real leader status.
+    _preparation_command(command, source, env, timeout)
+
+
+def _capture_preparation(command, source, env, timeout):
+    return _preparation_command(command, source, env, timeout, capture=True)
 
 
 def _original_inventory_modules(git):
@@ -267,7 +391,7 @@ def _build_inventory_batch(modules, source, env, lake, deadline):
     trusted-build process-group ownership, not Source namespace qualification.
     """
     require(0 < len(modules) <= INVENTORY_CONCURRENCY and hasattr(os, 'WNOWAIT'))
-    children, descriptors, observed, cleanup_failed = [], [], {}, False
+    observed = {}
     values = dict(env, LEAN_NUM_THREADS='1')
     def limits():
         def restrict(kind, maximum):
@@ -276,7 +400,7 @@ def _build_inventory_batch(modules, source, env, lake, deadline):
             resource.setrlimit(kind, (limit, limit))
         restrict(resource.RLIMIT_AS, INVENTORY_ADDRESS_SPACE)
         restrict(resource.RLIMIT_CPU, math.ceil(_inventory_remaining(deadline)))
-    with supervisor.termination_guard():
+    with _owned_preparation_groups() as (children, descriptors, cancelled):
         try:
             for module in modules:
                 _inventory_remaining(deadline)
@@ -287,8 +411,10 @@ def _build_inventory_batch(modules, source, env, lake, deadline):
                 descriptors.append(supervisor.pidfd_open(child.pid))
             pending = set(range(len(children)))
             while pending:
+                if cancelled[0]:
+                    raise supervisor.Interrupted()
                 ready, _, _ = select.select([descriptors[index] for index in pending], [], [],
-                                             _inventory_remaining(deadline))
+                                             min(0.05, _inventory_remaining(deadline)))
                 _inventory_remaining(deadline)
                 for index in tuple(pending):
                     if descriptors[index] not in ready:
@@ -299,27 +425,6 @@ def _build_inventory_batch(modules, source, env, lake, deadline):
                     pending.remove(index)
         except (OSError, subprocess.SubprocessError):
             raise Invalid('original inventory prebuild did not complete') from None
-        finally:
-            # All leaders are still owned/unreaped, even those already exited.
-            # Attempt every stop/wait before reporting any cleanup failure.
-            for child in children:
-                try:
-                    os.killpg(child.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except OSError:
-                    cleanup_failed = True
-            for child in children:
-                try:
-                    child.wait(timeout=5)
-                except (OSError, subprocess.SubprocessError):
-                    cleanup_failed = True
-            for descriptor in descriptors:
-                try:
-                    os.close(descriptor)
-                except OSError:
-                    cleanup_failed = True
-            require(not cleanup_failed)
     require(len(observed) == len(modules) and all(child.returncode == 0 for child in children))
     return [{'module': module, 'exit_code': children[index].returncode,
              'observed_finished_ns': observed[index],
@@ -459,8 +564,7 @@ def _generate_original(repository, commit, toolchain, problem, session, *, toolc
     env['PATH'] = _trusted_path(env['PATH'], (source, home))
     env['ELAN_TOOLCHAIN'] = toolchain
     env['TMPDIR'] = str(home)
-    version = subprocess.run([str(prefix / 'bin/lean'), '--version'], env=env,
-        capture_output=True, check=True, timeout=30).stdout.decode()
+    version = _capture_preparation([str(prefix / 'bin/lean'), '--version'], None, env, 30).decode()
     require(contracts.STOCK_COMPONENTS[toolchain][0] in version)
     packages = source / '.lake/packages'
     packages.mkdir(parents=True)
@@ -542,12 +646,11 @@ def _driver_environment(workspace, prefix, driver_path, home, toolchain):
     env.update(PATH=driver_path, ELAN_TOOLCHAIN=toolchain, TMPDIR=str(home))
     def probe(variable, values):
         try:
-            result = subprocess.run([str(prefix / 'bin/lake'), 'env', 'printenv', variable],
-                cwd=workspace, env=values, capture_output=True, check=True, timeout=30)
+            raw = _capture_preparation([str(prefix / 'bin/lake'), 'env', 'printenv', variable], workspace, values, 30)
         except (OSError, subprocess.SubprocessError):
             raise Invalid('original driver environment could not be established') from None
-        require(0 < len(result.stdout) <= 8192)
-        return result.stdout.decode().strip()
+        require(0 < len(raw) <= 8192)
+        return raw.decode().strip()
     inherited = []
     roots = [workspace.resolve(), (workspace / '.lake').resolve()]
     for item in probe('PATH', env).split(':'):

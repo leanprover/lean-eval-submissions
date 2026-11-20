@@ -311,6 +311,133 @@ else:
             self.assertFalse(any('--assume-modules-built' in entry['argv'] for entry in events))
 
 
+class TrustedInvokeOwnershipTests(unittest.TestCase):
+    def test_incompatible_auto_reaper_refuses_before_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            code = ("import ctypes,signal,sys\n" +
+                "sys.path.insert(0," + repr(str(ROOT / 'scripts')) + ")\n" +
+                "import prepare_stock_workspace as p\n" +
+                "signal.signal(signal.SIGCHLD,signal.SIG_IGN)\n" +
+                "try:p.invoke(['/nonexistent'],None,p.environment('/nonexistent'),1)\n" +
+                "except p.Invalid:pass\nelse:raise AssertionError('auto reaper accepted')\n" +
+                "assert signal.getsignal(signal.SIGCHLD)==signal.SIG_IGN\n")
+            result = subprocess.run([sys.executable, '-I', '-c', code], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_both_inventory_phase_failures_reap_actual_same_group_descendants(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / 'phase-regression.py'
+            script.write_text("import ctypes,json,os,signal,sys,tempfile\nfrom pathlib import Path\n" +
+                "sys.path[:0]=" + repr([str(ROOT / 'scripts'), str(ROOT / 'tests')]) + "\n" +
+                "import prepare_stock_workspace as p\nfrom test_prepare_stock_workspace import InventoryPreparationTests\n" +
+                "assert ctypes.CDLL(None).prctl(36,1,0,0,0)==0\nrows=[]\n" +
+                "for phase in('structure','inventory'):\n" +
+                " with tempfile.TemporaryDirectory()as directory:\n  root=Path(directory);git,source,lake=InventoryPreparationTests().fixture(root,('Alpha',))\n" +
+                "  worker=" + repr("import json,os,subprocess,sys,time\nfrom pathlib import Path\na=sys.argv[1:];phase='structure'if'--structure-only'in a else'inventory'if'--assume-modules-built'in a else'build'\nif phase==FAIL:\n child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);Path('descendant').write_text(str(child.pid));raise SystemExit(7)\nif phase=='build':\n p=Path('.lake/build/lib/lean/Alpha.olean');p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'owned control, not a Lean object')\n") + ".replace('FAIL',repr(phase))\n" +
+                "  lake.write_text('#!'+str(Path(sys.executable).resolve())+'\\n'+worker);lake.chmod(0o700)\n" +
+                "  try:p._prepare_inventory(git,source,p.environment(root),lake,3)\n" +
+                "  except p.Invalid:pass\n  else:raise AssertionError('failure accepted')\n" +
+                "  pid=int((source/'descendant').read_text());reaped=False\n" +
+                "  try:status=os.waitpid(pid,os.WNOHANG)\n  except ChildProcessError:reaped=True\n" +
+                "  else:\n   if status==(0,0):os.kill(pid,signal.SIGKILL);os.waitpid(pid,0)\n" +
+                "  assert reaped,'phase returned with an unreaped descendant'\n  rows.append(phase)\n" +
+                "print(json.dumps(rows))\n")
+            result = subprocess.run([sys.executable, '-I', str(script)], capture_output=True, timeout=12)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(json.loads(result.stdout), ['structure', 'inventory'])
+
+    def test_capture_exact_binary_and_size_failure_have_bounded_owned_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = bytes(range(256)) * 4096
+            raw = prepare._capture_preparation([sys.executable, '-c',
+                'import sys;sys.stdout.buffer.write(bytes(range(256))*4096)'], root, prepare.environment(root), 3)
+            self.assertEqual(raw, expected)
+            # The original Git/stdout16MiB bound is enforced while draining;
+            # failure still traverses the shared owned-group teardown.
+            with self.assertRaises(prepare.Invalid):
+                prepare._capture_preparation([sys.executable, '-c',
+                    'import sys;sys.stdout.buffer.write(b"x"*(16*1024*1024+1))'], root, prepare.environment(root), 3)
+
+    def test_real_descendants_all_exits_prior_settings_and_unrelated_children(self):
+        # An OUTER disposable subreaper cleans probes even if a regression makes
+        # the tested controller (whose prior flag may be zero) lose ownership.
+        controller_code = r'''import ctypes,json,os,signal,subprocess,sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1]);import prepare_stock_workspace as p
+root=Path(sys.argv[2]);mode=sys.argv[3];prior=int(sys.argv[4]);capture=bool(int(sys.argv[5]));libc=ctypes.CDLL(None)
+assert libc.prctl(36,prior,0,0,0)==0
+saved={n:signal.getsignal(n)for n in(signal.SIGTERM,signal.SIGINT,signal.SIGHUP)}
+real=subprocess.Popen
+live=real([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
+exited=real([sys.executable,'-c','raise SystemExit(23)'],start_new_session=True)
+os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOWAIT)
+children=[]
+def launch(*a,**kw):
+ child=real(*a,**kw);children.append(child);return child
+p.subprocess.Popen=launch
+try:
+ outcome='success'
+ try:
+  value=(p._capture_preparation if capture else p.invoke)([sys.executable,str(root/'worker.py'),mode],root,p.environment(root),.75 if mode=='timeout' else 3)
+  if capture:assert value==bytes(range(256))*4096
+ except p.Invalid:outcome='invalid'
+ except p.supervisor.Interrupted:outcome='interrupted'
+ assert outcome=={'success':'success','nonzero':'invalid','timeout':'invalid','signal':'interrupted'}[mode],outcome
+ assert len(children)==1 and children[0].returncode=={'success':0,'nonzero':7,'timeout':-9,'signal':-9}[mode]
+ identity=json.loads((root/'identity.json').read_text());pid=identity['descendant']
+ try:os.waitpid(pid,os.WNOHANG)
+ except ChildProcessError:pass
+ else:raise AssertionError('owned descendant not reaped')
+ status=Path(f'/proc/{pid}/stat')
+ if status.exists():assert status.read_text().rsplit(')',1)[1].split()[19]!=identity['start_ticks'],'original descendant still exists'
+ value=ctypes.c_int();assert libc.prctl(37,ctypes.byref(value),0,0,0)==0 and value.value==prior
+ assert all(signal.getsignal(n)==old for n,old in saved.items())
+ assert live.poll()is None,'unrelated live child was signalled'
+ status=os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+ assert status is not None and status.si_status==23,'unrelated exited child was reaped'
+ print(json.dumps({'mode':mode,'prior':prior,'capture':capture,'descendant_reaped':True,'setting_restored':True,'unrelated_preserved':True}))
+finally:
+ if live.poll()is None:live.kill()
+ live.wait();assert exited.wait()==23
+'''
+        worker_code = r'''import json,os,signal,subprocess,sys,time
+from pathlib import Path
+child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
+ticks=Path(f'/proc/{child.pid}/stat').read_text().rsplit(')',1)[1].split()[19]
+Path('identity.json').write_text(json.dumps({'descendant':child.pid,'leader':os.getpid(),'start_ticks':ticks}))
+sys.stdout.buffer.write(bytes(range(256))*4096);sys.stdout.buffer.flush()
+if sys.argv[1]=='signal':os.kill(os.getppid(),signal.SIGTERM)
+if sys.argv[1]in('signal','timeout'):time.sleep(60)
+raise SystemExit(7 if sys.argv[1]=='nonzero' else 0)
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'controller.py').write_text(controller_code)
+            (root / 'worker-template').write_text(worker_code)
+            harness = root / 'harness.py'
+            harness.write_text("import ctypes,json,os,signal,subprocess,sys\nfrom pathlib import Path\n" +
+                "root=Path(sys.argv[1]);assert ctypes.CDLL(None).prctl(36,1,0,0,0)==0;rows=[]\n" +
+                "for prior,capture in((0,0),(1,0),(0,1),(1,1)):\n for mode in('success','nonzero','timeout','signal'):\n" +
+                "  case=root/(str(prior)+'-'+str(capture)+'-'+mode);case.mkdir();(case/'worker.py').write_text((root/'worker-template').read_text())\n" +
+                "  result=subprocess.run([sys.executable,'-I',str(root/'controller.py'),sys.argv[2],str(case),mode,str(prior),str(capture)],capture_output=True,timeout=8)\n" +
+                "  identity=case/'identity.json'\n" +
+                "  if identity.exists():\n   pid=json.loads(identity.read_text())['descendant']\n" +
+                "   try:\n    status=os.waitid(os.P_PID,pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)\n" +
+                "    if status is None:os.kill(pid,signal.SIGKILL)\n    os.waitpid(pid,0)\n" +
+                "   except ChildProcessError:pass\n" +
+                "  assert result.returncode==0,result.stderr.decode()\n  rows.append(json.loads(result.stdout))\n" +
+                "print(json.dumps(rows))\n")
+            result = subprocess.run([sys.executable, '-I', str(harness), str(root), str(ROOT / 'scripts')],
+                                    capture_output=True, timeout=25)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            rows = json.loads(result.stdout)
+            self.assertEqual(len(rows), 16)
+            self.assertTrue(all(row['descendant_reaped'] and row['setting_restored'] and row['unrelated_preserved'] for row in rows))
+
+
 @unittest.skipUnless((BENCHMARK / '.git').exists(), 'existing offline public benchmark Git objects required')
 class OriginalStockTests(unittest.TestCase):
     def test_controlled_original_cli_inventory_success_and_semantic_rejection(self):
