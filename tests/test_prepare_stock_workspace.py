@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import shutil
+import stat
 import time
 from unittest import mock
 from pathlib import Path
@@ -546,6 +547,204 @@ if module=='Slow':
             self.assertLess(time.monotonic() - started, 2)
             events = [json.loads(line) for line in (source / 'events').read_text().splitlines()]
             self.assertFalse(any('--assume-modules-built' in entry['argv'] for entry in events))
+
+
+class DependencyCacheDetachTests(unittest.TestCase):
+    def fixture(self, root, *, tracked_artifact=False, payload=b'controlled public artifact\x00\xff'):
+        fixture_root = root / 'synthetic-driver'
+        fixture_root.mkdir()
+        fixture = Fixture(fixture_root, real=False)
+        session = root / 'session'
+        session.mkdir(mode=0o700)
+        workspace = session / 'workspace'
+        shutil.copytree(fixture.project, workspace)
+        benchmark_repo = root / 'benchmark'
+        benchmark_commit = commit_files(benchmark_repo, {
+            'generated/fixture/Submission.lean': (workspace / 'Submission.lean').read_bytes()})
+        benchmark = prepare.Git(benchmark_repo, benchmark_commit)
+        packages = session / 'source/.lake/packages'
+        packages.mkdir(parents=True)
+        repo = root / 'dependency-repository'
+        original = {'Library.lean': b'-- pinned original public dependency\n'}
+        if tracked_artifact:
+            original['.lake/build/output.bin'] = payload
+        commit = commit_files(repo, original)
+        dependency = prepare.Git(repo, commit)
+        destination = packages / 'library'
+        dependency.checkout_dependency(destination, 'https://github.com/fixture/library.git')
+        artifact = destination / '.lake/build/output.bin'
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_bytes(payload)
+        artifact.chmod(0o444)
+        os.utime(artifact, ns=(1234567890000000000, 1234567890123456789))
+        home_artifact = session / 'home/.cache/lake/artifacts/pinned-output.bin'
+        home_artifact.parent.mkdir(parents=True)
+        os.link(artifact, home_artifact)
+        self.assertIsNone(prepare._share_packages(workspace, packages))
+        prepare._strip_owned_git_metadata(packages)
+        return benchmark, session, [(dependency, destination)], artifact, home_artifact
+
+    def detach(self, fixture, timeout=3):
+        benchmark, session, dependencies, _, _ = fixture
+        return prepare._detach_dependency_cache_links(benchmark, 'fixture', session, dependencies, timeout)
+
+    def assert_no_temps(self, session):
+        self.assertFalse(list(session.rglob('.stock-owned-detach-*')))
+
+    def test_actual_public_cache_bytes_detach_before_strict_closure_without_changing_alias(self):
+        public = Path('/tmp/nix-shell.NgJZc4/lean-eval-stock-original-208-builder-2rbvrxx_/source/.lake/packages/LeanSearchClient/.lake/build/ir/LeanSearchClient/Basic.c')
+        if not public.is_file():
+            self.skipTest('existing independently pinned public dependency cache artifact required')
+        payload = public.read_bytes()
+        self.assertEqual(prepare.sha(payload), '04018e4a0091229d95310b78b299f07403922df948dd878ff3747623eb440c23')
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.fixture(Path(directory), payload=payload)
+            _, session, dependencies, artifact, outside_target_alias = fixture
+            old = artifact.stat()
+            with self.assertRaises(prepare.supervisor.Invalid):
+                prepare.supervisor.workspace_manifest(session / 'workspace')
+            observed = self.detach(fixture)
+            self.assertEqual(observed['detached_files'], 1)
+            self.assertEqual(observed['copied_bytes'], len(payload))
+            self.assertEqual(artifact.read_bytes(), payload)
+            self.assertEqual(artifact.stat().st_nlink, 1)
+            self.assertNotEqual(artifact.stat().st_ino, old.st_ino)
+            self.assertEqual(stat.S_IMODE(artifact.stat().st_mode), stat.S_IMODE(old.st_mode))
+            self.assertEqual(artifact.stat().st_mtime_ns, old.st_mtime_ns)
+            self.assertEqual(outside_target_alias.read_bytes(), payload)
+            self.assertEqual(outside_target_alias.stat().st_ino, old.st_ino)
+            self.assertEqual(stat.S_IMODE(outside_target_alias.stat().st_mode), stat.S_IMODE(old.st_mode))
+            self.assertEqual(outside_target_alias.stat().st_mtime_ns, old.st_mtime_ns)
+            self.assertEqual(outside_target_alias.stat().st_nlink, 1)  # naturally decreases
+            dependencies[0][0].verify_dependency_source(dependencies[0][1])
+            self.assertIsInstance(prepare.supervisor.workspace_manifest(session / 'workspace'), dict)
+            self.assert_no_temps(session)
+
+    def test_refuses_tracked_or_unknown_outside_alias_before_any_copy(self):
+        for unsafe in ('tracked', 'unknown_alias', 'Source', 'consumed'):
+            with self.subTest(unsafe=unsafe), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self.fixture(root, tracked_artifact=unsafe == 'tracked')
+                _, session, _, artifact, home = fixture
+                old = artifact.stat()
+                if unsafe == 'unknown_alias':
+                    os.link(artifact, root / 'unknown-outside-session')
+                elif unsafe == 'Source':
+                    (session / 'workspace/Submission.lean').write_text('-- already overlaid Source must refuse\n')
+                elif unsafe == 'consumed':
+                    (session / 'workspace' / prepare.supervisor.CONSUMED).write_text('{}')
+                with self.assertRaises(prepare.Invalid):
+                    self.detach(fixture)
+                self.assertEqual(artifact.stat().st_ino, old.st_ino)
+                self.assertEqual(home.read_bytes(), b'controlled public artifact\x00\xff')
+                self.assert_no_temps(session)
+
+    def test_refuses_symlink_foreign_owner_oversize_or_unsafe_mode(self):
+        for unsafe in ('symlink', 'parent_symlink', 'foreign', 'oversize', 'mode'):
+            with self.subTest(unsafe=unsafe), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self.fixture(root)
+                _, session, _, artifact, home = fixture
+                original_inode = artifact.stat().st_ino
+                if unsafe == 'symlink':
+                    artifact.unlink()
+                    artifact.symlink_to(home)
+                elif unsafe == 'parent_symlink':
+                    build = artifact.parent
+                    relocated = root / 'outside-build'
+                    build.rename(relocated)
+                    build.symlink_to(relocated, target_is_directory=True)
+                elif unsafe == 'oversize':
+                    artifact.chmod(0o644)
+                    with artifact.open('wb') as stream:
+                        stream.truncate(256 * 1024**2 + 1)
+                    artifact.chmod(0o444)
+                elif unsafe == 'mode':
+                    artifact.chmod(0o666)
+                real_fstat = os.fstat
+                def fstat(descriptor):
+                    info = real_fstat(descriptor)
+                    if unsafe == 'foreign' and info.st_ino == original_inode:
+                        fields = list(info)
+                        fields[4] = info.st_uid + 1
+                        return os.stat_result(fields)
+                    return info
+                with mock.patch.object(prepare.os, 'fstat', side_effect=fstat):
+                    with self.assertRaises((prepare.Invalid, OSError)):
+                        self.detach(fixture)
+                self.assert_no_temps(session)
+
+    def test_corrupt_copy_and_changed_tracked_input_never_freeze_success(self):
+        for failure in ('corrupt_copy', 'tracked_after_detach'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                fixture = self.fixture(Path(directory))
+                _, session, dependencies, artifact, home = fixture
+                original, old_inode = home.read_bytes(), artifact.stat().st_ino
+                real_write, real_replace = os.write, os.replace
+                def write(descriptor, data):
+                    return real_write(descriptor, bytes([data[0] ^ 1]) + data[1:])
+                def replace(*args, **kwargs):
+                    result = real_replace(*args, **kwargs)
+                    (dependencies[0][1] / 'Library.lean').write_text('-- unproved concurrent tracked change\n')
+                    return result
+                with mock.patch.object(prepare.os, 'write', side_effect=write if failure == 'corrupt_copy' else real_write), \
+                     mock.patch.object(prepare.os, 'replace', side_effect=replace if failure == 'tracked_after_detach' else real_replace):
+                    with self.assertRaises(prepare.Invalid):
+                        self.detach(fixture)
+                self.assert_no_temps(session)
+                self.assertEqual(home.read_bytes(), original)
+                if failure == 'corrupt_copy':
+                    self.assertEqual(artifact.stat().st_ino, old_inode)
+                else:
+                    self.assertNotEqual(artifact.stat().st_ino, old_inode)
+                    self.assertEqual(artifact.stat().st_nlink, 1)  # failed owned session only
+                self.assertFalse((session / 'owned-generation-observation.json').exists())
+
+    def test_replacement_race_partial_copy_and_deadline_remove_temp_emit_no_closure(self):
+        for failure in ('replacement', 'write', 'deadline', 'byte_limit', 'file_limit'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self.fixture(root)
+                _, session, _, artifact, home = fixture
+                original = home.read_bytes()
+                original_mtime, original_mode = home.stat().st_mtime_ns, stat.S_IMODE(home.stat().st_mode)
+                real_fsync, real_write = os.fsync, os.write
+                triggered = []
+                def fsync(descriptor):
+                    real_fsync(descriptor)
+                    if failure == 'replacement' and not triggered:
+                        triggered.append(True)
+                        replacement = artifact.parent / 'replacement'
+                        replacement.write_bytes(b'concurrent replacement must not be overwritten')
+                        os.replace(replacement, artifact)
+                def write(descriptor, data):
+                    if failure in ('write', 'deadline'):
+                        if not triggered:
+                            triggered.append(True)
+                            written = real_write(descriptor, data[:1])
+                            if failure == 'deadline':
+                                time.sleep(1.05)  # actual shared copy-phase deadline expires
+                            return written
+                        if failure == 'write':
+                            raise OSError('controlled partial copy failure')
+                        self.fail('copy continued after actual phase deadline')
+                    return real_write(descriptor, data)
+                with mock.patch.object(prepare.os, 'fsync', side_effect=fsync), \
+                     mock.patch.object(prepare.os, 'write', side_effect=write), \
+                     mock.patch.object(prepare, 'DETACH_MAX_BYTES', 1 if failure == 'byte_limit' else prepare.DETACH_MAX_BYTES), \
+                     mock.patch.object(prepare, 'DETACH_MAX_FILES', 1 if failure == 'file_limit' else prepare.DETACH_MAX_FILES):
+                    with self.assertRaises((prepare.Invalid, OSError)):
+                        self.detach(fixture, timeout=1 if failure == 'deadline' else 3)
+                self.assert_no_temps(session)
+                self.assertEqual(home.read_bytes(), original)
+                self.assertEqual(home.stat().st_mtime_ns, original_mtime)
+                self.assertEqual(stat.S_IMODE(home.stat().st_mode), original_mode)
+                self.assertFalse((session / 'owned-generation-observation.json').exists())
+                self.assertFalse((session / 'validated-context-template.json').exists())
+                if failure == 'replacement':
+                    self.assertEqual(artifact.read_bytes(), b'concurrent replacement must not be overwritten')
+                else:
+                    self.assertEqual(artifact.stat().st_ino, home.stat().st_ino)
 
 
 class TrustedInvokeOwnershipTests(unittest.TestCase):

@@ -17,8 +17,10 @@ from pathlib import Path
 import re
 import resource
 import select
+import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -38,6 +40,8 @@ PROBLEM = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z')
 GIT = str(Path(shutil.which('git')).resolve(strict=True))
 INVENTORY_CONCURRENCY = 4
 INVENTORY_ADDRESS_SPACE = 32 * 1024**3
+DETACH_MAX_FILES = 1_000_000
+DETACH_MAX_BYTES = 8 * 1024**3
 
 
 _GENERATION_SEAL = object()
@@ -152,6 +156,10 @@ class Git:
 
     def verify_dependency_checkout(self, destination):
         require(self.run('-C', str(destination), 'rev-parse', 'HEAD').decode().strip() == self.commit)
+        self.verify_dependency_source(destination)
+
+    def verify_dependency_source(self, destination):
+        # Retained CAS objects still prove tracked bytes after owned .git scrub.
         for path in self.entries:
             target = Path(destination) / path
             if self.entries[path]['mode'] == '120000':
@@ -577,6 +585,230 @@ def _strip_owned_git_metadata(packages):
             subdirectories.remove('.git')
 
 
+def _detach_dependency_cache_links(git, problem, session, dependencies, timeout_seconds):
+    """Copy-detach only proven owned public cache aliases, before ANY Source.
+
+    Nothing writes/chmods the old inode or its owned home-artifact alias. This
+    does not weaken strict workspace_manifest or authenticate arbitrary caches.
+    """
+    require(type(timeout_seconds) is int and 1 <= timeout_seconds <= 300)
+    started = time.monotonic_ns()
+    deadline = started + timeout_seconds * 1_000_000_000
+    session = supervisor.stock.absolute(str(session))
+    workspace, packages = session / 'workspace', session / 'source/.lake/packages'
+    artifacts = session / 'home/.cache/lake/artifacts'
+    directory_identities = {}
+    def directory(path):
+        require(path.is_relative_to(session) and path.resolve(strict=True) == path)
+        descriptor = os.open(session, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            for component in path.relative_to(session).parts:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                info = os.fstat(descriptor)
+                require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid() and not info.st_mode & 0o022)
+            info = os.fstat(descriptor)
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid() and not info.st_mode & 0o022)
+            identity = (info.st_dev, info.st_ino)
+            require(path not in directory_identities or directory_identities[path] == identity)
+            directory_identities[path] = identity
+            return descriptor
+        except BaseException:
+            os.close(descriptor)
+            raise
+    def pristine():
+        _inventory_remaining(deadline)
+        require(not (workspace / supervisor.CONSUMED).exists()
+                and not (workspace / supervisor.CONSUMED).is_symlink())
+        prefix = 'generated/' + problem + '/'
+        originals = {path[len(prefix):]: git.blob(path) for path in git.entries
+                     if path.startswith(prefix) and (path[len(prefix):] == 'Submission.lean'
+                     or path[len(prefix):].startswith('Submission/'))}
+        actual = {'Submission.lean': (workspace / 'Submission.lean')}
+        require(not actual['Submission.lean'].is_symlink())
+        source_directory = workspace / 'Submission'
+        require(not source_directory.is_symlink())
+        if source_directory.exists():
+            for path in source_directory.rglob('*'):
+                require(not path.is_symlink())
+                if path.is_file():
+                    actual[str(path.relative_to(workspace))] = path
+        require(set(actual) == set(originals) and all(path.read_bytes() == originals[name]
+                for name, path in actual.items()))
+        for dependency, destination in dependencies:
+            dependency.verify_dependency_source(destination)
+            _inventory_remaining(deadline)
+    def fingerprint(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
+    def same_initial(info, original):
+        # Prior owned replacements may lower nlink/alter ctime of this inode.
+        return fingerprint(info)[:6] == fingerprint(original)[:6]
+    def safe_file(info):
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
+                and not info.st_mode & 0o6022 and 0 <= info.st_size <= 256 * 1024**2)
+    roots, seen_roots = [], set()
+    for dependency, destination in dependencies:
+        destination = Path(destination)
+        require(destination.parent == packages and destination.name not in seen_roots
+                and destination.resolve(strict=True) == destination)
+        seen_roots.add(destination.name)
+        probe = directory(destination)
+        os.close(probe)
+        build = destination / '.lake/build'
+        # Every ancestor is owned/canonical; symlinked cache roots are refused.
+        for path in (destination / '.lake', build):
+            if path.exists() or path.is_symlink():
+                probe = directory(path)
+                os.close(probe)
+        if build.is_dir():
+            roots.append((build, dependency))
+    require(roots and artifacts.is_dir() and artifacts.resolve(strict=True) == artifacts)
+    probe = directory(session)
+    os.close(probe)
+    pristine()  # refuse post-overlay/consumed or changed tracked input BEFORE mutation
+    aliases, candidates, scanned = {}, [], 0
+    def walk(root, dependency, visit):
+        def recurse(descriptor, relative, depth):
+            nonlocal scanned
+            require(depth <= 64)
+            for name in sorted(os.listdir(descriptor)):
+                _inventory_remaining(deadline)
+                scanned += 1
+                require(scanned <= DETACH_MAX_FILES)
+                info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    require(info.st_uid == os.geteuid() and not info.st_mode & 0o022)
+                    child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                    dir_fd=descriptor)
+                    try:
+                        require((os.fstat(child).st_dev, os.fstat(child).st_ino) == (info.st_dev, info.st_ino))
+                        recurse(child, relative / name, depth + 1)
+                    finally:
+                        os.close(child)
+                else:
+                    safe_file(info)  # rejects symlinks, devices, foreign/mode/size
+                    visit(root, relative / name, info, dependency)
+        descriptor = directory(root)
+        try:
+            recurse(descriptor, Path(), 0)
+        finally:
+            os.close(descriptor)
+    def collect(root, relative, info, dependency):
+        if info.st_nlink <= 1:
+            return
+        key = (info.st_dev, info.st_ino)
+        if key not in aliases:
+            aliases[key] = {'initial': info, 'names': set(), 'remaining': info.st_nlink}
+        row = aliases[key]
+        require(fingerprint(info) == fingerprint(row['initial']))
+        canonical = root / relative
+        require(canonical.resolve(strict=True) == canonical)
+        row['names'].add(str(canonical))
+        if dependency is not None:
+            require('.lake/build/' + str(relative) not in dependency.entries)
+            candidates.append((root, relative, info))
+    for root, dependency in roots:
+        walk(root, dependency, collect)
+    walk(artifacts, None, collect)
+    # Unknown/outside-session aliases cannot silently gain cache provenance.
+    require(all(len(row['names']) == row['initial'].st_nlink for row in aliases.values()))
+    require(sum(info.st_size for _, _, info in candidates) <= DETACH_MAX_BYTES)
+    copied, byte_count = 0, 0
+    for root, relative, original in candidates:
+        _inventory_remaining(deadline)
+        # Re-open each ancestor by fd; path spelling cannot redirect replacement.
+        parent = directory(root)
+        try:
+            for component in relative.parts[:-1]:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                dir_fd=parent)
+                try:
+                    info = os.fstat(child)
+                    require(info.st_uid == os.geteuid() and not info.st_mode & 0o022)
+                except BaseException:
+                    os.close(child)
+                    raise
+                os.close(parent)
+                parent = child
+            name, temporary = relative.name, None
+            source_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                                dir_fd=parent)
+            target_fd = None
+            try:
+                info = os.fstat(source_fd)
+                safe_file(info)
+                row = aliases[(original.st_dev, original.st_ino)]
+                require(same_initial(info, original) and info.st_nlink == row['remaining']
+                        and fingerprint(os.stat(name, dir_fd=parent, follow_symlinks=False)) == fingerprint(info))
+                temporary = '.stock-owned-detach-' + secrets.token_hex(16)
+                target_fd = os.open(temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                    0o600, dir_fd=parent)
+                digest, total = hashlib.sha256(), 0
+                while True:
+                    _inventory_remaining(deadline)
+                    chunk = os.read(source_fd, 1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    byte_count += len(chunk)
+                    require(total <= info.st_size and byte_count <= DETACH_MAX_BYTES)
+                    digest.update(chunk)
+                    pending = memoryview(chunk)
+                    while pending:
+                        _inventory_remaining(deadline)
+                        written = os.write(target_fd, pending)
+                        require(written > 0)
+                        pending = pending[written:]
+                require(total == info.st_size and fingerprint(os.fstat(source_fd)) == fingerprint(info))
+                os.lseek(target_fd, 0, os.SEEK_SET)
+                verified = hashlib.sha256()
+                while True:
+                    _inventory_remaining(deadline)
+                    chunk = os.read(target_fd, 1024 * 1024)
+                    if not chunk:
+                        break
+                    verified.update(chunk)
+                require(verified.digest() == digest.digest())
+                os.fchmod(target_fd, stat.S_IMODE(info.st_mode))
+                os.utime(target_fd, ns=(info.st_atime_ns, info.st_mtime_ns))
+                os.fsync(target_fd)
+                fresh = os.fstat(target_fd)
+                require(fresh.st_nlink == 1 and fresh.st_size == info.st_size
+                        and stat.S_IMODE(fresh.st_mode) == stat.S_IMODE(info.st_mode)
+                        and fresh.st_mtime_ns == info.st_mtime_ns and fresh.st_uid == info.st_uid
+                        and (fresh.st_dev, fresh.st_ino) != (info.st_dev, info.st_ino)
+                        and fingerprint(os.stat(name, dir_fd=parent, follow_symlinks=False)) == fingerprint(info)
+                        and fingerprint(os.fstat(source_fd)) == fingerprint(info))
+                _inventory_remaining(deadline)
+                os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+                temporary = None
+                os.fsync(parent)
+                installed = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                require(same_initial(installed, fresh) and installed.st_nlink == 1)
+                row['remaining'] -= 1
+                copied += 1
+            finally:
+                try:
+                    if target_fd is not None:
+                        os.close(target_fd)
+                finally:
+                    try:
+                        os.close(source_fd)
+                    finally:
+                        if temporary is not None:
+                            os.unlink(temporary, dir_fd=parent)
+        finally:
+            os.close(parent)
+    pristine()  # all original tracked bytes must still match retained pinned Git
+    _inventory_remaining(deadline)
+    return {'detached_files': copied, 'copied_bytes': byte_count, 'scanned_entries': scanned,
+            'elapsed_ns': time.monotonic_ns() - started, 'timeout_seconds': timeout_seconds,
+            'maximum_files': DETACH_MAX_FILES, 'maximum_bytes': DETACH_MAX_BYTES}
+
+
 def _trusted_path(value, forbidden):
     require(isinstance(value, str) and 0 < len(value) <= 8192)
     canonical = []
@@ -685,6 +917,7 @@ def _generate_original(repository, commit, toolchain, problem, session, *, toolc
     verify_inputs(generated_selected=True)
     _strip_owned_git_metadata(packages)
     driver_environment = _driver_environment(workspace, prefix, env['PATH'], home, toolchain)
+    detached_cache = _detach_dependency_cache_links(git, problem, session, dependency_objects, timeout_seconds)
     prepared = supervisor.workspace_manifest(workspace)
     lock, _ = _configuration_lock(repository, commit, toolchain, problem, workspace)
     return _OwnedGeneration({'schema_version': 1, 'generation_observed': True, 'benchmark_commit': commit,
@@ -695,6 +928,7 @@ def _generate_original(repository, commit, toolchain, problem, session, *, toolc
         'generator_binary_sha256': supervisor.file_hash(source / '.lake/build/bin/lean-eval')['sha256'],
         'statement_revision': manifest['statement_revision'], 'workspace': str(workspace),
         'prepared_manifest': prepared, 'configuration_lock': lock, 'driver_environment': driver_environment,
+        'detached_dependency_cache': detached_cache,
         'resolved_generator_argv': argv,
         'manifest_inventory_validation': inventory,
         'qualification': 'not_established'}, _GENERATION_SEAL)
