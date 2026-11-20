@@ -181,7 +181,9 @@ def verify_source(plan: dict[str, Any], source_root: pathlib.Path,
                     and sidecar["submission_ref"] == task["source_commit"]
                     and sidecar["submission_kind"] == task["source_kind"]
                     and sidecar["submitter"].lower() == task["owner_login"]
-                    and sidecar["model"] == task["declared_model"],
+                    and sidecar["model"] == task["declared_model"]
+                    and sidecar["benchmark_commit"] == task["benchmark_commit"]
+                    and ("problem_ids" not in sidecar or task["problem_id"] in sidecar["problem_ids"]),
                     "original archive/Result provenance differs")
 
 
@@ -196,6 +198,9 @@ def inventory(audit_root: pathlib.Path, repository_root: pathlib.Path,
     _refuse(not export_root.exists() and not export_root.is_symlink(), "finite export already exists")
     objects: dict[str, bytes] = {}
     for entry in plan["entries"]:
+        for target in [entry["target_path"], entry["target_path"].removesuffix(".tar.age") + ".json"]:
+            _refuse(not migration._git(audit_root, "ls-tree", AUDIT_COMMIT, "--", target).stdout,
+                    "finite migration target already exists")
         for path, digest in [(entry["source_path"], entry["source_ciphertext_sha256"]),
                              (entry["source_path"].removesuffix(".tar.age") + ".json",
                               entry["source_sidecar_sha256"])]:

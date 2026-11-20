@@ -119,8 +119,22 @@ jobs:
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
-            /*
-            !**/*.tar.age.parts/
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.json
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.tar.age
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.json
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.tar.age
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.json
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.tar.age
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.json
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.tar.age
+            /audit/2026/08/mlgraham-1128-2d317a57.json
+            /audit/2026/08/mlgraham-1128-2d317a57.tar.age
+            /audit/2026/08/mlgraham-1139-c81843f5.json
+            /audit/2026/08/mlgraham-1139-c81843f5.tar.age
+            /audit/2026/08/mlgraham-1156-d561d416.json
+            /audit/2026/08/mlgraham-1156-d561d416.tar.age
+            /audit/2026/08/savarin-1080-ab459a1e.json
+            /audit/2026/08/savarin-1080-ab459a1e.tar.age
           ref: ${{ inputs.audit_commit }}
           path: audit
           fetch-depth: 1
@@ -172,6 +186,7 @@ jobs:
           EXPECTED_COUNT: ${{ inputs.expected_migration_count }}
         run: |
           set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
           [[ "$AUDIT_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]]
           [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
@@ -208,6 +223,7 @@ jobs:
           AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
         run: |
           set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
           read_key=/dev/shm/lean-eval-audit-migration-read-key
           known_hosts="$RUNNER_TEMP/lean-eval-audit-known-hosts"
           cleanup_read_key() {
@@ -257,6 +273,7 @@ jobs:
         if: inputs.apply == true
         run: |
           set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${LEGACY_ARCHIVE_IDENTITY:-}"
           python scripts/migrate_queued_public_archive_envelopes.py verify-source \
@@ -380,8 +397,22 @@ jobs:
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
-            /*
-            !**/*.tar.age.parts/
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.json
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.tar.age
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.json
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.tar.age
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.json
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.tar.age
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.json
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.tar.age
+            /audit/2026/08/mlgraham-1128-2d317a57.json
+            /audit/2026/08/mlgraham-1128-2d317a57.tar.age
+            /audit/2026/08/mlgraham-1139-c81843f5.json
+            /audit/2026/08/mlgraham-1139-c81843f5.tar.age
+            /audit/2026/08/mlgraham-1156-d561d416.json
+            /audit/2026/08/mlgraham-1156-d561d416.tar.age
+            /audit/2026/08/savarin-1080-ab459a1e.json
+            /audit/2026/08/savarin-1080-ab459a1e.tar.age
           ref: ${{ inputs.audit_commit }}
           path: audit
           fetch-depth: 1
@@ -432,7 +463,8 @@ jobs:
           GIT_CONFIG_COUNT=1 \
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $audit_basic_auth" \
-            git -C audit push origin HEAD:refs/heads/archive-file-key-rewrap-v1
+            git -C audit push origin HEAD:refs/heads/archive-file-key-rewrap-v1 \
+              --force-with-lease=refs/heads/archive-file-key-rewrap-v1:
           unset audit_basic_auth
           cleanup_writer
           trap - EXIT
@@ -464,4 +496,5 @@ jobs:
           rm -f "$RUNNER_TEMP/age-file-key"
           rm -f "$RUNNER_TEMP/archive-migration-plan.json" \
             "$RUNNER_TEMP/archive-migration-report.json" \
-            /dev/shm/lean-eval-legacy-archive-identity
+            /dev/shm/lean-eval-legacy-archive-identity \
+            /dev/shm/lean-eval-audit-migration-read-key

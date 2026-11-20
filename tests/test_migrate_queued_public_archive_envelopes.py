@@ -5,7 +5,10 @@ import hashlib
 import json
 import pathlib
 import sys
+import os
 import subprocess
+import contextlib
+import io
 import tempfile
 import unittest
 from unittest import mock
@@ -88,7 +91,7 @@ class FinitePublicArchiveMigrationTests(unittest.TestCase):
         bindings = []
         for entry in plan['entries']:
             metadata = json.loads((source / (entry['source_path'].removesuffix('.tar.age') + '.json')).read_text())
-            task = {'source_repository': metadata['submission_repo'], 'source_commit': metadata['submission_ref'], 'source_kind': metadata['submission_kind'], 'owner_login': metadata['submitter'], 'declared_model': metadata['model']}
+            task = {'source_repository': metadata['submission_repo'], 'source_commit': metadata['submission_ref'], 'source_kind': metadata['submission_kind'], 'owner_login': metadata['submitter'], 'declared_model': metadata['model'], 'benchmark_commit': metadata['benchmark_commit'], 'problem_id': 'fixture'}
             bindings.append({'archive_submission_id': entry['submission_id'], 'original_authority_task': task})
         return (plan, {'migration_plan': plan, 'result_bindings': bindings})
 
@@ -197,7 +200,10 @@ class FinitePublicArchiveMigrationTests(unittest.TestCase):
                     self.assertEqual(report['migration_touched_path_count'], 16)
                     self.assertEqual(report['audit_main_commit'], git(writer, 'rev-parse', 'HEAD'))
                     if collision:
-                        git(writer, 'push', 'origin', 'HEAD:refs/heads/archive-file-key-rewrap-v1')
+                        git(writer, 'push', 'origin', source_commit + ':refs/heads/archive-file-key-rewrap-v1')
+                        race = subprocess.run(['git', '-C', str(writer), 'push', 'origin', 'HEAD:refs/heads/archive-file-key-rewrap-v1', '--force-with-lease=refs/heads/archive-file-key-rewrap-v1:'], capture_output=True)
+                        self.assertNotEqual(0, race.returncode)
+                        self.assertEqual(source_commit, git(writer, 'ls-remote', 'origin', 'refs/heads/archive-file-key-rewrap-v1').split()[0])
                         expected = 'review branch already exists'
                     else:
                         side = writer / (plan['entries'][0]['source_path'].removesuffix('.tar.age') + '.json')
@@ -215,6 +221,102 @@ class FinitePublicArchiveMigrationTests(unittest.TestCase):
                             finite.preflight(wrong, selected, root)
                         inherited.assert_not_called()
 
+    def test_real_inventory_reads_only_selected_git_blobs_and_refuses_mode_hash_or_export_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            audit = root / 'audit'
+            audit.mkdir()
+            subprocess.run(['git', 'init', '-b', 'main', str(audit)], check=True, capture_output=True)
+            git(audit, 'config', 'user.name', 'Inventory Test')
+            git(audit, 'config', 'user.email', 'fixture@example.com')
+            plan, selection = self.fixture(audit)
+            git(audit, 'add', '.')
+            git(audit, 'commit', '-m', 'source four')
+            commit = git(audit, 'rev-parse', 'HEAD')
+            plan = old.build_plan(audit, commit)
+            selection['migration_plan'] = plan
+            git(audit, 'remote', 'add', 'origin', 'local-audit-fixture')
+            with mock.patch.object(finite, 'load_selection', return_value=selection), \
+                 mock.patch.object(finite, 'AUDIT_COMMIT', commit), \
+                 mock.patch.object(old, 'AUDIT_ORIGINS', {'local-audit-fixture'}):
+                self.assertEqual(plan, finite.inventory(audit, root, root / 'export'))
+                self.assertEqual(8, len([p for p in (root / 'export').rglob('*') if p.is_file()]))
+                with self.assertRaisesRegex(old.MigrationError, 'export already exists'):
+                    finite.inventory(audit, root, root / 'export')
+                # Changing Git mode is refused before any header/key operation.
+                source = audit / plan['entries'][0]['source_path']
+                source.chmod(0o755)
+                git(audit, 'add', '.')
+                git(audit, 'commit', '-m', 'wrong source mode')
+                changed = git(audit, 'rev-parse', 'HEAD')
+                with mock.patch.object(finite, 'AUDIT_COMMIT', changed), \
+                     self.assertRaisesRegex(old.MigrationError, 'regular Git blob'):
+                    finite.inventory(audit, root, root / 'wrong-mode')
+                source.chmod(0o644)
+                source.write_bytes(b'changed ciphertext')
+                git(audit, 'add', '.')
+                git(audit, 'commit', '-m', 'wrong ciphertext SHA')
+                changed = git(audit, 'rev-parse', 'HEAD')
+                with mock.patch.object(finite, 'AUDIT_COMMIT', changed), \
+                     self.assertRaisesRegex(old.MigrationError, 'Git SHA differs'):
+                    finite.inventory(audit, root, root / 'wrong-sha')
+
+    def test_cli_inventory_writes_plan_and_cli_apply_refuses_before_header_helper(self):
+        self.addCleanup(os.umask, os.umask(0o077))
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            plan, selection = self.fixture(root / 'source')
+            output = root / 'plan.json'
+            with mock.patch.object(sys, 'argv', ['finite', 'inventory', '--repository-root', str(root), '--audit-root', str(root), '--source-root', str(root / 'export'), '--output', str(output)]), \
+                 mock.patch.object(finite, 'inventory', return_value=plan) as inventory:
+                self.assertEqual(0, finite.main())
+                inventory.assert_called_once_with(root, root, root / 'export')
+            self.assertEqual(plan, old._load_plan(output))
+            wrong = copy.deepcopy(plan)
+            wrong['entries'][0]['source_sidecar_sha256'] = '0' * 64
+            core = {k: wrong[k] for k in ['source_repository', 'source_commit', 'entries', 'retained']}
+            wrong['inventory_digest'] = hashlib.sha256(b'lean-eval-archive-envelope-migration-v1\0' + old._canonical_bytes(core)).hexdigest()
+            output.write_text(json.dumps(wrong))
+            errors = io.StringIO()
+            with mock.patch.object(sys, 'argv', ['finite', 'migrate-one', '--repository-root', str(root), '--source-root', str(root / 'source'), '--output-root', str(root / 'target'), '--plan', str(output), '--legacy-identity', str(root / 'identity'), '--file-key-helper', str(root / 'helper'), '--adapter-executable', str(root / 'adapter'), '--source-path', plan['entries'][0]['source_path']]), \
+                 mock.patch.object(finite, 'load_selection', return_value=selection), \
+                 mock.patch.object(old, '_extract_file_key') as extract, contextlib.redirect_stderr(errors):
+                self.assertEqual(1, finite.main())
+                extract.assert_not_called()
+            self.assertNotIn(str(root), errors.getvalue())
+
+    def test_sparse_staging_keeps_unselected_git_history_and_archive_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            writer = root / 'writer'
+            writer.mkdir()
+            subprocess.run(['git', 'init', '-b', 'main', str(writer)], check=True, capture_output=True)
+            git(writer, 'config', 'user.name', 'Sparse Test')
+            git(writer, 'config', 'user.email', 'fixture@example.com')
+            plan, _ = self.fixture(writer)
+            write_pair(writer, 'audit/2026/05/unrelated.tar.age', sidecar(1, b'unrelated'), b'unrelated')
+            git(writer, 'add', '.')
+            git(writer, 'commit', '-m', 'selected and unrelated')
+            base = git(writer, 'rev-parse', 'HEAD')
+            paths = old._migration_touched_paths(plan)
+            subprocess.run(['git', '-C', str(writer), 'sparse-checkout', 'set', '--no-cone', '--stdin'], input=''.join('/' + p + '\n' for p in sorted(paths)), text=True, check=True, capture_output=True)
+            self.assertFalse((writer / 'audit/2026/05/unrelated.tar.age').exists())
+            for entry in plan['entries']:
+                old_path = writer / entry['source_path']
+                data = old_path.read_bytes()
+                side = old_path.parent / (old_path.name.removesuffix('.tar.age') + '.json')
+                metadata = side.read_bytes()
+                git(writer, 'rm', '--', entry['source_path'], side.relative_to(writer).as_posix())
+                target = writer / entry['target_path']
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+                (target.parent / (target.name.removesuffix('.tar.age') + '.json')).write_bytes(metadata)
+            git(writer, 'add', '.')
+            tree = git(writer, 'write-tree')
+            self.assertEqual(old.count_archive_ciphertexts_in_tree(writer, base), old.count_archive_ciphertexts_in_tree(writer, tree))
+            self.assertEqual(git(writer, 'rev-parse', base + ':audit/2026/05/unrelated.tar.age'), git(writer, 'rev-parse', tree + ':audit/2026/05/unrelated.tar.age'))
+            self.assertEqual(16, len(git(writer, 'diff', '--cached', '--no-renames', '--name-only').splitlines()))
+
     def test_workflow_guards_precede_identity_aws_and_writer_and_keep_old_callers(self):
         text = (ROOT / '.github/workflows/migrate-queued-public-archive-envelopes.yml').read_text()
         steps = named_workflow_steps(text)
@@ -228,7 +330,9 @@ class FinitePublicArchiveMigrationTests(unittest.TestCase):
         self.assertLess(text.index('Freeze and verify the complete inventory'), text.index('LEGACY_ARCHIVE_IDENTITY:'))
         self.assertLess(text.index('Prove legacy decrypt material and AWS session are gone'), text.index('Mint audit-repository-only migration writer'))
         self.assertIn('test "$actual_count" = 4', text)
-        self.assertIn('refs/heads/archive-file-key-rewrap-v1', text)
+        self.assertIn('--force-with-lease=refs/heads/archive-file-key-rewrap-v1:', text)
+        self.assertNotIn('            /*', text)
+        self.assertIn('/dev/shm/lean-eval-audit-migration-read-key', text.split('      - name: Remove migration scratch')[1])
         old_text = (ROOT / '.github/workflows/migrate-archive-envelopes.yml').read_text()
         self.assertIn('test "$actual_count" = 439', old_text)
         self.assertNotIn('migrate_queued_public', old_text)
