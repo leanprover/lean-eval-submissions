@@ -66,32 +66,51 @@ or aggregate VM memory enforcement. Actual provider resource qualification
 remains separate.
 
 All actual preparation subprocess sites share scoped ownership: build/generator
-commands, short Git/selector/version commands and captured Lake environment
-probes. Linux pidfds and WNOWAIT retain every owned leader through the last group
-kill, including leaders that already exited. Success, nonzero exit, deadline and
-termination signals all stop and reap owned groups BEFORE returning or accepting
-the original real leader exit status. A temporary process-local child-subreaper
-setting makes orphan descendants in those groups reapable; the previous setting
-is restored on every path. Every retiring group remains reserved through its last kill before reaping.
-Explicit per-resource retirement state tracks signalled/reaped/descendant-settled
-and pidfd ownership. A partial retirement error refuses refill and outer cleanup
-never re-signals an already-reaped PID or retries a closed/reused numeric fd.
-Successful retired resources leave the owner registry before capacity is reused,
-so no O(number-of-modules) live groups or pidfds accumulate. Only
-reserved groups are waited/signalled; unrelated live or exited children are not
-consumed. There is no waitpid(-1) or broad process scan/kill.
+commands, Git/selector/version commands and captured Lake environment probes.
+Linux pidfds and WNOWAIT retain every owned leader through its last group kill,
+including leaders that already exited. Success, nonzero exit, deadline and
+termination signals stop and reap owned groups before returning or accepting the
+real leader exit status. Per-resource retirement state prevents re-signalling a
+reaped leader or closing a released/reused descriptor. A slot is reusable only
+after its group, descendants and owned descriptor have settled.
 
-This assumes a dedicated synchronous preparation process with default SIGCHLD,
-not a shared threaded server or external child reaper. Incompatible automatic
-reaping is refused before launch, because it could release leader identity.
-Cancellation is recorded while teardown runs, and handlers/settings are restored
-before cancellation propagates. Captured stdout is drained without blocking,
-limited to the existing16MiB bound, and requires EOF after owned writers stop;
-existing smaller checks (such as8192-byte environment probes) remain in force.
-Original argv, timeout caps and successful output bytes are retained. This
-trusted-public-build ownership does not replace untrusted Source PID-namespace
-containment, physical/aggregate provider resource qualification, provider
-destruction or job/scratch cleanup qualification. Selected source/module/manifest/revision and all
+**Explicit inactive API change:** preparation now refuses a process with ANY
+preexisting child, including zombies, or more than one kernel thread. It reads
+only its own thread child lists before changing handlers, subreaper, umask,
+files or spawning. The previous tests allowed operation alongside unrelated live
+and exited children; that extra shared-process behavior is withdrawn, and the
+replacement refusal tests verify those children and their own forks remain
+untouched. The future job must be a dedicated synchronous preparation process,
+with default SIGCHLD and no asynchronous caller forks, thread creation or
+external child reaper during the call. There is no active consumer to migrate.
+This does not change the replay corpus, original programs or execution policy.
+
+The empty baseline makes all children subsequently adopted by the temporary
+subreaper attributable to this preparation. Cleanup discovers only direct
+children through this process's thread child lists, reserves their exact
+PID/starttime and opens/rechecks pidfds before signal/wait. Live and zombie
+adoptees outside reserved groups are drained, including new adoptions exposed
+by killing parents. Such an escape fails the whole operation, even after
+successful cleanup: no refill, C or context is accepted. A legitimate adoptee in
+another still-reserved pool group remains assigned to that group's retirement.
+There is no guessed attribution to a module, waitpid(-1), system process scan,
+or unreserved PID signal. Discovery is capped at4096 adopted identities and uses
+one five-second teardown deadline across group cleanup, adopted-child drain and
+partial-failure retries; cleanup failure remains a failure. This is trusted
+preparation ownership, not a hostile fork-bomb or physical-resource guarantee.
+
+Scoped022 covers the whole generation and public finalization/overlay entry,
+before file creation, and every actual command scope. The prior umask, signal
+handlers and subreaper setting are restored on normal, failure and signal paths.
+The single-thread/empty-child gate precedes these process-global changes; no
+post-Source chmod or strict manifest relaxation is used. Captured stdout retains
+the existing16MiB bound and EOF requirement, with smaller environment checks
+unchanged. All four rolling slots, original launch/result order, real status and
+output bytes, shared1200-second inventory deadline, selected-generation300 and
+bounded detachment300 remain unchanged. This ownership does not qualify provider
+resources, untrusted Source containment, provider destruction or scratch cleanup.
+
+Selected source/module/manifest/revision and all
 global catalog inputs are bound by that immutable tree. The loader ignores only
 the original exact `.DS_Store` entry, rejects other stray files/directories, and
 conserves first-occurrence module order. Canonical dotted ASCII module operands
@@ -112,7 +131,7 @@ and invokes that resolved original command within a bounded timeout. No supplied
 build receipt, synthetic started flag, patched compiler/Lake, or retained
 workspace can replace actual command success. Failures produce no successful
 generation observation. Trusted builder timeout cleanup concerns its owned
-process group; submitted Source containment remains the separate namespace
+groups and exact adopted descendants; submitted Source containment remains the separate namespace
 supervisor's responsibility.
 
 Original stock release/runtime authentication is an independent prerequisite;

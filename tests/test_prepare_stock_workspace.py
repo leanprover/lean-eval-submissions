@@ -46,7 +46,7 @@ def commit_files(root, files, *, public_repository=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(raw)
     git('add', '.')
-    git('commit', '-qm', 'controlled public fixture')
+    git('-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '-qm', 'controlled public fixture')
     if public_repository:
         git('remote', 'add', 'origin', 'https://github.com/' + public_repository + '.git')
     return git('rev-parse', 'HEAD').decode().strip()
@@ -181,6 +181,52 @@ class GitObjectTests(unittest.TestCase):
 
 
 class InventoryPreparationTests(unittest.TestCase):
+    def test_pool_retirement_preserves_other_slot_adoptees_and_refuses_escape_before_refill(self):
+        for escape in (False, True):
+            with self.subTest(escape=escape), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                modules = ('Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta')
+                _git, source, lake = self.fixture(root, modules)
+                lake.write_text('#!' + str(Path(sys.executable).resolve()) + '\n' + r'''import json,os,sys,time
+from pathlib import Path
+module=sys.argv[2];root=Path.cwd()
+with(root/'launched').open('a')as stream:stream.write(module+'\n')
+if module=='Alpha':
+ while not(root/'adopted').exists():time.sleep(.001)
+ if os.getenv('ESCAPE'):
+  if os.fork()==0:
+   os.setsid();(root/'escape-pid').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
+  while not(root/'escape-pid').exists():time.sleep(.001)
+ else:time.sleep(.03)
+elif module=='Beta':
+ middle=os.fork()
+ if middle==0:
+  if os.fork()==0:(root/'adopted').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
+  os._exit(0)
+ os.waitpid(middle,0);time.sleep(.3)
+elif module in('Gamma','Delta'):time.sleep(.2)
+elif module=='Epsilon':
+ # It starts while Beta is still running AND its orphan is still alive.
+ pid=int((root/'adopted').read_text());assert Path('/proc/'+str(pid)).exists()
+ (root/'early-refill').touch()
+p=root/'.lake/build/lib/lean'/(module+'.olean');p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'controlled artifact, not Lean qualification')
+''')
+                env = prepare.environment(root)
+                if escape:
+                    env['ESCAPE'] = '1'
+                    with self.assertRaises(prepare.Invalid):
+                        prepare._build_inventory_pool(modules, source, env, lake,
+                            time.monotonic_ns() + 4_000_000_000)
+                    self.assertEqual(set((source / 'launched').read_text().split()), set(modules[:4]))
+                else:
+                    result = prepare._build_inventory_pool(modules, source, env, lake,
+                        time.monotonic_ns() + 4_000_000_000)
+                    self.assertEqual([row['module'] for row in result], list(modules))
+                    self.assertTrue((source / 'early-refill').exists())
+                self.assertFalse(prepare._process_children()[1])
+                self.assertFalse((root / 'owned-generation-observation.json').exists())
+                self.assertFalse((root / 'validated-context-template.json').exists())
+
     def fixture(self, root, modules):
         files = {}
         for index, module in enumerate(modules):
@@ -761,6 +807,146 @@ class TrustedInvokeOwnershipTests(unittest.TestCase):
             result = subprocess.run([sys.executable, '-I', '-c', code], capture_output=True, timeout=5)
             self.assertEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_shared_child_api_now_refuses_all_sixteen_cases_before_mutation(self):
+        # Explicit API change: these were previously shared-child success/exit
+        # cases. They now REFUSE before spawn or process-global mutation.
+        code = r"""import ctypes,json,os,signal,subprocess,sys,tempfile,time
+from pathlib import Path
+from unittest import mock
+sys.path.insert(0,sys.argv[1]);import prepare_stock_workspace as p
+libc=ctypes.CDLL(None);rows=[]
+with tempfile.TemporaryDirectory()as directory:
+ root=Path(directory)
+ for prior,capture in((0,0),(1,0),(0,1),(1,1)):
+  for mode in('success','nonzero','timeout','signal'):
+   assert libc.prctl(36,prior,0,0,0)==0
+   # This unrelated child forks WHILE the refusal is exercised; its own child
+   # exits naturally and is waited by its parent, never by the preparer.
+   live=subprocess.Popen([sys.executable,'-c',
+    'import os,sys,time;from pathlib import Path;p=Path(sys.argv[1]);p.write_text("ready");'
+    'child=os.fork();'
+    '\nif child==0:time.sleep(.25);os._exit(0)'
+    '\nwhile not p.with_suffix(".stop").exists() and time.monotonic()<float(sys.argv[2]):time.sleep(.005)'
+    '\nif child:os.waitpid(child,0)',str(root/'ready'),str(time.monotonic()+3)])
+   exited=subprocess.Popen([sys.executable,'-c','raise SystemExit(23)'])
+   os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOWAIT)
+   handlers={n:signal.getsignal(n)for n in(signal.SIGTERM,signal.SIGINT,signal.SIGHUP)}
+   try:
+    with mock.patch.object(p.subprocess,'Popen',side_effect=AssertionError('spawn after refusal')),mock.patch.object(p.os,'umask',side_effect=AssertionError('umask after refusal')),mock.patch.object(p.signal,'signal',side_effect=AssertionError('handler after refusal')),mock.patch.object(p.ctypes,'CDLL',side_effect=AssertionError('PRCTL after refusal')):
+     try:(p._capture_preparation if capture else p.invoke)(['/nonexistent'],None,p.environment(root),1)
+     except p.Invalid:pass
+     else:raise AssertionError('shared-child API still accepted')
+    assert live.poll()is None
+    state=os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+    assert state and state.si_status==23
+    value=ctypes.c_int();assert libc.prctl(37,ctypes.byref(value),0,0,0)==0 and value.value==prior
+    assert all(signal.getsignal(n)==v for n,v in handlers.items())
+    rows.append([prior,capture,mode])
+   finally:
+    (root/'ready.stop').touch();assert live.wait(timeout=4)==0;assert exited.wait()==23
+    (root/'ready.stop').unlink()
+assert not p._process_children()[1]
+print(json.dumps(rows))
+"""
+        result = subprocess.run([sys.executable, '-I', '-c', code, str(ROOT / 'scripts')],
+                                capture_output=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(len(json.loads(result.stdout)), 16)
+
+    def test_extra_kernel_thread_refuses_before_spawn_or_umask_change(self):
+        import threading
+        stop = threading.Event()
+        thread = threading.Thread(target=stop.wait)
+        thread.start()
+        try:
+            with mock.patch.object(prepare.subprocess, 'Popen', side_effect=AssertionError('spawn')), \
+                 mock.patch.object(prepare.os, 'umask', side_effect=AssertionError('umask')):
+                with self.assertRaises(prepare.Invalid):
+                    prepare.invoke(['/nonexistent'], None, prepare.environment('/nonexistent'), 1)
+        finally:
+            stop.set()
+            thread.join()
+
+    def test_actual_setsid_doublefork_escape_all_exits_and_transient_setup_faults(self):
+        code = r"""import ctypes,json,os,signal,subprocess,sys,tempfile,time
+from pathlib import Path
+sys.path.insert(0,sys.argv[1]);import prepare_stock_workspace as p
+libc=ctypes.CDLL(None);rows=[]
+worker=r'''import json,os,signal,sys,time
+from pathlib import Path
+root=Path.cwd()
+def identity(name):
+ pieces=Path('/proc/self/stat').read_text().rsplit(')',1)[1].split();(root/name).write_text(json.dumps({'pid':os.getpid(),'ticks':pieces[19]}))
+if os.fork()==0:
+ os.setsid();identity('middle')
+ if os.fork()!=0:os._exit(0)
+ identity('writer')
+ for fd in(0,1,2):
+  try:os.close(fd)
+  except OSError:pass
+ if os.fork()==0:identity('leaf');time.sleep(3);os._exit(0)
+ while not(root/'leaf').exists():time.sleep(.001)
+ end=time.monotonic()+3
+ while time.monotonic()<end:
+  with(root/'heartbeat').open('a')as stream:stream.write('x')
+  time.sleep(.005)
+ os._exit(0)
+while not(root/'heartbeat').exists():time.sleep(.001)
+if sys.argv[1]=='signal':os.kill(os.getppid(),signal.SIGTERM)
+if sys.argv[1]in('signal','timeout'):time.sleep(5)
+raise SystemExit(7 if sys.argv[1]=='nonzero' else 0)
+'''
+with tempfile.TemporaryDirectory()as directory:
+ root=Path(directory)
+ cases=[(prior,capture,mode,'none')for prior in(0,1)for capture in(0,1)for mode in('success','nonzero','timeout','signal')]
+ cases += [(0,1,'success',fault)for fault in('pidfd','kill','close')]
+ for index,(prior,capture,mode,fault)in enumerate(cases):
+  case=root/str(index);case.mkdir();script=case/'worker.py';script.write_text(worker)
+  assert libc.prctl(36,prior,0,0,0)==0
+  previous=os.umask(2);handlers={n:signal.getsignal(n)for n in(signal.SIGTERM,signal.SIGINT,signal.SIGHUP)}
+  opened=p.supervisor.pidfd_open;kill=p.supervisor.pidfd_kill;close=p.os.close;failed=[False];adoptedfds=set()
+  def pin(pid):
+   # Command leader is reserved in its own PGID; a different PGID identifies
+   # the actual adopted escape, not a mocked stopped=True receipt.
+   escaped=os.getpgid(pid)!=pid or(case/'writer').exists()and pid==json.loads((case/'writer').read_text())['pid']
+   if fault=='pidfd'and escaped and not failed[0]:failed[0]=True;raise OSError('owned pin fault')
+   fd=opened(pid)
+   if escaped:adoptedfds.add(fd)
+   return fd
+  def stop(fd):
+   if fault=='kill'and fd in adoptedfds and not failed[0]:failed[0]=True;raise OSError('owned kill fault')
+   return kill(fd)
+  def release(fd):
+   if fault=='close'and fd in adoptedfds and not failed[0]:
+    failed[0]=True;close(fd);replacement=os.open('/dev/null',os.O_RDONLY)
+    if replacement!=fd:os.dup2(replacement,fd);close(replacement)
+    adoptedfds.remove(fd);adoptedfds.add(('replacement',fd));raise OSError('owned close fault')
+   return close(fd)
+  p.supervisor.pidfd_open=pin;p.supervisor.pidfd_kill=stop;p.os.close=release
+  try:
+   try:(p._capture_preparation if capture else p.invoke)([sys.executable,str(script),mode],case,p.environment(case),.15 if mode=='timeout' else 2)
+   except p.Invalid:pass
+   else:raise AssertionError('escape accepted')
+   assert not p._process_children()[1],'escaped live or zombie child remains'
+   for name in('middle','writer','leaf'):
+    identity=json.loads((case/name).read_text());path=Path('/proc')/str(identity['pid'])/'stat'
+    assert not path.exists()or path.read_text().rsplit(')',1)[1].split()[19]!=identity['ticks']
+   old=(case/'heartbeat').stat().st_size;time.sleep(.015);assert(case/'heartbeat').stat().st_size==old
+   current=os.umask(2);assert current==2
+   value=ctypes.c_int();assert libc.prctl(37,ctypes.byref(value),0,0,0)==0 and value.value==prior
+   assert all(signal.getsignal(n)==v for n,v in handlers.items())
+   assert fault=='none'or failed[0]
+   for fd in list(adoptedfds):
+    if isinstance(fd,tuple):os.fstat(fd[1]);close(fd[1])
+   rows.append([prior,capture,mode,fault])
+  finally:p.supervisor.pidfd_open=opened;p.supervisor.pidfd_kill=kill;p.os.close=close;os.umask(previous)
+print(json.dumps(rows))
+"""
+        result = subprocess.run([sys.executable, '-I', '-c', code, str(ROOT / 'scripts')],
+                                capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(len(json.loads(result.stdout)), 19)
+
     def test_both_inventory_phase_failures_reap_actual_same_group_descendants(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -797,7 +983,7 @@ class TrustedInvokeOwnershipTests(unittest.TestCase):
                 prepare._capture_preparation([sys.executable, '-c',
                     'import sys;sys.stdout.buffer.write(b"x"*(16*1024*1024+1))'], root, prepare.environment(root), 3)
 
-    def test_real_descendants_all_exits_prior_settings_and_unrelated_children(self):
+    def test_real_descendants_all_exits_prior_settings_in_dedicated_process(self):
         # An OUTER disposable subreaper cleans probes even if a regression makes
         # the tested controller (whose prior flag may be zero) lose ownership.
         controller_code = r'''import ctypes,json,os,signal,subprocess,sys
@@ -807,9 +993,6 @@ root=Path(sys.argv[2]);mode=sys.argv[3];prior=int(sys.argv[4]);capture=bool(int(
 assert libc.prctl(36,prior,0,0,0)==0
 saved={n:signal.getsignal(n)for n in(signal.SIGTERM,signal.SIGINT,signal.SIGHUP)}
 real=subprocess.Popen
-live=real([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
-exited=real([sys.executable,'-c','raise SystemExit(23)'],start_new_session=True)
-os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOWAIT)
 children=[]
 def launch(*a,**kw):
  child=real(*a,**kw);children.append(child);return child
@@ -831,13 +1014,9 @@ try:
  if status.exists():assert status.read_text().rsplit(')',1)[1].split()[19]!=identity['start_ticks'],'original descendant still exists'
  value=ctypes.c_int();assert libc.prctl(37,ctypes.byref(value),0,0,0)==0 and value.value==prior
  assert all(signal.getsignal(n)==old for n,old in saved.items())
- assert live.poll()is None,'unrelated live child was signalled'
- status=os.waitid(os.P_PID,exited.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)
- assert status is not None and status.si_status==23,'unrelated exited child was reaped'
- print(json.dumps({'mode':mode,'prior':prior,'capture':capture,'descendant_reaped':True,'setting_restored':True,'unrelated_preserved':True}))
+ print(json.dumps({'mode':mode,'prior':prior,'capture':capture,'descendant_reaped':True,'setting_restored':True,'dedicated_children_empty':not p._process_children()[1]}))
 finally:
- if live.poll()is None:live.kill()
- live.wait();assert exited.wait()==23
+ pass
 '''
         worker_code = r'''import json,os,signal,subprocess,sys,time
 from pathlib import Path
@@ -871,7 +1050,7 @@ raise SystemExit(7 if sys.argv[1]=='nonzero' else 0)
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             rows = json.loads(result.stdout)
             self.assertEqual(len(rows), 16)
-            self.assertTrue(all(row['descendant_reaped'] and row['setting_restored'] and row['unrelated_preserved'] for row in rows))
+            self.assertTrue(all(row['descendant_reaped'] and row['setting_restored'] and row['dedicated_children_empty'] for row in rows))
 
 
 @unittest.skipUnless((BENCHMARK / '.git').exists(), 'existing offline public benchmark Git objects required')
@@ -935,6 +1114,46 @@ class OriginalStockTests(unittest.TestCase):
                                       for line in lines) + '\n')
             with self.assertRaises(prepare.Invalid):
                 prepare.invoke([str(prefix / 'bin/lake'), *observation['argv'][1:]], project, env, 30)
+
+    def test_whole_generation_entry_restores_umask_after_real_original_export_failure(self):
+        # Actual original Git export reaches the first trusted-PATH guard. Stop
+        # there: no original build, Source, generation receipt or context claim.
+        for mask in (0o002, 0o022):
+            with self.subTest(mask=mask), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                session = root / 'failed-preparation'
+                previous = os.umask(mask)
+                try:
+                    with mock.patch.object(prepare, '_trusted_path', side_effect=prepare.Invalid('controlled prebuild stop')):
+                        with self.assertRaises(prepare.Invalid):
+                            prepare.generate_original(BENCHMARK, '208b6b22d396f28771dba56414b19f47cae5f2a7',
+                                'leanprover/lean4:v4.35.0-rc3', 'two_plus_two', session,
+                                toolchain_prefix=Path(sys.executable).resolve().parent, dependency_repositories={})
+                    self.assertEqual(os.umask(mask), mask)
+                finally:
+                    os.umask(previous)
+                self.assertEqual(stat.S_IMODE((session / 'source/generated/two_plus_two').stat().st_mode), 0o755)
+                for path in (session / 'source/generated/two_plus_two').rglob('*'):
+                    if path.is_dir():
+                        self.assertEqual(stat.S_IMODE(path.stat().st_mode) & 0o022, 0)
+                    else:
+                        prepare.supervisor.file_hash(path)
+                self.assertFalse((session / 'workspace').exists())
+                self.assertFalse((session / 'owned-generation-observation.json').exists())
+        for entry, arguments, keywords in (
+            (prepare.finalize_public_context, ({}, {}), dict(source_repository='/nonexistent',
+                benchmark_repository='/nonexistent', authority_repository='/nonexistent',
+                lean_repository='/nonexistent', toolchain_prefix='/nonexistent', bubblewrap='/nonexistent',
+                temporary_directory='/nonexistent')),
+            (prepare.overlay_public_git, ({'source': {'visibility': 'private', 'fetch_method': 'archive'}},
+                '/nonexistent', '/nonexistent'), dict(benchmark_repository='/nonexistent', authority_repository='/nonexistent'))):
+            previous = os.umask(0o002)
+            try:
+                with self.assertRaises(prepare.Invalid):
+                    entry(*arguments, **keywords)
+                self.assertEqual(os.umask(0o002), 0o002)
+            finally:
+                os.umask(previous)
 
     def test_all_original_inventory_modules_conserved_in_original_order(self):
         # Frozen independently from the three original Git catalogs and the
@@ -1024,8 +1243,15 @@ class OriginalStockTests(unittest.TestCase):
             authority = root / 'owned-authority-fixture'
             locator['commit'] = commit_files(authority, {locator['path']: raw})
             refresh(request)
-            result = prepare.overlay_public_git(request, source_root, f.project,
-                benchmark_repository=BENCHMARK, authority_repository=authority)
+            previous_umask = os.umask(0o002)
+            try:
+                result = prepare.overlay_public_git(request, source_root, f.project,
+                    benchmark_repository=BENCHMARK, authority_repository=authority)
+                self.assertEqual(os.umask(0o002), 0o002)
+            finally:
+                os.umask(previous_umask)
+            self.assertEqual(stat.S_IMODE((f.project / 'Submission').stat().st_mode), 0o755)
+            prepare.supervisor.workspace_manifest(f.project)
             self.assertEqual(result['source_commit'], source_commit)
             self.assertEqual((f.project / 'lakefile.toml').read_bytes(), original)
             self.assertEqual((f.project / 'Solution.lean').read_text(), '-- trusted generated wrapper fixture\n')
