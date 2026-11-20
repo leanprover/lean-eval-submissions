@@ -1,0 +1,130 @@
+name: One finite source-free marker phase observation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finite-public-runtime-guard-staging
+  cancel-in-progress: false
+
+jobs:
+  marker:
+    if: >-
+      github.repository == 'leanprover/lean-eval-submissions' &&
+      github.event_name == 'workflow_dispatch' && github.ref_protected == true &&
+      github.ref == format('refs/tags/lean-eval-dispatch/{0}', github.sha) &&
+      github.run_attempt == 1
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    environment: cloudflare-staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          python-version: '3.11.18'
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install pinned tools without deployment or OIDC authority
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          npm --prefix server ci
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 120 --retry 2 \
+            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/finite-marker-age.tar.gz"
+          echo "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  $RUNNER_TEMP/finite-marker-age.tar.gz" \
+            | sha256sum --check --strict
+          mkdir "$RUNNER_TEMP/finite-marker-tools"
+          tar --extract --gzip --file "$RUNNER_TEMP/finite-marker-age.tar.gz" --directory "$RUNNER_TEMP/finite-marker-tools"
+          test "$("$RUNNER_TEMP/finite-marker-tools/age/age" --version)" = v1.3.1
+          echo "$RUNNER_TEMP/finite-marker-tools/age" >> "$GITHUB_PATH"
+
+      - name: Prepare only frozen profile metadata and marker commitments
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python runtime-guard-staging/marker.py prepare
+
+      - name: Deploy only absent fixed resources and verify exact ownership
+        timeout-minutes: 15
+        env:
+          CLOUDFLARE_ACCOUNT_ID: a46b90978a1c29cc4795f30677e7e4b8
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python runtime-guard-staging/marker.py deploy
+
+      - name: Prove phase capture and send exactly one source-free marker
+        timeout-minutes: 8
+        run: python runtime-guard-staging/marker.py run
+
+      - name: Fence the journal before resource retirement
+        if: always()
+        timeout-minutes: 1
+        run: python runtime-guard-staging/marker.py fence
+
+      - name: Retire only exact owned resources and prove absence
+        if: always()
+        timeout-minutes: 10
+        env:
+          CLOUDFLARE_ACCOUNT_ID: a46b90978a1c29cc4795f30677e7e4b8
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python runtime-guard-staging/marker.py cleanup
+
+      - name: Remove private scratch even after a failed observation or cleanup
+        if: always()
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          marker_scrub_status=0
+          python runtime-guard-staging/marker.py scrub || marker_scrub_status=$?
+          rm -rf "$RUNNER_TEMP/finite-marker-tools"
+          rm -f "$RUNNER_TEMP/finite-marker-age.tar.gz"
+          exit "$marker_scrub_status"
+
+      - name: Retain only the positive source-free receipt
+        if: always()
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: finite-marker-safe-receipt
+          path: ${{ runner.temp }}/finite-marker-safe-receipt.json
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 7

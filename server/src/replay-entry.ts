@@ -23,6 +23,9 @@ export default {
       sandbox(runtime, runnerNonce) {
         return replaySandbox(runtime, runnerNonce);
       },
+      markerStore(runtime, name) {
+        return runtime.REPLAY_TERMINAL_RECEIPT.getByName(name);
+      },
       receiptStore(runtime, runnerNonce, historicalIdentity) {
         const name = historicalIdentity === undefined
           ? `r-${runnerNonce.slice(0, 61)}`

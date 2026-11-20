@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/benchmark-configuration-lock-v1.schema.json",
+  "title": "Inactive stock benchmark configuration lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "benchmark_repository",
+    "benchmark_commit",
+    "benchmark_tree",
+    "selection",
+    "toolchain",
+    "selected_files",
+    "supported_toolchains",
+    "prepare_toolchain",
+    "workspace_driver",
+    "generator_source_binding",
+    "manifest_layout",
+    "problem_statement_revisions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "stock_benchmark_configuration_lock"
+    },
+    "benchmark_repository": {
+      "const": "leanprover/lean-eval"
+    },
+    "benchmark_commit": {
+      "$ref": "#/$defs/commit"
+    },
+    "benchmark_tree": {
+      "$ref": "#/$defs/commit"
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "root",
+            "toolchain_directory"
+          ]
+        },
+        "path": {
+          "oneOf": [
+            {
+              "const": "."
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ]
+        }
+      }
+    },
+    "toolchain": {
+      "$ref": "#/$defs/toolchain"
+    },
+    "selected_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lean-toolchain",
+        "lakefile.toml",
+        "lake-manifest.json"
+      ],
+      "properties": {
+        "lean-toolchain": {
+          "$ref": "#/$defs/blob"
+        },
+        "lakefile.toml": {
+          "$ref": "#/$defs/blob"
+        },
+        "lake-manifest.json": {
+          "$ref": "#/$defs/blob"
+        }
+      }
+    },
+    "supported_toolchains": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/file"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prepare_toolchain": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/file"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "workspace_driver": {
+      "$ref": "#/$defs/file"
+    },
+    "generator_source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources",
+        "command",
+        "derived_output_manifest_sha256"
+      ],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "command": {
+          "const": [
+            "lake",
+            "exe",
+            "lean-eval",
+            "generate"
+          ]
+        },
+        "derived_output_manifest_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "manifest_layout": {
+      "const": "per_problem_v1"
+    },
+    "problem_statement_revisions": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1000,
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$(?![\\s\\S])": {
+          "$ref": "#/$defs/positive"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$(?![\\s\\S])"
+    },
+    "toolchain": {
+      "enum": [
+        "leanprover/lean4:v4.35.0-rc3",
+        "leanprover/lean4:v4.35.0",
+        "leanprover/lean4:v4.36.0-rc2"
+      ]
+    },
+    "positive": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "blob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "git_blob",
+        "sha256"
+      ],
+      "properties": {
+        "git_blob": {
+          "$ref": "#/$defs/commit"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "git_blob",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "git_blob": {
+          "$ref": "#/$defs/commit"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}
