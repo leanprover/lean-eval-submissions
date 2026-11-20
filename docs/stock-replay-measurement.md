@@ -42,6 +42,8 @@ The Python wrapper binds its own death to its original parent using Linux
 must not keep a Sandbox alive after the original Lake owner dies. No new process
 group/session is created by the production wrapper. Child signals are recorded
 as signals and propagated as signals after the completed observation.
+Python's default KeyboardInterrupt handler is restored to native SIGINT
+termination; an inherited ignored SIGINT remains ignored.
 
 ## Exact invocation and phase evidence
 

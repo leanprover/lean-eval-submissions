@@ -480,6 +480,26 @@ class StockMeasurementTests(unittest.TestCase):
 
 
 class RealNamespaceTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux parent-death primitive is unavailable')
+    def test_real_interrupt_preserves_signal_status_and_inherited_ignore(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for ignored in (False, True):
+                ready = root / ('ready-' + str(ignored))
+                program = ('import pathlib,signal,sys,time\nsys.path.insert(0,' + repr(str(ROOT / 'scripts')) + ')\n'
+                    + 'from stock_replay_measurement import parent_death_guard\n'
+                    + ('signal.signal(signal.SIGINT,signal.SIG_IGN)\n' if ignored else '')
+                    + 'parent_death_guard()\npathlib.Path(' + repr(str(ready)) + ').touch()\ntime.sleep(.2)\n')
+                process = subprocess.Popen([PYTHON, '-c', program])
+                try:
+                    deadline = time.monotonic() + 2
+                    while not ready.exists() and process.poll() is None and time.monotonic() < deadline: time.sleep(.005)
+                    self.assertTrue(ready.exists())
+                    process.send_signal(signal.SIGINT)
+                    self.assertEqual(process.wait(timeout=2), 0 if ignored else -signal.SIGINT)
+                finally:
+                    if process.poll() is None: process.kill(); process.wait()
+
     @unittest.skipUnless(BWRAP and sys.platform == 'linux', 'Linux bubblewrap is unavailable')
     def test_stopped_real_phase_timeout_excludes_pre_measurement_journal_delay(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -475,6 +475,10 @@ def load_measure(path=None):
 
 def parent_death_guard():
     """The wrapper must not outlive the Lake process that originally owned bwrap."""
+    if signal.getsignal(signal.SIGINT) is signal.default_int_handler:
+        # Python's injected handler would turn a real signal into an ordinary
+        # exit130. Preserve native process semantics, including inherited IGN.
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
     parent = os.getppid()
     libc = ctypes.CDLL(None, use_errno=True)
     require(libc.prctl(1, signal.SIGKILL, 0, 0, 0) == 0)  # PR_SET_PDEATHSIG

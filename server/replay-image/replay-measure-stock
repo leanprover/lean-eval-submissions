@@ -6,6 +6,8 @@ import ctypes
 import signal
 import sys
 
+if signal.getsignal(signal.SIGINT) is signal.default_int_handler:
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
 parent = os.getppid()
 if parent == 1:
     os.kill(os.getpid(), signal.SIGKILL)
