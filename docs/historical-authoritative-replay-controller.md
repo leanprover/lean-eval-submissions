@@ -65,12 +65,16 @@ enabled with the separately reviewed environment credentials, one invocation:
 3. renders and deploys only the task's qualified immutable image, then proves
    exact health while ordinary replay and staging acceptance remain disabled;
 4. reserves the exact replay-task/attempt cleanup identity in durable storage,
-   without State-write or Cloudflare-deployment authority, before appending
-   `replay.started` by exact-head compare-and-swap;
-5. fetches the exact public repository or Gist commit and benchmark commit,
-   builds the deterministic handoff, and invokes the executor without a State
-   writer or Cloudflare deployment credential in scope; and
-6. appends exactly one attempt-bound terminal event, or a typed orchestration
+   without State-write or Cloudflare-deployment authority;
+5. fetches the exact public repository or Gist commit and benchmark commit and
+   builds the deterministic handoff in a five-minute step, before any attempt
+   becomes running; a noncancelled preparation failure or five-minute step
+   timeout retains the old bounded `source_fetch_failed` attempt accounting;
+6. refreshes validated State, requires the prepared task and all its reviewed
+   bindings to remain identical, and checks execution capacity before each
+   exact-head `replay.started` compare-and-swap; it then invokes the executor
+   without a State writer or Cloudflare deployment credential in scope; and
+7. appends exactly one attempt-bound terminal event, or a typed orchestration
    failure. The orchestration-failure append is explicitly guarded by
    `!cancelled()`: cancellation after start leaves the running attempt untouched
    and converges only through the seven-hour stale recovery on the next
@@ -82,6 +86,50 @@ enabled with the separately reviewed environment credentials, one invocation:
    until the source-free cleanup route consumes the exact durable reservation
    and returns an attempt-bound `destruction: confirmed` proof. Polling and
    cancellation recovery use the same cleanup identity and idempotent proof.
+
+On successful preparation, every start publication is preceded by a capacity
+check that preserves the complete reviewed measurement wall limit (currently
+330 minutes), five minutes of poll/delivery grace, twelve minutes for cleanup
+and State publication, a 310-second executor-POST allowance, and sixty seconds
+for State publication/request preparation/OIDC. The POST has an outer
+300-second timeout with a five-second forced-kill grace, so its retries cannot
+consume the unbounded final-request extension of curl's retry window. The
+six-hour job allows 410 seconds of setup before State start. The job timestamp
+is captured in the first shell step; GitHub's preceding job setup is not part
+of that timestamp, so this is conservative operational accounting rather than
+an exact measurement of the hosted job's entire lifetime.
+
+If capacity is insufficient while the refreshed task is still queued, the run
+reports successful `deferred` without starting an attempt or invoking an
+executor. An enabled replenisher may launch one successor using the existing
+strictly decreasing `remaining_runs` budget and unchanged baseline checks.
+At most two consecutive warmed successors are permitted for the same exact
+queued task. The dispatch carries that task identity and consecutive-deferral
+counter; successful execution resets both. A third refusal fails the job while
+the task remains queued, stopping for diagnosis. Every refusal emits a warning
+and source-free elapsed/required/remaining summary, even in a single manual run.
+Busy/unknown attempts, task changes, and State/rebind errors stop the chain.
+Deferred runs consume the existing decreasing chain budget, never task attempts.
+No infinite or silently green warm loop is introduced.
+
+A preparation failure, including a noncancelled step timeout, instead publishes
+the existing start/failure pair without the execution-capacity guard, because
+no executor will run. `source_fetch_failed` remains retryable only through four
+total attempts across deliberate retries. After that accounting the job fails,
+retaining the old stop-chain behavior: an outage cannot automatically exhaust
+attempts across the corpus. A manager diagnoses before deliberately retrying.
+Operator cancellation never takes this fallback.
+
+A second capacity check after request preparation and OIDC minting reserves the
+POST allowance as well as the full measurement limit and grace. Both checks
+print source-free elapsed/required/remaining seconds. A warning after the 202
+receipt reports any unexpected job-deadline truncation of the process window.
+The sixty-second State/start allowance is not a guarantee against an arbitrary
+network stall: if State publication already succeeded and startup exceeds that
+allowance, the existing `runner_start_failed` path records the failure. An
+ambiguous executor start still requires destruction proof; cancellation still
+uses seven-hour stale recovery. No measurement limit, checker outcome, image,
+toolchain, or retry classification is changed.
 
 Cloudflare deployment, State reads, State writes, public source fetching, and
 executor OIDC are kept in separate steps. The lane has no AWS permission and
@@ -148,3 +196,5 @@ Implementation is not activation. Before creating the repository variables:
 
 Production intake, ordinary private replay, and release publication are
 independent gates and do not become enabled by this controller.
+
+A noncancelled preparation-step timeout is a failed outcome before continue-on-error, distinct from job cancellation; see [the Actions runner step implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/StepsRunner.cs#L295).
