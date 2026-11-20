@@ -36,7 +36,7 @@ CONFIG_FILES = ('lean-toolchain', 'lakefile.toml', 'lake-manifest.json')
 GENERATOR_COMMIT = '0b8cc2d141710a18515c53448f006c971dd8eeb4'
 PROBLEM = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z')
 GIT = str(Path(shutil.which('git')).resolve(strict=True))
-INVENTORY_CONCURRENCY = 2
+INVENTORY_CONCURRENCY = 4
 INVENTORY_ADDRESS_SPACE = 32 * 1024**3
 
 
@@ -383,7 +383,7 @@ def _inventory_remaining(deadline):
 
 
 def _build_inventory_batch(modules, source, env, lake, deadline):
-    """Two trusted original single-module builds; no submitted Source runs.
+    """Four trusted original single-module builds; no submitted Source runs.
 
     WNOWAIT keeps each owned group leader unreaped until group termination,
     preventing a completed leader's PID/group identity from being reused.

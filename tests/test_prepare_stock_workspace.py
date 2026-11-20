@@ -195,6 +195,10 @@ root=Path.cwd();args=sys.argv[1:]
 with(root/'events').open('a')as h:h.write(json.dumps({'argv':args,'pid':os.getpid(),'as_limit':resource.getrlimit(resource.RLIMIT_AS)[0],'threads':os.getenv('LEAN_NUM_THREADS')})+'\n')
 if args[0]=='build':
  module=args[1]
+ if os.getenv('FIXTURE_BARRIER'):
+  ready=root/'ready';ready.mkdir(exist_ok=True);(ready/module).write_text(str(os.getpid()));deadline=time.monotonic()+3
+  while len(list(ready.iterdir()))<int(os.getenv('FIXTURE_BARRIER')):
+   assert time.monotonic()<deadline;time.sleep(.005)
  if os.getenv('FIXTURE_FAILURE')==module:sys.exit(7)
  time.sleep(float(os.getenv('FIXTURE_SLEEP','0')))
  target=root/'.lake/build/lib/lean'/(module.replace('.','/')+'.olean');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'controlled artifact, not a Lean object')
@@ -274,22 +278,23 @@ else:
     def test_all_module_order_dedup_and_actual_child_exit_before_inventory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            git, source, lake = self.fixture(root, ('Beta', 'Alpha', 'Beta'))
-            self.assertEqual(prepare._original_inventory_modules(git), ('Beta', 'Alpha'))
-            observation = self.run_owned(lambda: prepare._prepare_inventory(git, source, prepare.environment(root), lake, 3))
-            self.assertEqual([entry['module'] for entry in observation['module_builds']], ['Beta', 'Alpha'])
+            git, source, lake = self.fixture(root, ('Beta', 'Alpha', 'Gamma', 'Delta', 'Beta'))
+            self.assertEqual(prepare._original_inventory_modules(git), ('Beta', 'Alpha', 'Gamma', 'Delta'))
+            env = dict(prepare.environment(root), FIXTURE_BARRIER='4')
+            observation = self.run_owned(lambda: prepare._prepare_inventory(git, source, env, lake, 3))
+            self.assertEqual([entry['module'] for entry in observation['module_builds']], ['Beta', 'Alpha', 'Gamma', 'Delta'])
             self.assertTrue(all(entry['exit_code'] == 0 for entry in observation['module_builds']))
             events = [json.loads(line) for line in (source / 'events').read_text().splitlines()]
             self.assertEqual(events[-1]['argv'], ['exe', 'lean-eval', 'validate-manifest', '--assume-modules-built'])
             builds = [entry for entry in events if entry['argv'][0] == 'build']
-            self.assertEqual({entry['argv'][1] for entry in builds}, {'Alpha', 'Beta'})
+            self.assertEqual({entry['argv'][1] for entry in builds}, {'Alpha', 'Beta', 'Gamma', 'Delta'})
             self.assertTrue(all(entry['as_limit'] == 32 * 1024**3 and entry['threads'] == '1' for entry in builds))
 
     def test_partial_actual_build_failure_stops_and_reaps_all_owned_children(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            git, source, lake = self.fixture(root, ('Slow', 'Bad', 'Unstarted'))
-            env = dict(prepare.environment(root), FIXTURE_FAILURE='Bad', FIXTURE_SLEEP='10')
+            git, source, lake = self.fixture(root, ('Slow', 'Bad', 'SlowTwo', 'SlowThree', 'Unstarted'))
+            env = dict(prepare.environment(root), FIXTURE_FAILURE='Bad', FIXTURE_SLEEP='10', FIXTURE_BARRIER='4')
             started = time.monotonic()
             with self.assertRaises(prepare.Invalid):
                 self.run_owned(lambda: prepare._prepare_inventory(git, source, env, lake, 3))
@@ -298,10 +303,41 @@ else:
             self.assertFalse(any('--assume-modules-built' in entry['argv'] for entry in events))
             self.assertFalse(any(entry['argv'] == ['build', 'Unstarted'] for entry in events))
 
+    def test_fourth_launch_or_pidfd_failure_reaps_every_started_child(self):
+        for failing_setup in ('launch', 'pidfd'):
+            with self.subTest(failing_setup=failing_setup), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                _, source, lake = self.fixture(root, ('One', 'Two', 'Three', 'Four'))
+                env = dict(prepare.environment(root), FIXTURE_BARRIER='4', FIXTURE_SLEEP='10')
+                real_popen, real_pidfd = subprocess.Popen, prepare.supervisor.pidfd_open
+                children, calls = [], {'launch': 0, 'pidfd': 0}
+                def launch(*args, **kwargs):
+                    calls['launch'] += 1
+                    if failing_setup == 'launch' and calls['launch'] == 4:
+                        raise OSError('controlled fourth launch failure')
+                    child = real_popen(*args, **kwargs)
+                    children.append(child)
+                    return child
+                def pidfd(pid):
+                    calls['pidfd'] += 1
+                    if failing_setup == 'pidfd' and calls['pidfd'] == 4:
+                        raise OSError('controlled fourth pidfd failure')
+                    return real_pidfd(pid)
+                with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                     mock.patch.object(prepare.supervisor, 'pidfd_open', side_effect=pidfd):
+                    with self.assertRaises(prepare.Invalid):
+                        prepare._build_inventory_batch(('One', 'Two', 'Three', 'Four'), source, env, lake,
+                                                       time.monotonic_ns() + 3_000_000_000)
+                self.assertEqual(len(children), 3 if failing_setup == 'launch' else 4)
+                for child in children:
+                    self.assertIsNotNone(child.returncode)
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(child.pid, os.WNOHANG)
+
     def test_one_shared_deadline_cannot_reset_between_batches(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            git, source, lake = self.fixture(root, ('One', 'Two', 'Three', 'Four', 'Five', 'Six'))
+            git, source, lake = self.fixture(root, ('One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'))
             env = dict(prepare.environment(root), FIXTURE_SLEEP='0.45')
             started = time.monotonic()
             with self.assertRaises(prepare.Invalid):

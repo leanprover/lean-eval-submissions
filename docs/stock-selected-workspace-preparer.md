@@ -41,7 +41,7 @@ validate-generated-catalog against the exact original Git snapshot. The full
 semantic guard runs the genuine original eval_inventory; no structural-only or
 selected-inventory substitute is accepted. Before it, the preparer derives ALL
 original modules in original manifest filename/first-occurrence order and builds
-them in fixed batches of at most two original `lake build <module>` commands.
+them in fixed batches of at most four original `lake build <module>` commands.
 Only successful real child exits plus original module artifacts allow the
 original supported `validate-manifest --assume-modules-built` invocation. That
 flag skips rebuilding only; every original module is still imported and the
@@ -51,7 +51,7 @@ One monotonic deadline of at most1200 seconds covers plan loading, the original
 structural precheck, ALL batches and the final full validator. It is never reset
 per batch. The selected generator still has its independent at-most300-second
 bound, and runtime M/T are unchanged. Any partial failure, deadline or cleanup
-failure leaves generation/context unproved. A two-worker limit and
+failure leaves generation/context unproved. A four-worker limit and
 LEAN_NUM_THREADS=1 hint apply to these trusted public builds. Each build child
 also inherits kernel CPU-time and at-most32GiB virtual-address-space limits;
 stricter inherited limits are preserved. The address limit is not physical RAM
