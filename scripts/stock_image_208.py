@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 INSTALL = Path('/opt/lean-eval')
@@ -22,6 +23,8 @@ LEAN = '470d5ce1400764999581fd26d5d72b00d990b0f4'
 LEAN_TREE = '062f40e3b5e68d7dfda6c43ea26784e0e7850f43'
 TOOLCHAIN = 'leanprover/lean4:v4.35.0-rc3'
 RELEASE_SHA256 = '1526de16c0496f16b46a168f26c990af4e3796505273c3342fec17d72d763997'
+RELEASE_URL = 'https://github.com/leanprover/lean4/releases/download/v4.35.0-rc3/lean-4.35.0-rc3-linux.tar.zst'
+DOWNLOAD_RECEIPT_SHA256 = '9051df30341f8f6e3c5dcd2d994548a2ea39231e765b3e50c7ee4c2a6bf10f47'
 MODULE_PLAN = '7e84c623aa7ebab350a750882ceb620b110a5edda93761de9e673d6388a09202'
 TOOLS = {
     'lean': 'bf8d54e4714cc4b03d3f6bb34c83b7202b87e49c8bfcbff6895c085bb90ceb38',
@@ -56,12 +59,14 @@ def libraries():
 def fetch(preparer, repository, commit, destination):
     """Build-only public acquisition. Operands derive solely from bound Git."""
     require(repository.startswith('https://github.com/') and '@' not in repository)
+    require(isinstance(commit, str) and re.fullmatch(r'[0-9a-f]{40}', commit))
     require(not destination.exists() and not destination.is_symlink())
     env = {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'GIT_CONFIG_GLOBAL': '/dev/null',
            'GIT_CONFIG_NOSYSTEM': '1', 'GIT_TERMINAL_PROMPT': '0', 'GIT_ALLOW_PROTOCOL': 'https',
            'GIT_NO_REPLACE_OBJECTS': '1'}
     common = ['/usr/bin/git', '--no-replace-objects', '-c', 'core.hooksPath=/dev/null',
-              '-c', 'core.fsmonitor=false', '-c', 'credential.helper=']
+              '-c', 'core.fsmonitor=false', '-c', 'credential.helper=',
+              '-c', 'maintenance.auto=false', '-c', 'gc.auto=0']
     for args in (['init', '--bare', str(destination)],
                  ['-C', str(destination), 'fetch', '--depth', '1', '--no-tags', '--', repository, commit],
                  ['-C', str(destination), 'update-ref', 'refs/heads/pinned', commit]):
@@ -96,6 +101,7 @@ def fetch_public_git():
 
 
 def installed(preparer):
+    validate_public_inputs(INSTALL / 'stock-image-208-public-inputs-v1.json')
     benchmark, manifest = inputs(preparer)
     modules = preparer._original_inventory_modules(benchmark)
     require(len(modules) == 296 and preparer.sha(preparer.supervisor.stock.canonical(modules)) == MODULE_PLAN)
@@ -137,6 +143,16 @@ def installed(preparer):
 def check_tools(preparer):
     for name, expected in TOOLS.items():
         require(preparer.supervisor.file_hash(PREFIX / 'bin' / name)['sha256'] == expected)
+
+
+def validate_public_inputs(path):
+    expected = {'schema_version': 1, 'kind': 'fixed_stock208_public_release_inputs',
+                'release': {'url': RELEASE_URL, 'sha256': RELEASE_SHA256, 'bytes': 595611952,
+                            'original_download_receipt_sha256': DOWNLOAD_RECEIPT_SHA256},
+                'tool_sha256': TOOLS,
+                'lean': {'commit': LEAN, 'tree': LEAN_TREE,
+                         'check_lean_git_path': 'src/lake/Lake/CLI/Check.lean'}}
+    require(json.loads(path.read_bytes()) == expected)
 
 
 def main():

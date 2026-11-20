@@ -9,30 +9,49 @@ private historical rows, but this recipe supplies no private Source support.
 
 The recipe consumes the existing original595611952-byte release archive,
 SHA1526de16c0496f16b46a168f26c990af4e3796505273c3342fec17d72d763997,
-from the fixed build-context path. The saved public download receipt points to
+from the fixed build-context path. The consumed
+`configuration/stock-image-208-public-inputs-v1.json` records the original public
+download receipt's exact URL/size/SHA-256 and its own SHA-256. That receipt points to
 `https://github.com/leanprover/lean4/releases/download/v4.35.0-rc3/lean-4.35.0-rc3-linux.tar.zst`.
 It extracts the whole unmodified release: Lean/Lake470d5ce, its bundled comparator,
 exporter, native kernel and NanoDa4c544ed. No custom comparator/NanoDa binary,
 compiler shim, strip step, Lean/Lake patch or Nix runtime prefix is copied.
-The five executable hashes are additionally checked against the original archive.
-The checked hash and prior public acquisition evidence are the artifact binding;
-this source change performs no new upstream release authentication.
+The five executable hashes were derived by streaming those five regular `bin/`
+members from the exact SHA-256-verified original tarball, then are checked during
+installation. Original `src/lake/Lake/CLI/Check.lean` Git bytes are separately
+compared with the packaged release file. The original download receipt records
+no download timestamp; file mtimes are not substituted for one. No upstream
+signature, signed-URL freshness or new release authentication is claimed.
 
 The base is the existing digest-pinned Sandbox0.12.7 Python image. The fixed
-wrappers require `/usr/bin/python3`3.11; build refuses a different system Python
-instead of changing their argv/shebang/runtime policy. Python dependencies use
-the existing hash-locked requirements. Bubblewrap0.12.0 is built from the same
+wrappers retain the base's original prebuilt Python3.11.14 at
+`/usr/local/python/bin/python3.11`, selected through its existing
+`/usr/local/bin/python3.11` alternative. Build checks the realpath/version before
+apt, restores that exact alternative after any transitive distro Python install,
+and checks again. It installs no distro Python/pip or new interpreter/builder.
+The same native Python/pip installs only the existing hash-locked requirements
+with isolated pip, no dependency resolution and a verified fixed native site
+directory. Named locked packages may replace existing versions; pip itself is
+never upgraded. New build/check commands use `-I -B`, and source bytecode-cache
+absence is checked. Bubblewrap0.12.0 is built from the same
 SHA9760d007-bound source tarball as `install_bwrap.sh`, without changing its source
 or loading/weakening a host AppArmor policy during build. Apt package resolution,
-the native loader/compiler closure, bubblewrap's source Git commit for profile3,
-and nested user namespaces still need actual image/runtime evidence. No new
+the native loader/compiler closure and nested user namespaces still need actual
+image/runtime evidence. The official0.12.0 Git tag advertises peeled target
+2a76602a8c71f36c1527cf9fc3417d9149822e0c; this does not prove the release source
+tarball equals a Git archive. Profile binding must retain both that association
+and the built release-source/binary/image hashes. No new
 profile3 or image digest is invented from source installation.
 
 The build-only `fetch-public-git` action obtains fixed original benchmark and
 Lean Git commits plus the twelve dependency commits/URLs derived from the exact
 original manifest. It uses only explicit public HTTPS routes, a minimal environment,
 empty credential helpers, no prompt/hooks/replace objects and the existing owned
-command primitive. Full bare Git objects remain at fixed paths:
+command primitive, with canonical40-hex revisions checked before fetching.
+Shallow depth1 bare repositories retain each pinned commit's complete tree,
+not its full history. The existing local dependency clone/checkout path is
+separately tested with a genuine shallow bare fixture. Repositories remain at
+fixed paths (root ownership is required by this inactive root caller):
 
 - `/opt/lean-eval/git/benchmark.git`: original208/tree47b.
 - `/opt/lean-eval/git/lean.git`: original470d5ce/tree062f40e3.
@@ -61,25 +80,33 @@ to accommodate installation. `/run/lean-eval` remains a private0700 control root
 The default entry runs a finite offline `check-installed` and exits. It verifies
 actual original Git selections/dependency pins, all312 manifests/ordered296 plan,
 the stock Check.lean bytes against original Lean Git, five binary hashes, original
-Lean launcher/version, instrumentation hashes, closed schema imports and bwrap
-file identity. Its JSON explicitly reports `generation_observed=false`,
+Lean launcher/version and closed schema imports. It computes/reports actual
+instrumentation and bwrap hashes, without comparing those with expected pins.
+Those reports are observations for later profile binding, not authentication.
+Its JSON explicitly reports `generation_observed=false`,
 `image_qualified=false`, `runtime_qualified=false`, `request3_admitted=false` and
 `private_Source_supported=false`. This is installation evidence only. It neither
 constructs a Task, overlays Source, starts the supervisor, elaborates Lean Source,
-creates a service nor changes State/publication.
+creates a service nor changes State/publication. The default networknone check
+does not exercise the fresh preparer: its original cache fetch/restore phases
+require separately authorized outbound public HTTPS. The actual host must also
+support pidfds and readable own `/proc/self/task/*/children` lists.
 
 After separate Root build authorization, from this exact source worktree:
 
 ```sh
 mkdir -p .stock-image-inputs
 cp /tmp/lean-eval-435rc3-checker-compat/lean-4.35.0-rc3-linux.tar.zst .stock-image-inputs/
-docker build --file Dockerfile.stock-replay-208 --tag lean-eval-stock208:local .
+DOCKER_BUILDKIT=1 docker build --file Dockerfile.stock-replay-208 --tag lean-eval-stock208:local .
 docker run --rm --network none lean-eval-stock208:local
 ```
 
-These are proposed commands, not executed results. The Dockerignore exposes only
+These are proposed commands, not executed results. BuildKit is required for the
+per-Dockerfile Dockerignore; a legacy engine is not an acceptable build route.
+The Dockerignore exposes only
 the named public archive, required modules/wrappers/schemas and hash-locked Python
-requirements. Do not pass credentials, private Source, build secrets, host runtime
+requirements and the fixed consumed public-input record. Do not commit the staged
+archive to Git. Do not pass credentials, private Source, build secrets, host runtime
 prefixes, arbitrary task inputs or Docker sockets. The build necessarily obtains
 public Git/dependency sources and pinned bwrap/Python packages; the default run
 uses no network. Do not publish the tag or wire it into a Worker/controller.
