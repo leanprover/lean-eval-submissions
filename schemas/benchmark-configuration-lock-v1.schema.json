@@ -126,6 +126,7 @@
           }
         },
         "command": {
+          "description": "Original generator entrypoint. Inactive selected-workspace preparation resolves exactly this entrypoint followed by --problem and the sole validated problem_statement_revisions key. Zero or multiple keys and arbitrary additional argv are refused. The resolved full argv is recorded separately in preparation evidence; selected generation does not claim whole-catalog inventory synchronization. Original full semantic manifest/inventory validation remains mandatory beforehand. This clarification grants no admission or runtime qualification.",
           "const": [
             "lake",
             "exe",
