@@ -132,6 +132,12 @@ DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
 CONVERGENCE_RETRY_EXIT = 75
+# A disabled v1-only receiver still strands callbacks already dispatched by a
+# v2 producer. Admit only the independently reviewed receiver implementation;
+# later callback implementations need their own explicit compatibility review.
+EVALUATION_V2_CALLBACK_DIGESTS = frozenset({
+    "118a376bc3793c4c25e7f7507a647e68b901044ccfcb171026b805626802ae97",
+})
 STATE_CONTRACT_ROOT_KINDS = {
     "README.md": ("100644", "blob"),
     "docs": ("040000", "tree"),
@@ -342,6 +348,17 @@ def _validate_qualification_header(
             "target deployment toolchain differs from its reviewed qualification"
         )
     return callback_digest
+
+
+def validate_evaluation_callback_floor(
+    qualification: dict[str, Any], target_root: pathlib.Path,
+) -> str:
+    digest = _validate_qualification_header(qualification, target_root)
+    if digest not in EVALUATION_V2_CALLBACK_DIGESTS:
+        raise RollbackValidationError(
+            "rollback receiver is not qualified for in-flight v2 evaluation callbacks"
+        )
+    return digest
 
 
 def _qualification_state_contracts(qualification: dict[str, Any]) -> dict[str, Any]:
@@ -913,6 +930,13 @@ def _validate_replay_container(
 def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     if not FULL_COMMIT.fullmatch(args.expected_commit):
         raise RollbackValidationError("expected commit must be a full lowercase Git SHA")
+    disable_launch_gates = getattr(args, "require_launch_gates_disabled", False)
+    if disable_launch_gates and not (
+        args.require_intake_disabled and args.require_replay_disabled
+    ):
+        raise RollbackValidationError(
+            "all-false rollback requires disabled intake and replay"
+        )
     intake_config = _object(args.intake_config)
     broker_config = _object(args.broker_config)
     replay_config = _object(args.replay_config)
@@ -966,6 +990,18 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     intake_expected["DISPATCH_WORKFLOW_REF"] = (
         f"lean-eval-dispatch/{args.expected_commit}"
     )
+    if disable_launch_gates:
+        disabled = dict(
+            INTAKE_ENABLED="false",
+            INTAKE_ENABLEMENT_MODE="disabled",
+            **DISABLED_LAUNCH_GATE_BINDINGS,
+        )
+        missing = sorted(set(disabled) - set(intake_expected))
+        if missing:
+            raise RollbackValidationError(
+                f"all-false rollback target lacks tracked launch gates: {missing}"
+            )
+        intake_expected.update(disabled)
     broker_expected = _expected_vars(
         broker_selected, args.expected_commit, "broker config"
     )
@@ -2004,6 +2040,7 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--output", type=pathlib.Path, required=True)
     plan.add_argument("--require-replay-disabled", action="store_true")
     plan.add_argument("--require-intake-disabled", action="store_true")
+    plan.add_argument("--require-launch-gates-disabled", action="store_true")
     plan.add_argument("--current-replay-config", type=pathlib.Path, required=True)
     plan.add_argument("--qualification", type=pathlib.Path, required=True)
     plan.add_argument("--target-root", type=pathlib.Path, required=True)
@@ -2079,6 +2116,10 @@ def parser() -> argparse.ArgumentParser:
     source_contract.add_argument("--state-main", type=pathlib.Path, required=True)
     source_contract.add_argument("--state-live-commit", type=pathlib.Path, required=True)
     source_contract.add_argument("--state-live-tree", type=pathlib.Path, required=True)
+
+    callback_floor = commands.add_parser("evaluation-callback-floor")
+    callback_floor.add_argument("--qualification", type=pathlib.Path, required=True)
+    callback_floor.add_argument("--target-root", type=pathlib.Path, required=True)
 
     all_false_health = commands.add_parser("all-false-production-health")
     all_false_health.add_argument("--response", type=pathlib.Path, required=True)
@@ -2164,6 +2205,10 @@ def main() -> int:
                 )
                 return CONVERGENCE_RETRY_EXIT
             print(state_commit)
+        elif args.command == "evaluation-callback-floor":
+            print(validate_evaluation_callback_floor(
+                _object(args.qualification), args.target_root,
+            ))
         elif args.command == "select-state-contract":
             print(select_declared_state_contract(
                 _object(args.qualification), args.target_root,

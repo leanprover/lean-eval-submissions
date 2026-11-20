@@ -9,6 +9,11 @@ import json
 import pathlib
 import re
 
+try:
+    from .build_evaluation_receipt import timestamp, validate as validate_receipt
+except ImportError:
+    from build_evaluation_receipt import timestamp, validate as validate_receipt
+
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
@@ -38,6 +43,9 @@ def build(
     benchmark_commit: str,
     toolchain: str,
     evaluator_version: str,
+    terminal_receipt: pathlib.Path,
+    receipt_context: dict[str, object],
+    current_run_attempt: int,
     allowlist_required: bool = False,
 ) -> dict[str, object]:
     if evaluate_result not in {"success", "failure"}:
@@ -69,7 +77,16 @@ def build(
         raise ValueError("archive completion timestamp is invalid") from error
     if archive_time.tzinfo != dt.timezone.utc or archive_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z" != occurred_at:
         raise ValueError("archive completion timestamp is not canonical UTC milliseconds")
-    evaluation_time = archive_time + dt.timedelta(milliseconds=1)
+    expected_identity = {"submission_id": submission_id, "problem_id": problem_id,
+                         "benchmark_commit": benchmark_commit, "toolchain": toolchain,
+                         "workflow_commit": evaluator_version}
+    if any(receipt_context.get(key) != value for key, value in expected_identity.items()):
+        raise ValueError("evaluation receipt context disagrees with callback identity")
+    receipt = validate_receipt(_object(terminal_receipt, "evaluation terminal receipt"),
+                               context=receipt_context, current_run_attempt=current_run_attempt,
+                               evaluate_result=evaluate_result, results=results)
+    if timestamp(receipt["started_at"], "started_at") <= archive_time:
+        raise ValueError("evaluation start must follow archive completion")
     if evaluate_result == "failure":
         outcome: dict[str, object] = {
             "status": "failed",
@@ -97,10 +114,11 @@ def build(
             else {"status": "rejected", "reason_code": rejection_reason}
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "submission_id": submission_id,
         "attempt": 1,
-        "occurred_at": evaluation_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "occurred_at": receipt["started_at"],
+        "completed_at": receipt["completed_at"],
         "benchmark_repository": "leanprover/lean-eval",
         "benchmark_commit": benchmark_commit,
         "toolchain": toolchain,
@@ -118,6 +136,15 @@ def main() -> int:
     parser.add_argument("--toolchain", required=True)
     parser.add_argument("--evaluator-version", required=True)
     parser.add_argument("--allowlist-required", default="false", choices=("true", "false", ""))
+    parser.add_argument("--submission-id", required=True)
+    parser.add_argument("--terminal-receipt", type=pathlib.Path, required=True)
+    parser.add_argument("--workflow-run-id", required=True)
+    parser.add_argument("--current-run-attempt", type=int, required=True)
+    parser.add_argument("--source-repository", required=True)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--source-metadata-sha256", required=True)
+    parser.add_argument("--statement-revision", type=int, required=True)
+    parser.add_argument("--runner-tier", choices=("standard", "large"), required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args()
     try:
@@ -129,6 +156,17 @@ def main() -> int:
             benchmark_commit=args.benchmark_commit,
             toolchain=args.toolchain,
             evaluator_version=args.evaluator_version,
+            terminal_receipt=args.terminal_receipt,
+            current_run_attempt=args.current_run_attempt,
+            receipt_context={
+                "submission_id": args.submission_id,
+                "workflow_commit": args.evaluator_version, "workflow_run_id": args.workflow_run_id,
+                "source_repository": args.source_repository, "source_commit": args.source_commit,
+                "source_metadata_sha256": args.source_metadata_sha256,
+                "problem_id": args.problem_id, "statement_revision": args.statement_revision,
+                "benchmark_commit": args.benchmark_commit, "toolchain": args.toolchain,
+                "runner_tier": args.runner_tier,
+            },
             allowlist_required=args.allowlist_required == "true",
         )
     except ValueError as error:

@@ -8,10 +8,12 @@ explicitly preserve the consecutive retryable-failure rule. Version 2 binds the 
 identity to its event IDs, uses the terminal time for the evaluation outcome,
 and rejects changed retries with HTTP 409.
 
-Deploy this receiver before changing the evaluation workflow or completion
-producer. This revision leaves both workflows and the Python completion
-producer unchanged, so submissions dispatched during deployment still send
-version 1. No existing State event or release schedule is rewritten.
+Deploy the receiver stage before changing the evaluation workflow or completion
+producer. The receiver-only revision leaves both workflows and the Python
+completion producer unchanged, so submissions dispatched during that first
+deployment still send version 1. The separate producer stage changes those
+workflows and emits version 2 only after receiver readiness is proved. Neither
+stage rewrites an existing State event or release schedule.
 
 ## Receiver deployment
 
@@ -42,12 +44,30 @@ original receipt, completion callback, canonical events and release schedule.
 
 Before enabling a version 2 producer, enforce the compatible callback digest in
 the production rollback admission path and prove the retained receiver unit.
+The producer revision adds `evaluation-callback-floor` to the normal rollback
+workflow before Cloudflare access. It verifies the target's complete existing
+qualification and actual source digest against the reviewed v2 receiver digest;
+matching a State contract alone is insufficient. Later receiver source changes
+require explicit compatibility review and an updated digest. Run rollback from
+the current protected-main workflow; do not dispatch an obsolete workflow tag or
+rerun an earlier deployment to bypass that admission check. Older workflow
+history and privileged manual deployment are not constrained by a new validator.
 After any version 2 workflow has been dispatched, use that qualified receiver
 unit or a later independently qualified compatible unit for emergency rollback.
 An older version 1-only Worker cannot receive those in-flight callbacks, even
 with intake disabled and even when it supports the same State contract.
 Disabling intake prevents new submissions; it does not remove existing callback
 obligations. Preserve original receipts for callback-only repair if needed.
+
+The rollback plan uses the target's unchanged tracked configuration with the
+closed `--require-launch-gates-disabled` mode. This mode also requires disabled
+intake and replay, and replaces only the fixed intake and lifecycle launch gates
+with their all-false values. Every other variable, capability, State proof and
+source binding remains exact. Retain a real all-false intake version with the
+same-source broker and disabled replay versions; an enabled intake version does
+not qualify. The rollback deployment forces that same fixed map and verifies
+all gates remain disabled before and after changing dependencies. Normal
+deployment configuration remains independent of this emergency mode.
 
 Receiver support alone does not repair the old acceptance clock. Keep
 publication paused until the separate safeguard for existing backdated release

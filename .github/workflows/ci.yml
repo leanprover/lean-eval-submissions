@@ -61,10 +61,24 @@ jobs:
       - name: Lint workflows
         run: actionlint
 
+      - name: Install pinned bubblewrap for nested namespace tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes meson ninja-build libcap-dev
+          stock_bwrap_path=$(bash scripts/install_bwrap.sh "$RUNNER_TEMP/lean-eval-bwrap")
+          stock_bwrap_dir=$(cd "$RUNNER_TEMP/lean-eval-bwrap" && pwd -P)
+          test "$stock_bwrap_path" = "$stock_bwrap_dir/bwrap"
+          echo "$stock_bwrap_dir" >> "$GITHUB_PATH"
+
       - name: Offline test suite
         # Discovery keeps every ordinary tests/test_*.py module in CI without
         # a second hand-maintained inventory that can silently become stale.
-        run: python -m unittest discover -v -s tests -p 'test_*.py'
+        run: |
+          stock_bwrap_dir=$(cd "$RUNNER_TEMP/lean-eval-bwrap" && pwd -P)
+          test "$(command -v bwrap)" = "$stock_bwrap_dir/bwrap"
+          command -v bwrap
+          bwrap --version
+          python -m unittest discover -v -s tests -p 'test_*.py'
 
   solution-dependency-sandbox:
     runs-on: ubuntu-26.04
