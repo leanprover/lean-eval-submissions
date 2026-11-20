@@ -963,6 +963,25 @@
         "ref": "0107e917361a6e6679a19bebfb66a44c5f5b5184",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-20T15:10:58Z",
+      "benchmark_commit": "7c037060659044fa084dad30d37fe2d36c50d64c",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1f910-f6e9-7014-a2e9-95ef98384d58"
+      },
+      "problem_id": "aspherical_integer_homology_four_sphere",
+      "production_metadata": {},
+      "result_id": "r2_80bff9e1fd46e073f2f439756843ecabc709465db2664e71e20704a0ef1d8c7f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "21700b8ff1789218e01aa29939dc80def520238b",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
