@@ -2,6 +2,7 @@
 !Dockerfile.stock-replay-208
 !.stock-image-inputs/lean-4.35.0-rc3-linux.tar.zst
 !requirements-jsonschema-workflow.txt
+!configuration/stock-image-208-public-inputs-v1.json
 !scripts/stock_image_208.py
 !scripts/prepare_stock_workspace.py
 !scripts/stock_replay_contract.py
