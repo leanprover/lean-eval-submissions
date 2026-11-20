@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-measurement-config-v2.schema.json",
+  "title": "Inactive stock replay measurement configuration v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "phase_semantics",
+    "wall_time_limit_ms",
+    "memory_limit_bytes",
+    "retired_instructions",
+    "checker_sequence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "phase_semantics": {
+      "const": "stock_lake_solution_build_export_dual_kernel_v1"
+    },
+    "wall_time_limit_ms": {
+      "$ref": "#/$defs/positive"
+    },
+    "memory_limit_bytes": {
+      "$ref": "#/$defs/positive"
+    },
+    "retired_instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "perf_event"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "perf_event": {
+          "const": "instructions:u"
+        }
+      }
+    },
+    "checker_sequence": {
+      "const": [
+        "bundled_nanoda",
+        "bundled_leanchecker"
+      ]
+    }
+  },
+  "$defs": {
+    "positive": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    }
+  }
+}
