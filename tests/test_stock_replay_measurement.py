@@ -154,6 +154,34 @@ class StockMeasurementTests(unittest.TestCase):
         self.assertEqual(self.verdict(trace)['checker_outcome'], 'accepted')
         self.assertEqual(stock.read_start(c.policy, c.clock, 'native_kernel')['generation'], '4' * 64)
 
+    def test_independently_captured_original_stock_argv_and_configs_match(self):
+        c = self.context
+        fixture = json.loads((ROOT / 'tests/fixtures/stock-lake-original-bwrap-v1.json').read_text())
+        self.assertEqual(fixture['provenance']['lean_commit'], 'eb6cafb7290e8bd5f2937522d8d804f58f02bafc')
+        c.policy['lake_home'] = str(c.prefix)
+        c.policy['declarations'] = fixture['declarations']
+        c.policy['permitted_axioms'] = fixture['permitted_axioms']
+        stock.validate_policy(c.policy)
+        previous = None
+        for row in fixture['invocations']:
+            stage = row['stage']
+            config = c.temporary / ('captured-' + stage)
+            replace = {'$PROJECT': str(c.project), '$LEAN_PREFIX': str(c.prefix),
+                       '$TEMP': str(c.temporary), '$CONFIG': str(config), '$EXPORT': str(c.export),
+                       '$INHERITED_PATH': c.policy['inherited_path'], '$RESOLVED_PATH': c.policy['resolved_path'],
+                       '$LEAN_PATH': c.policy['lean_path']}
+            def value(text):
+                for key, target in replace.items(): text = text.replace(key, target)
+                return text
+            if stage in stock.STAGES[5:]:
+                contents = copy.deepcopy(fixture['kernel_configs'][stock.STAGES.index(stage) - 5])
+                contents['export_file_path'] = str(c.export)
+                config.write_bytes(stock.canonical(contents)); config.chmod(0o600)
+            arguments = [value(a) for a in row['arguments']]
+            # Deliberately do not construct these arguments with sandbox_options:
+            # the frozen fixture came from the independent original stock driver.
+            previous = stock.match_invocation(c.policy, arguments, stage, previous)
+
     def test_first_nonzero_kernel_cannot_be_hidden_by_native_success(self):
         trace = synthetic_trace(self.context.policy)
         trace['invocations'][5]['termination']['code'] = 1
@@ -267,6 +295,9 @@ class StockMeasurementTests(unittest.TestCase):
         arguments = c.arguments('solution_export')
         stock.match_invocation(c.policy, arguments, 'solution_export', None)
         self.assertEqual(stock.split_bwrap(arguments)[1][-2:], c.policy['declarations'])
+        c.policy['binding']['problem_id'] = 'Original-Problem_7'
+        c.policy['declarations'].append(c.policy['declarations'][0])
+        stock.validate_policy(c.policy)  # same problem alphabet as execution-request1
 
     def test_unknown_options_network_mount_or_module_substitution_refuse(self):
         c = self.context

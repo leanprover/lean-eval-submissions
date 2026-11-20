@@ -138,6 +138,15 @@ exercise real inherited FDs, private/perf FD closure, signal propagation,
 post-launch failure, false separators, two-kernel failures and stale clocks.
 These are not stock-image/provider qualification or a new admitted replay.
 
+The normalized `stock-lake-original-bwrap-v1.json` parser fixture was captured
+independently from all seven actual calls of the original stock4.35 stable
+WorkspaceTest, with its exact source hashes recorded. The original driver
+accepted with bundled NanoDa and native Lean. Its argv/config fixture is not
+constructed by this adapter's template builder. For that local capture, the
+previously disclosed Nix loader shim ran after original-argv validation; no
+compiler/Lake source or binary was patched. It does not qualify a stock image,
+the provider runtime, or Nix-specific instrumentation as the production recipe.
+
 Remaining work is the reviewed profile/config/request and selected-workspace
 integration, authoritative evaluator/supervisor wiring, real stock original-driver
 image qualification, Worker parity, actual provider namespace/limits/destruction,

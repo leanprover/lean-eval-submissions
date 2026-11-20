@@ -112,7 +112,7 @@ def validate_binding(binding):
     require(integer(binding['attempt'], 1, 4) and integer(binding['started_ms']))
     require(integer(binding['statement_revision'], 1))
     require(isinstance(binding['problem_id'], str)
-            and re.fullmatch(r'[a-z0-9][a-z0-9_]{0,127}', binding['problem_id']) is not None)
+            and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}', binding['problem_id']) is not None)
 
 
 def validate_policy(policy):
@@ -132,7 +132,6 @@ def validate_policy(policy):
         values = policy[field]
         require(isinstance(values, list) and len(values) <= 256)
         require(all(isinstance(v, str) and 0 < len(v) <= 512 and '\0' not in v for v in values))
-        require(len(set(values)) == len(values))
     require(bool(policy['declarations']))
     tools = policy['tools']
     require(isinstance(tools, dict) and set(tools) == TOOL_NAMES)
