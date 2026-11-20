@@ -27,7 +27,8 @@ _SPEC.loader.exec_module(stock)
 CONTROL = Path('/run/lean-eval')
 INSTALL = Path('/opt/lean-eval')
 TRUSTED_FILES = ('Challenge.lean', 'Solution.lean', 'WorkspaceTest.lean', 'config.json', 'lakefile.toml',
-                 'lake-manifest.json', 'lean-toolchain', '.lake/build/bin/workspace_test')
+                 'lake-manifest.json', 'lean-toolchain', 'README.md', 'holes.json', '.lake/build/bin/workspace_test')
+OPTIONAL_TRUSTED_FILES = ('ChallengeDeps.lean',)
 FRAME_LIMIT = 4096
 TEARDOWN_SECONDS = 5
 CUTOFF_RESERVE_MS = 2 * TEARDOWN_SECONDS * 1000 + 1001
@@ -84,7 +85,11 @@ def file_hash(path, maximum=256 * 1024 * 1024):
         os.close(descriptor)
 
 
-def workspace_manifest(project, *, consumed=None):
+def trusted_files(project):
+    return TRUSTED_FILES + tuple(name for name in OPTIONAL_TRUSTED_FILES if (Path(project) / name).exists())
+
+
+def workspace_manifest(project, *, consumed=None, forbidden_roots=()):
     """Commit all prepared non-Source state, including cache/dependency bytes.
 
     The qualified preparer must establish its pristine origin; hashing an
@@ -92,7 +97,7 @@ def workspace_manifest(project, *, consumed=None):
     Submission overlay grammar and has a separate byte commitment.
     """
     project = stock.absolute(str(project))
-    allowed = {name for name in TRUSTED_FILES if '/' not in name} | {'.lake', 'Submission.lean', 'Submission', CONSUMED}
+    allowed = {name for name in TRUSTED_FILES if '/' not in name} | set(OPTIONAL_TRUSTED_FILES) | {'.lake', 'Submission.lean', 'Submission', CONSUMED}
     require({path.name for path in project.iterdir()} <= allowed)
     marker = project / CONSUMED
     if consumed is None:
@@ -107,10 +112,18 @@ def workspace_manifest(project, *, consumed=None):
         info = path.lstat()
         is_source = relative == 'Submission.lean' or relative.startswith('Submission/')
         if stat.S_ISLNK(info.st_mode):
-            # Shared package aliases are trusted preparer inputs, never Source.
-            require(not is_source and relative.startswith('.lake/packages/'))
-            target = path.resolve(strict=True)
-            require(not target.is_relative_to(project) and target.is_dir())
+            # These include the original helper's direct packages alias and
+            # Lean Pool's individual source/config-file aliases, never Source.
+            require(not is_source and (relative == '.lake/packages' or relative.startswith('.lake/packages/')))
+            try:
+                target = path.resolve(strict=True)
+            except (OSError, RuntimeError):
+                raise Invalid('invalid prepared dependency alias') from None
+            require(not target.is_relative_to(project) and not project.is_relative_to(target)
+                    and (target.is_dir() or target.is_file())
+                    and (relative != '.lake/packages' or target.is_dir())
+                    and all(not target.is_relative_to(Path(root)) and not Path(root).is_relative_to(target)
+                            for root in forbidden_roots))
             trusted.update(stock.canonical([relative, 'link', str(target)]) + b'\n')
             walk(target, relative, ancestors)
         elif stat.S_ISDIR(info.st_mode):
@@ -130,7 +143,7 @@ def workspace_manifest(project, *, consumed=None):
         if child.name != CONSUMED:
             walk(child, child.name, set())
     require((project / 'Submission.lean').is_file())
-    return {'schema_version': 2, 'files': {name: file_hash(project / name) for name in TRUSTED_FILES},
+    return {'schema_version': 2, 'files': {name: file_hash(project / name) for name in trusted_files(project)},
             'prepared_tree_sha256': trusted.hexdigest(), 'source_sha256': source.hexdigest()}
 
 
@@ -191,7 +204,7 @@ def context_from_request(request, policy, *, benchmark_files, authority_raw,
     return context
 
 
-def validate_context(context, policy, *, consumed=None, installed=False):
+def validate_context(context, policy, *, consumed=None, installed=False, control=CONTROL):
     stock.validate_policy(policy)
     require(policy['challenge_module'] == 'Challenge' and policy['solution_module'] == 'Solution')
     require(isinstance(context, dict) and set(context) == {'schema_version', 'binding', 'request_sha256',
@@ -230,7 +243,8 @@ def validate_context(context, policy, *, consumed=None, installed=False):
                 and not path.is_relative_to(Path(policy['project']))
                 and not path.is_relative_to(Path(policy['temporary_directory'])))
     require(not Path(policy['project']).is_relative_to(Path(policy['lean_prefix'])))
-    require(context['workspace_manifest'] == workspace_manifest(policy['project'], consumed=consumed))
+    require(context['workspace_manifest'] == workspace_manifest(policy['project'], consumed=consumed,
+            forbidden_roots=(policy['temporary_directory'], control)))
     require(context['policy_template_sha256'] == policy_template_digest(policy))
     require(context['lean_sha256'] == file_hash(Path(policy['lean_prefix']) / 'bin/lean')['sha256'])
     require(isinstance(context['interpreter'], dict) and set(context['interpreter']) == {'path', 'sha256'})
@@ -411,7 +425,7 @@ def outer_command(policy, control, files, info_fd, status_fd, go_fd, python):
         '--bind', policy['project'], policy['project'],
         '--bind', policy['temporary_directory'], policy['temporary_directory'],
         '--ro-bind', policy['lean_prefix'], policy['lean_prefix']]
-    for name in TRUSTED_FILES:
+    for name in trusted_files(policy['project']):
         path = str(Path(policy['project']) / name)
         command += ['--ro-bind', path, path]
     # Only these immutable instrumentation files are overlaid at their fixed
@@ -445,14 +459,14 @@ def supervise(policy_template, context_template, *, control=CONTROL, python='/us
 
 def _supervise(policy_template, context_template, *, control, python, files, active):
     """Run one original per-problem driver. Never activates request/profile3."""
-    validate_context(context_template, policy_template)
+    control = stock.absolute(str(control))
+    validate_context(context_template, policy_template, control=control)
     selected_files = runtime_files() if files is None else files
     require(len(selected_files) == len(context_template['instrumentation']))
     require(context_template['instrumentation'] == instrumentation_commitments(selected_files))
     require(str(Path(python).resolve(strict=True)) == context_template['interpreter']['path'])
     if files is None:
         require(set(context_template['instrumentation']) == {str(target) for target in runtime_files().values()})
-    control = stock.absolute(str(control))
     stock.secure_directory(control)
     require({path.name for path in control.iterdir()} <= {'stock-supervisor-input.json'})
     require(not control.is_relative_to(Path(policy_template['project']))

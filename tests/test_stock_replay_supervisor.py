@@ -33,6 +33,8 @@ class Fixture(Context):
         super().__init__(root, real=real, codes=codes)
         (self.project / 'WorkspaceTest.lean').write_bytes(ORIGINAL.read_bytes())
         (self.project / 'Challenge.lean').write_text('-- synthetic owner fixture\n')
+        (self.project / 'README.md').write_text('# Synthetic supervisor fault fixture\n')
+        (self.project / 'holes.json').write_text('{}\n')
         (self.project / 'Solution.lean').write_text('-- trusted generated wrapper fixture\n')
         (self.project / 'Submission.lean').write_text('-- untrusted fixture input\n')
         (self.prefix / 'bin/lean').write_text('#!/bin/sh\nexit 0\n')
@@ -120,6 +122,57 @@ class StockSupervisorTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_actual_share_packages_layouts_are_committed_and_validated(self):
+        from evaluate_submission import _share_packages
+        for lean_pool in (False, True):
+            with self.subTest(lean_pool=lean_pool), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                root = Path(directory)
+                f = Fixture(root)
+                shared = root / 'shared-packages'
+                package = shared / ('lean-pool' if lean_pool else 'mathlib')
+                package.mkdir(parents=True)
+                (package / 'lakefile.toml').write_text('name = "lean-pool"\n')
+                (package / 'lake-manifest.json').write_text('{}\n')
+                (package / 'Library.lean').write_text('-- trusted pinned dependency\n')
+                self.assertIsNone(_share_packages(f.project, shared))
+                f.context = context(f.policy, files=f.files)
+                supervisor.validate_context(f.context, f.policy, control=f.control)
+                alias = f.project / '.lake/packages'
+                self.assertEqual(alias.is_symlink(), not lean_pool)
+                if lean_pool:
+                    self.assertTrue((alias / 'lean-pool/lakefile.toml').is_symlink())
+                    self.assertFalse((alias / 'lean-pool/.lake').is_symlink())
+                    self.assertTrue((f.project / '.lake/package-overrides.json').is_file())
+                (package / 'Library.lean').write_text('-- changed pinned dependency\n')
+                with self.assertRaises(supervisor.Invalid):
+                    supervisor.validate_context(f.context, f.policy, control=f.control)
+
+    def test_dependency_aliases_refuse_source_project_control_temporary_and_cycles(self):
+        for destination in ('source', 'project', 'control', 'temporary', 'cycle', 'top_file'):
+            with self.subTest(destination=destination), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                root = Path(directory)
+                f = Fixture(root)
+                alias = f.project / '.lake/packages'
+                if destination == 'source':
+                    (f.project / 'Submission.lean').unlink()
+                    alias = f.project / 'Submission.lean'
+                    target = f.prefix / 'bin/lean'
+                elif destination == 'project':
+                    target = f.project
+                elif destination == 'control':
+                    target = f.control
+                elif destination == 'temporary':
+                    target = f.temporary
+                elif destination == 'top_file':
+                    target = f.prefix / 'bin/lean'
+                else:
+                    target = root / 'shared-packages'
+                    target.mkdir()
+                    (target / 'cycle').symlink_to(target, target_is_directory=True)
+                alias.symlink_to(target, target_is_directory=target.is_dir())
+                with self.assertRaises(supervisor.Invalid):
+                    supervisor.workspace_manifest(f.project, forbidden_roots=(f.temporary, f.control))
 
     def test_buffered_real_completion_is_judged_by_trusted_finish_not_delivery(self):
         for over_budget in (False, True):
@@ -549,6 +602,57 @@ if sys.argv[1:]==['env']:
 
 
 class SupervisorSourceTests(unittest.TestCase):
+    def test_actual_original_generated_filesets_are_retained_and_bound(self):
+        fixture = json.loads((ROOT / 'tests/fixtures/stock-original-workspace-filesets-v1.json').read_bytes())
+        self.assertEqual(fixture['commit'], '8955681b9914d7ebc7d286414843021b7d6c9de1')
+        def tree_sha(entries):
+            children = {}
+            for path, mode, blob in entries:
+                first, separator, remaining = path.partition('/')
+                if separator:
+                    children.setdefault(first, []).append((remaining, mode, blob))
+                else:
+                    children[first] = (mode, blob)
+            records = []
+            for name, value in children.items():
+                directory = isinstance(value, list)
+                mode, blob = ('40000', tree_sha(value)) if directory else value
+                records.append(((name + ('/' if directory else '')).encode(),
+                    mode.encode() + b' ' + name.encode() + b'\0' + bytes.fromhex(blob)))
+            raw = b''.join(value for _, value in sorted(records))
+            return hashlib.sha1(b'tree ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+        for row in fixture['workspaces']:
+            with self.subTest(problem=row['problem_id']), tempfile.TemporaryDirectory() as directory:
+                f = Fixture(Path(directory), real=False)
+                entries = []
+                for item in row['files']:
+                    raw = item['utf8'].encode()
+                    blob = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+                    self.assertEqual(blob, item['git_blob'])
+                    self.assertEqual(hashlib.sha256(raw).hexdigest(), item['sha256'])
+                    entries.append((item['path'], item['mode'], blob))
+                    path = f.project / item['path']
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(raw)
+                    path.chmod(int(item['mode'][-3:], 8))
+                self.assertEqual(tree_sha(entries), row['git_tree'])
+                manifest = supervisor.workspace_manifest(f.project)
+                expected_deps = row['problem_id'] == 'H1_not_closedComplemented'
+                self.assertEqual('ChallengeDeps.lean' in manifest['files'], expected_deps)
+                for name in ('README.md', 'holes.json') + (('ChallengeDeps.lean',) if expected_deps else ()):
+                    original = (f.project / name).read_bytes()
+                    self.assertEqual(manifest['files'][name]['sha256'], hashlib.sha256(original).hexdigest())
+                    (f.project / name).write_bytes(original + b'\n')
+                    self.assertNotEqual(supervisor.workspace_manifest(f.project), manifest)
+                    (f.project / name).write_bytes(original)
+                self.assertEqual(supervisor.workspace_manifest(f.project), manifest)
+                for unknown in ('lakefile.lean', 'extra-config.toml'):
+                    path = f.project / unknown
+                    path.write_text('unexpected executable configuration\n')
+                    with self.assertRaises(supervisor.Invalid):
+                        supervisor.workspace_manifest(f.project)
+                    path.unlink()
+
     def test_info_pipe_accumulates_fragments_through_eof_and_refuses_truncation(self):
         for pieces, valid in (([b'{"child-', b'pid":42}'], True), ([b'{"child-'], False), ([b'x' * 4097], False)):
             reader, writer = os.pipe2(os.O_CLOEXEC)
