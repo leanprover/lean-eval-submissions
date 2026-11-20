@@ -1,0 +1,128 @@
+name: Finite PUBLIC runtime guard staging
+
+# Remove after the bounded compatibility campaign. No State or image writes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finite-public-runtime-guard-staging
+  cancel-in-progress: false
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 70
+    environment: replay-staging
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      max-parallel: 1
+      fail-fast: true
+      matrix:
+        case: [a-match, a-mismatch, b-match, b-mismatch]
+    steps:
+      - name: Require an immutable protected dispatch tag
+        env:
+          EXACT_REF: refs/tags/lean-eval-dispatch/${{ github.sha }}
+        run: test "$GITHUB_REF" = "$EXACT_REF"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          python-version: '3.11.18'
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install pinned controller dependencies and disposable age tooling
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          npm --prefix server ci
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 120 --retry 2 \
+            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/public-guard-age.tar.gz"
+          echo "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  $RUNNER_TEMP/public-guard-age.tar.gz" \
+            | sha256sum --check --strict
+          tar --extract --gzip --file "$RUNNER_TEMP/public-guard-age.tar.gz" --directory "$RUNNER_TEMP"
+          test "$("$RUNNER_TEMP/age/age" --version)" = v1.3.1
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Prepare the fixed public fixture without deployment authority
+        timeout-minutes: 5
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python scripts/public_runtime_guard_staging.py prepare \
+            --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
+
+      - name: Deploy only absent case resources and verify exact ownership
+        timeout-minutes: 27
+        env:
+          CASE: ${{ matrix.case }}
+          CLOUDFLARE_ACCOUNT_ID: a46b90978a1c29cc4795f30677e7e4b8
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python scripts/public_runtime_guard_staging.py deploy \
+            --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
+
+      - name: Observe the host and execute the fixed guarded case
+        timeout-minutes: 20
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${STATE_WRITE_KEY:-}"
+          python scripts/public_runtime_guard_staging.py run \
+            --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
+
+      - name: Retire only owned namespaces and prove resource absence
+        if: always()
+        timeout-minutes: 6
+        env:
+          CASE: ${{ matrix.case }}
+          CLOUDFLARE_ACCOUNT_ID: a46b90978a1c29cc4795f30677e7e4b8
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/public-guard-$CASE/receipt.json" ]; then
+            python scripts/public_runtime_guard_staging.py cleanup \
+              --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
+          fi
+
+      - name: Retain only the source-free target and cleanup receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: public-guard-${{ matrix.case }}-receipt
+          path: ${{ runner.temp }}/public-guard-${{ matrix.case }}/receipt.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -269,6 +269,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",
                 "public-replay-github-evidence.yml",
+                "public-runtime-guard-staging.yml",
                 "server-archive.yml",
                 "set-staging-intake.yml",
                 "submission.yml",
@@ -362,7 +363,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             promoted_runtime_scripts,
-            offline_evidence_scripts
+            (offline_evidence_scripts | {"public_runtime_guard_staging.py"})
             - {
                 "classify_historical_private_archives.py",
                 "historical_replay_controller.py",
