@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
+import errno
 import hashlib
 import io
 import json
@@ -12,11 +13,14 @@ import os
 import pathlib
 import re
 import secrets
+import socket
+import ssl
 import subprocess
 import sys
 import tarfile
 import time
 import uuid
+import urllib.error
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPT_DIRECTORY) not in sys.path:
@@ -183,11 +187,54 @@ def wait_applications(deadline, config, namespace_id):
             time.sleep(remaining_timeout(deadline, 3))
 
 
-def http(url, body=None, oidc=False, timeout_budget=None):
+def transport_failure(error):
+    """Classify a bounded exception graph without copying messages or context."""
+    pending, seen = [error], set()
+    for _ in range(8):
+        if not pending:
+            break
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, TimeoutError) or isinstance(current, OSError) and current.errno == errno.ETIMEDOUT:
+            return {"cause": "timeout", "timed_out": True}
+        if isinstance(current, ConnectionResetError) or isinstance(current, OSError) and current.errno == errno.ECONNRESET:
+            return {"cause": "connection_reset", "timed_out": False}
+        if isinstance(current, socket.gaierror):
+            return {"cause": "dns", "timed_out": False}
+        if isinstance(current, ssl.SSLError):
+            return {"cause": "tls", "timed_out": False}
+        if isinstance(current, BaseException) and isinstance(current.__cause__, BaseException):
+            pending.append(current.__cause__)
+        if isinstance(current, urllib.error.URLError) and isinstance(current.reason, BaseException):
+            pending.append(current.reason)
+    return {"cause": "unknown_transport", "timed_out": False}
+
+
+def diagnostic_request(method, url, headers, body, timeout, diagnostics, stage):
+    if diagnostics is None:
+        return request_http(method, url, headers, body, timeout)
+    started = time.monotonic()
+    checkpoint = {"stage": stage, "timeout_seconds": timeout}
+    diagnostics({**checkpoint, "state": "pending"})
+    try:
+        response = request_http(method, url, headers, body, timeout)
+    except TransportError as error:
+        diagnostics({**checkpoint, "state": "failed",
+                     "elapsed_ms": max(0, int((time.monotonic() - started) * 1000)),
+                     **transport_failure(error)})
+        raise
+    diagnostics({**checkpoint, "state": "responded",
+                 "elapsed_ms": max(0, int((time.monotonic() - started) * 1000))})
+    return response
+
+
+def http(url, body=None, oidc=False, timeout_budget=None, diagnostics=None):
     headers = {}
     if oidc:
         token_url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=lean-eval-replay-staging"
-        token = request_http("GET", token_url, {"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]}, None, 30)
+        token = diagnostic_request("GET", token_url, {"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]}, None, 30, diagnostics, "oidc_mint")
         if token.status in (429, 500, 502, 503, 504):
             raise TransientRpcError("staging OIDC mint temporarily unavailable")
         if token.status != 200:
@@ -199,7 +246,7 @@ def http(url, body=None, oidc=False, timeout_budget=None):
     timeout = 30 if body is None else 300 if url.endswith(("/staging-acceptance", "/historical-public-replay")) else 60
     if timeout_budget is not None:
         timeout = min(timeout, timeout_budget)
-    r = request_http("GET" if body is None else "POST", url, headers, raw, timeout)
+    r = diagnostic_request("GET" if body is None else "POST", url, headers, raw, timeout, diagnostics, "endpoint_request")
     try:
         return r.status, json.loads(r.body)
     except (ValueError, UnicodeError):
@@ -359,8 +406,21 @@ def run_case(case, directory):
     receipt["phase"] = "runtime-observation"
     receipt["outcome"] = "incomplete"
     receipt.pop("runtime_readiness", None)
+    receipt["marker_binding"] = {
+        "schema_version": 1, "phase": "runtime-observation",
+        **{key: observation[key] for key in ("request_id", "runner_nonce", "archive_ciphertext_sha256", "marker_sha256")},
+        "worker": config["name"], "worker_commit": receipt["commit"],
+        "worker_version": receipt["worker_version"],
+    }
+    receipt["marker_http"] = {}
     save(directory / "receipt.json", receipt)
-    status, evidence = http(url + "/api/v1/staging-acceptance", observation, True)
+
+    def record_marker_http(checkpoint):
+        receipt["marker_http"][checkpoint["stage"]] = checkpoint
+        save(directory / "receipt.json", receipt)
+
+    status, evidence = http(url + "/api/v1/staging-acceptance", observation, True,
+                            diagnostics=record_marker_http)
     refusal = {401: {"error": "unauthorized"}, 400: {"error": "invalid_request"},
                503: {"error": "staging_acceptance_disabled"}}
     if status in refusal and evidence == refusal[status]:

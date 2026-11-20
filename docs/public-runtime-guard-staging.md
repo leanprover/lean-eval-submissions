@@ -125,6 +125,19 @@ setup/tail. Four serial cases cost at most 560 job-minutes, with one Sandbox at
 a time. Ambiguous transport stays distinct from typed pre-Sandbox refusals;
 only exact known 400/401/503 refusal bodies establish that no Sandbox began.
 Tool diagnostics are bounded and redact credentials; requests/keys are not logged.
+Before observation, the receipt records only the marker request ID, random nonce,
+ciphertext and marker hashes, and the owned Worker commit/version. It records the
+OIDC mint and marker endpoint request separately as pending before each call,
+then responded or failed with elapsed milliseconds and the configured limit.
+Transport failures use a fixed category (timeout, connection reset, DNS, TLS, or
+unknown transport) from at most eight exception nodes, including URL-error
+reasons. The `timed_out` flag means a timeout was identified; false with unknown
+transport does not rule one out. No exception messages, URL/query, headers,
+request bodies, synthetic age identity or OIDC credentials enter these fields.
+A responded checkpoint means an HTTP response arrived, not marker success.
+These client checkpoints cannot locate a server startup, command or destruction
+stall, establish provider capacity, or justify a rerun. The single marker POST,
+300-second limit, frozen-host checks and destruction requirement are unchanged.
 Health, OIDC mint and status transport failures share the same two-failure poll
 allowance. A terminal poll failure records incomplete. Deployment records bounded
 read-only ownership before execution, so marker failure retains IDs; an unrecorded
