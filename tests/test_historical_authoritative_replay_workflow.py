@@ -82,8 +82,8 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
 
     def test_started_append_rebinds_only_after_validated_state_and_retries_cas(self) -> None:
         started = WORKFLOW.split(
-            "Append replay.started before fetching public source", 1
-        )[1].split("Fetch exact public source", 1)[0]
+            "Append replay.started only after public preparation and capacity checks", 1
+        )[1].split("Invoke the exact executor", 1)[0]
         self.assertIn("for cas_attempt in $(seq 1 4)", started)
         self.assertIn("git -C state fetch --no-tags origin", started)
         self.assertIn("git -C state merge --ff-only", started)
@@ -99,6 +99,40 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn('--expected-head "$expected"', started)
         self.assertIn('test "$published" = true', started)
         self.assertNotIn("EXPECTED_STATE_HEAD", started)
+
+    def test_public_preparation_is_bounded_before_any_started_append(self) -> None:
+        prepare = WORKFLOW.split(
+            "Fetch exact public source and benchmark and build the runner handoff", 1
+        )[1].split("Append replay.started only after public preparation and capacity checks", 1)[0]
+        started = WORKFLOW.split(
+            "Append replay.started only after public preparation and capacity checks", 1
+        )[1].split("Invoke the exact executor", 1)[0]
+        self.assertIn("timeout-minutes: 5", prepare)
+        self.assertIn("steps.reserve.outputs.reserved == 'true'", prepare)
+        self.assertIn("echo 'ready=true'", prepare)
+        self.assertNotIn("PRODUCTION_STATE_WRITE_KEY", prepare)
+        self.assertIn('test -z "${STATE_WRITE_KEY:-}"', prepare)
+        self.assertIn("steps.prepare.outputs.ready == 'true'", started)
+        self.assertIn("steps.prepare.outcome == 'failure'", started)
+        self.assertIn("continue-on-error: true", prepare)
+        self.assertLess(WORKFLOW.index("historical_public_runner.py prepare"),
+                        WORKFLOW.index("state-event started"))
+        self.assertNotIn("actions/upload-artifact", WORKFLOW)
+
+    def test_capacity_is_checked_after_each_cas_refresh_and_before_executor_post(self) -> None:
+        started = WORKFLOW.split(
+            "Append replay.started only after public preparation and capacity checks", 1
+        )[1].split("Invoke the exact executor", 1)[0]
+        self.assertLess(started.index("refresh-rebind-plan"), started.index("--phase before-start"))
+        self.assertLess(started.index("--phase before-start"),
+                        started.index("if state_head=$(scripts/publish_replay_state_event"))
+        self.assertGreater(started.index("--phase before-start"),
+                           started.index("for cas_attempt in $(seq 1 4)"))
+        executor = WORKFLOW.split("Invoke the exact executor", 1)[1]
+        self.assertLess(executor.index("--phase before-execute"), executor.index("executor-start-attempted"))
+        self.assertLess(executor.index("--phase before-execute"), executor.index("start_status=$(timeout"))
+        self.assertIn("+ 20100", executor)
+        self.assertIn("+ 20880", executor)
 
     def test_stale_recovery_is_gated_by_exact_durable_destruction(self) -> None:
         preflight = WORKFLOW.split(
@@ -167,10 +201,10 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         )[1].split("Require the exact enabled historical executor", 1)[0]
         reservation = WORKFLOW.split(
             "Reserve exact cleanup identity before State can become running", 1
-        )[1].split("Append replay.started before fetching public source", 1)[0]
-        started = WORKFLOW.split(
-            "Append replay.started before fetching public source", 1
         )[1].split("Fetch exact public source", 1)[0]
+        started = WORKFLOW.split(
+            "Append replay.started only after public preparation and capacity checks", 1
+        )[1].split("Invoke the exact executor", 1)[0]
         executor = WORKFLOW.split(
             "Invoke the exact executor without Cloudflare or State write authority", 1
         )[1].split("Append the exact reported historical terminal outcome", 1)[0]
@@ -187,7 +221,6 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("AWS_", WORKFLOW)
 
     def test_failure_and_cancellation_paths_are_bounded(self) -> None:
-        self.assertIn("source_fetch_failed", WORKFLOW)
         self.assertIn("runner_start_failed", WORKFLOW)
         self.assertIn("runner_lost", WORKFLOW)
         self.assertIn("verdict_invalid", WORKFLOW)
@@ -270,7 +303,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         )
         runner_lost = WORKFLOW.index('echo runner_lost > "$RUNNER_TEMP/failure-reason"')
         attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         status_accepted = WORKFLOW.index('test "$start_status" = 202')
         receipt_validated = WORKFLOW.index(
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, '
@@ -286,7 +319,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
 
     def test_lost_start_response_requires_cleanup_before_state_failure(self) -> None:
         attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         cleanup = WORKFLOW.index(
             "Confirm exact cleanup after any ambiguous executor start"
         )
@@ -307,7 +340,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
     def test_reservation_is_bounded_before_state_and_source(self) -> None:
         reservation = WORKFLOW.split(
             "Reserve exact cleanup identity before State can become running", 1
-        )[1].split("Append replay.started before fetching public source", 1)[0]
+        )[1].split("Fetch exact public source", 1)[0]
         self.assertIn("scripts/reserve_historical_public_cleanup.py", reservation)
         self.assertIn("--request", reservation)
         self.assertIn("--plan", reservation)
@@ -322,7 +355,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", reservation)
 
     def test_timed_out_or_rejected_start_cannot_publish_without_cleanup(self) -> None:
-        start_request = WORKFLOW.index("start_status=$(curl")
+        start_request = WORKFLOW.index("start_status=$(timeout")
         status_rejected = WORKFLOW.index('test "$start_status" = 202')
         cleanup = WORKFLOW.index(
             "Confirm exact cleanup after any ambiguous executor start"

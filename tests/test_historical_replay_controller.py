@@ -1062,6 +1062,43 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
         self.assertEqual(binding["transport"]["status"], "ready")
         self.assertEqual(binding["attempt"], 1)
 
+    def test_prepared_handoff_survives_only_unrelated_state_rebinding(self) -> None:
+        archive = b"public source prepared before replay.started"
+        handoff = self.fixture.handoff(archive)
+        original = self.fixture.plan()
+        queue = copy.deepcopy(self.fixture.queue)
+        queue["source_event_count"] += 1
+        queue["source_digest"] = "f" * 64
+        rebound = rebind_execution_plan(
+            original, queue, self.fixture.authority, self.fixture.authority_raw,
+            self.fixture.profile, self.fixture.profile_raw,
+            self.fixture.matrix, self.fixture.matrix_raw,
+            self.fixture.contract, self.fixture.contract_raw,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "source.tar.gz"
+            path.write_bytes(archive)
+            request = build_executor_request(
+                rebound, handoff, path, self.fixture.matrix,
+                self.fixture.contract, "4" * 64,
+            )
+        started = started_event(
+            rebound, queue, "2026-08-25T01:00:00.004Z", random_bytes=b"\x01" * 10,
+        )
+        self.assertEqual(validate_executor_request(rebound, started, request), request)
+        self.assertEqual(rebound["task"], original["task"])
+        self.assertEqual(request["source_archive_sha256"], hashlib.sha256(archive).hexdigest())
+        changed = copy.deepcopy(queue)
+        changed["tasks"][0]["attempt"] = 1
+        changed["tasks"][0].update(status="failed", reason_code="runner_lost", retryable=True)
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "task changed while refreshing"):
+            rebind_execution_plan(
+                original, changed, self.fixture.authority, self.fixture.authority_raw,
+                self.fixture.profile, self.fixture.profile_raw,
+                self.fixture.matrix, self.fixture.matrix_raw,
+                self.fixture.contract, self.fixture.contract_raw,
+            )
+
     def test_executor_envelope_binds_attempt_runtime_and_terminal_event(self) -> None:
         archive = b"public source archive fixture"
         plan = self.fixture.plan()
