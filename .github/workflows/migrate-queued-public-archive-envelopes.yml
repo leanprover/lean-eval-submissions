@@ -1,0 +1,500 @@
+name: Migrate four queued public archive envelopes
+run-name: Four public archive migration ${{ inputs.operation_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Unique operator correlation ID (archive-migration- plus 32 lowercase hex)
+        required: true
+        type: string
+      audit_commit:
+        description: Exact reviewed lean-eval-audit main commit
+        required: true
+        type: string
+      expected_inventory_digest:
+        description: Freshly reviewed migration inventory digest
+        required: true
+        type: string
+      expected_migration_count:
+        description: Exact number of unique reviewed public schema-1 archives (4)
+        required: true
+        type: string
+      expected_workflow_commit:
+        description: Exact environment-bound reviewed implementation commit
+        required: true
+        type: string
+      apply:
+        description: Build and push the isolated migration review branch
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: For apply, enter stage-envelope-migration
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lean-eval-historical-archive-envelope-migration
+  cancel-in-progress: false
+
+jobs:
+  authorize-manual:
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    timeout-minutes: 1
+    steps:
+      - name: Require an upstream protected-main dispatch
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_PROTECTED: ${{ github.ref_protected }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
+          GH_TOKEN: ${{ github.token }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          [[ "$OPERATION_ID" =~ ^archive-migration-[0-9a-f]{32}$ ]]
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+          test "$EVENT_REF_PROTECTED" = true
+          [[ "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .protected)" = true
+
+  migrate:
+    needs: authorize-manual
+    environment: archive-migration-production
+    runs-on: ubuntu-26.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Bind the environment-reviewed implementation and exact event commit
+        env:
+          EVENT_SHA: ${{ github.sha }}
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_IMPLEMENTATION_COMMIT: ${{ vars.REVIEWED_IMPLEMENTATION_COMMIT }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_WORKFLOW_COMMIT" = "$REVIEWED_IMPLEMENTATION_COMMIT"
+          if [ "$EVENT_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
+            comparison=$(gh api \
+              "repos/leanprover/lean-eval-submissions/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$EVENT_SHA")
+            jq -e \
+              --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
+              --arg head "$EVENT_SHA" '
+                .status == "ahead" and
+                .base_commit.sha == $base and
+                .merge_base_commit.sha == $base and
+                .head_commit.sha == $head and
+                .ahead_by == .total_commits and
+                .ahead_by == (.commits | length) and
+                (.files | length) > 0 and
+                (.files | length) < 300 and
+                all(.files[];
+                  (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                  (.status == "added" or .status == "modified") and
+                  (has("previous_filename") | not))
+              ' <<< "$comparison" >/dev/null
+          fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.18'
+
+      - name: Check out the exact private audit source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.json
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.tar.age
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.json
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.tar.age
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.json
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.tar.age
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.json
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.tar.age
+            /audit/2026/08/mlgraham-1128-2d317a57.json
+            /audit/2026/08/mlgraham-1128-2d317a57.tar.age
+            /audit/2026/08/mlgraham-1139-c81843f5.json
+            /audit/2026/08/mlgraham-1139-c81843f5.tar.age
+            /audit/2026/08/mlgraham-1156-d561d416.json
+            /audit/2026/08/mlgraham-1156-d561d416.tar.age
+            /audit/2026/08/savarin-1080-ab459a1e.json
+            /audit/2026/08/savarin-1080-ab459a1e.tar.age
+          ref: ${{ inputs.audit_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+
+      - name: Prove the finite branch and non-overlap before dependency installation
+        env:
+          AUDIT_COMMIT: ${{ inputs.audit_commit }}
+          AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+        run: |
+          set -euo pipefail
+          test "$AUDIT_COMMIT" = f3df4480d48cf5024602c15d656e4469fa774cc9
+          plan=evidence/historical-replay/archive-migration-plans/0e86c85775bbe111e3e8b8adda4ac987b6f97688149e2e01df27d9256e376378.json
+          test "$(sha256sum "$plan" | cut -d' ' -f1)" = \
+            0e86c85775bbe111e3e8b8adda4ac987b6f97688149e2e01df27d9256e376378
+          read_key=/dev/shm/lean-eval-audit-migration-read-key
+          known_hosts="$RUNNER_TEMP/lean-eval-audit-known-hosts"
+          cleanup_read_key() {
+            rm -f "$read_key" "$known_hosts"
+            unset AUDIT_MIGRATION_READ_KEY GIT_SSH_COMMAND
+          }
+          trap cleanup_read_key EXIT
+          test -n "$AUDIT_MIGRATION_READ_KEY"
+          umask 077
+          printf '%s\n' "$AUDIT_MIGRATION_READ_KEY" > "$read_key"
+          unset AUDIT_MIGRATION_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $read_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15" \
+            python scripts/migrate_archive_envelopes.py preflight-audit \
+              --audit-root audit --source-commit "$AUDIT_COMMIT" --plan "$plan"
+          cleanup_read_key
+          trap - EXIT
+
+      - name: Install the exact source-only original identity validator
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Freeze and verify the complete inventory
+        id: inventory
+        env:
+          AUDIT_COMMIT: ${{ inputs.audit_commit }}
+          EXPECTED_DIGEST: ${{ inputs.expected_inventory_digest }}
+          EXPECTED_COUNT: ${{ inputs.expected_migration_count }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          [[ "$AUDIT_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
+          test "$(git -C audit rev-parse HEAD)" = "$AUDIT_COMMIT"
+          test "$AUDIT_COMMIT" = f3df4480d48cf5024602c15d656e4469fa774cc9
+          test "$EXPECTED_DIGEST" = 260dd44bab488046530ef5bb8ae647c2d38e6ec98db1402ceb70a96d848a18ff
+          test "$EXPECTED_COUNT" = 4
+          python scripts/migrate_queued_public_archive_envelopes.py inventory \
+            --repository-root "$GITHUB_WORKSPACE" --audit-root audit \
+            --source-root "$RUNNER_TEMP/finite-public-source" \
+            --output "$RUNNER_TEMP/archive-migration-plan.json"
+          actual_digest=$(jq -r .inventory_digest "$RUNNER_TEMP/archive-migration-plan.json")
+          actual_count=$(jq -r .migration_count "$RUNNER_TEMP/archive-migration-plan.json")
+          test "$actual_digest" = "$EXPECTED_DIGEST"
+          test "$actual_count" = "$EXPECTED_COUNT"
+          test "$actual_count" = 4
+          {
+            echo "digest=$actual_digest"
+            echo "count=$actual_count"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Require explicit apply confirmation
+        if: inputs.apply == true
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = stage-envelope-migration
+
+      - name: Prove a fresh review branch and non-overlapping audit main
+        if: inputs.apply == true
+        env:
+          AUDIT_COMMIT: ${{ inputs.audit_commit }}
+          AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          read_key=/dev/shm/lean-eval-audit-migration-read-key
+          known_hosts="$RUNNER_TEMP/lean-eval-audit-known-hosts"
+          cleanup_read_key() {
+            rm -f "$read_key" "$known_hosts"
+            unset AUDIT_MIGRATION_READ_KEY GIT_SSH_COMMAND
+          }
+          trap cleanup_read_key EXIT
+          test -n "$AUDIT_MIGRATION_READ_KEY"
+          umask 077
+          printf '%s\n' "$AUDIT_MIGRATION_READ_KEY" > "$read_key"
+          unset AUDIT_MIGRATION_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $read_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15" \
+            python scripts/migrate_queued_public_archive_envelopes.py preflight-audit \
+              --repository-root "$GITHUB_WORKSPACE" --audit-root audit \
+              --plan "$RUNNER_TEMP/archive-migration-plan.json"
+          cleanup_read_key
+          trap - EXIT
+
+      - name: Install hash-locked adapter dependencies
+        if: inputs.apply == true
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python -m pip install --disable-pip-version-check --require-hashes \
+            -r infrastructure/aws-key-adapter/requirements-workflow.txt
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        if: inputs.apply == true
+        with:
+          go-version-file: server/age-file-key/go.mod
+          cache-dependency-path: server/age-file-key/go.sum
+
+      - name: Build the pinned detached-header helper
+        if: inputs.apply == true
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          cd server/age-file-key
+          test "$(go list -m -f '{{.Version}}' filippo.io/age)" = v1.3.1
+          CGO_ENABLED=0 go build -mod=readonly -trimpath \
+            -o "$RUNNER_TEMP/age-file-key" .
+          test -x "$RUNNER_TEMP/age-file-key"
+
+      - name: Reprove the closed source selection before any AWS or identity authority
+        if: inputs.apply == true
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${LEGACY_ARCHIVE_IDENTITY:-}"
+          python scripts/migrate_queued_public_archive_envelopes.py verify-source \
+            --repository-root "$GITHUB_WORKSPACE" \
+            --source-root "$RUNNER_TEMP/finite-public-source" \
+            --plan "$RUNNER_TEMP/archive-migration-plan.json"
+
+      - name: Require the exact dedicated migration role
+        if: inputs.apply == true
+        env:
+          AWS_WRAP_ROLE_ARN: ${{ vars.AWS_WRAP_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test "$AWS_WRAP_ROLE_ARN" = \
+            arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production
+
+      - name: Assume only the production Encrypt role
+        if: inputs.apply == true
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_WRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: lean-eval-historical-envelope-migration
+          mask-aws-account-id: true
+
+      - name: Rewrap selected file keys and copy exact ciphertext bytes
+        if: inputs.apply == true
+        env:
+          LEGACY_ARCHIVE_IDENTITY: ${{ secrets.LEGACY_ARCHIVE_IDENTITY }}
+          LEAN_EVAL_KMS_KEY_ID: alias/lean-eval-archive-identities-production
+          LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rm -f /dev/shm/lean-eval-legacy-archive-identity
+            unset LEGACY_ARCHIVE_IDENTITY
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+            {
+              echo 'AWS_ACCESS_KEY_ID='
+              echo 'AWS_SECRET_ACCESS_KEY='
+              echo 'AWS_SESSION_TOKEN='
+            } >> "$GITHUB_ENV"
+          }
+          trap cleanup EXIT
+          test -n "$LEGACY_ARCHIVE_IDENTITY"
+          umask 077
+          printf '%s' "$LEGACY_ARCHIVE_IDENTITY" > \
+            /dev/shm/lean-eval-legacy-archive-identity
+          unset LEGACY_ARCHIVE_IDENTITY
+          test -s /dev/shm/lean-eval-legacy-archive-identity
+          output_root="$RUNNER_TEMP/migrated-audit"
+          jq -r '.entries[].source_path' "$RUNNER_TEMP/archive-migration-plan.json" \
+            | while IFS= read -r source_path; do
+                python scripts/migrate_queued_public_archive_envelopes.py migrate-one \
+                  --repository-root "$GITHUB_WORKSPACE" \
+                  --plan "$RUNNER_TEMP/archive-migration-plan.json" \
+                  --source-root "$RUNNER_TEMP/finite-public-source" \
+                  --output-root "$output_root" \
+                  --legacy-identity /dev/shm/lean-eval-legacy-archive-identity \
+                  --file-key-helper "$RUNNER_TEMP/age-file-key" \
+                  --adapter-executable scripts/aws_key_adapter.py \
+                  --source-path "$source_path"
+              done
+          cleanup
+          trap - EXIT
+          python scripts/migrate_queued_public_archive_envelopes.py validate-output \
+            --repository-root "$GITHUB_WORKSPACE" \
+            --plan "$RUNNER_TEMP/archive-migration-plan.json" \
+            --source-root "$RUNNER_TEMP/finite-public-source" \
+            --output-root "$output_root" \
+            --output "$RUNNER_TEMP/archive-migration-report.json"
+
+      - name: Prove legacy decrypt material and AWS session are gone before audit write authority
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        run: |
+          set -euo pipefail
+          refuse() {
+            printf 'authority boundary refused: %s\n' "$1" >&2
+            exit 1
+          }
+          rm -f /dev/shm/lean-eval-legacy-archive-identity
+          test ! -e /dev/shm/lean-eval-legacy-archive-identity || \
+            refuse 'legacy identity remains'
+          test -z "${AWS_ACCESS_KEY_ID:-}" || refuse 'AWS access key remains'
+          test -z "${AWS_SECRET_ACCESS_KEY:-}" || refuse 'AWS secret key remains'
+          test -z "${AWS_SESSION_TOKEN:-}" || refuse 'AWS session token remains'
+          test -s "$RUNNER_TEMP/archive-migration-report.json" || \
+            refuse 'validated migration report is absent'
+          rm -rf -- audit "$RUNNER_TEMP/finite-public-source"
+          test ! -e "$RUNNER_TEMP/finite-public-source"
+          test ! -e audit || refuse 'read-authority checkout remains'
+
+      - name: Mint audit-repository-only migration writer
+        if: inputs.apply == true
+        id: audit_token
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Re-check out the exact audit source with branch-staging authority
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.json
+            /archives/01/01a00e33-d100-71ae-8741-6f26172f3655.tar.age
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.json
+            /archives/01/01a01c7e-d408-704d-a72f-9c874a913259.tar.age
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.json
+            /archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.tar.age
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.json
+            /archives/01/01a01dbe-2620-7c59-8573-d8f932962912.tar.age
+            /audit/2026/08/mlgraham-1128-2d317a57.json
+            /audit/2026/08/mlgraham-1128-2d317a57.tar.age
+            /audit/2026/08/mlgraham-1139-c81843f5.json
+            /audit/2026/08/mlgraham-1139-c81843f5.tar.age
+            /audit/2026/08/mlgraham-1156-d561d416.json
+            /audit/2026/08/mlgraham-1156-d561d416.tar.age
+            /audit/2026/08/savarin-1080-ab459a1e.json
+            /audit/2026/08/savarin-1080-ab459a1e.tar.age
+          ref: ${{ inputs.audit_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ steps.audit_token.outputs.token }}
+
+      - name: Push only an isolated review branch
+        if: inputs.apply == true
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+          INVENTORY_DIGEST: ${{ steps.inventory.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cleanup_writer() {
+            unset AUDIT_TOKEN audit_token audit_basic_auth
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup_writer EXIT
+          test -n "$AUDIT_TOKEN"
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
+          git -C audit switch -c archive-file-key-rewrap-v1
+          jq -r '.entries[].source_path' "$RUNNER_TEMP/archive-migration-plan.json" \
+            | while IFS= read -r source_path; do
+                git -C audit rm --quiet -- \
+                  "$source_path" "${source_path%.tar.age}.json"
+              done
+          cp -a "$RUNNER_TEMP/migrated-audit/." audit/
+          git -C audit config user.name lean-eval-archiver
+          git -C audit config user.email lean-eval-archiver@users.noreply.github.com
+          git -C audit add .
+          git -C audit diff --cached --check
+          staged_tree=$(git -C audit write-tree)
+          before_count=$(python scripts/migrate_archive_envelopes.py \
+            count-archive-ciphertexts --audit-root audit \
+            --tree ${{ inputs.audit_commit }})
+          after_count=$(python scripts/migrate_archive_envelopes.py \
+            count-archive-ciphertexts --audit-root audit \
+            --tree "$staged_tree")
+          test "$after_count" = "$before_count"
+          git -C audit commit --quiet \
+            -m "migration: rewrap four queued public archive file keys"
+          audit_basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
+          unset audit_token
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $audit_basic_auth" \
+            git -C audit push origin HEAD:refs/heads/archive-file-key-rewrap-v1 \
+              --force-with-lease=refs/heads/archive-file-key-rewrap-v1:
+          unset audit_basic_auth
+          cleanup_writer
+          trap - EXIT
+          {
+            echo '### Historical archive migration branch staged'
+            echo
+            echo "- source audit commit: \`${{ inputs.audit_commit }}\`"
+            echo "- inventory digest: \`$INVENTORY_DIGEST\`"
+            echo "- review branch commit: \`$(git -C audit rev-parse HEAD)\`"
+            echo '- no audit main ref was changed'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record source-free dry-run evidence
+        if: inputs.apply == false
+        run: |
+          {
+            echo '### Historical archive migration dry run passed'
+            echo
+            echo "- source audit commit: \`${{ inputs.audit_commit }}\`"
+            echo "- migration count: \`${{ steps.inventory.outputs.count }}\`"
+            echo "- inventory digest: \`${{ steps.inventory.outputs.digest }}\`"
+            echo '- no identity, AWS role, plaintext, artifact, branch, or audit write was used'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove migration scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/migrated-audit" "$RUNNER_TEMP/finite-public-source"
+          rm -f "$RUNNER_TEMP/age-file-key"
+          rm -f "$RUNNER_TEMP/archive-migration-plan.json" \
+            "$RUNNER_TEMP/archive-migration-report.json" \
+            /dev/shm/lean-eval-legacy-archive-identity \
+            /dev/shm/lean-eval-audit-migration-read-key

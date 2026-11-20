@@ -707,6 +707,21 @@ def migrate_one(
     source_path: str,
 ) -> None:
     _require_canonical_selection(plan)
+    _migrate_one_validated(
+        plan, source_root, output_root, legacy_identity,
+        file_key_helper, adapter_executable, source_path,
+    )
+
+
+def _migrate_one_validated(
+    plan: dict[str, Any],
+    source_root: pathlib.Path,
+    output_root: pathlib.Path,
+    legacy_identity: pathlib.Path,
+    file_key_helper: pathlib.Path,
+    adapter_executable: pathlib.Path,
+    source_path: str,
+) -> None:
     if output_root.is_symlink() or (output_root.exists() and not output_root.is_dir()):
         raise MigrationError("migration output root must be a real directory")
     matches = [entry for entry in plan["entries"] if entry.get("source_path") == source_path]
@@ -808,6 +823,12 @@ def validate_output(
     plan: dict[str, Any], source_root: pathlib.Path, output_root: pathlib.Path
 ) -> dict[str, Any]:
     _require_canonical_selection(plan)
+    return _validate_output_validated(plan, source_root, output_root)
+
+
+def _validate_output_validated(
+    plan: dict[str, Any], source_root: pathlib.Path, output_root: pathlib.Path
+) -> dict[str, Any]:
     if source_root.is_symlink() or not source_root.is_dir():
         raise MigrationError("migration source root must be a real directory")
     if output_root.is_symlink() or not output_root.is_dir():
