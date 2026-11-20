@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import copy
 import contextlib
+import errno
 import io
 import json
 import pathlib
+import socket
+import ssl
 import tempfile
 import types
 import unittest
+import urllib.error
 from unittest import mock
 import importlib.util
 
@@ -21,6 +25,106 @@ TASK = 'rt1_' + 'b' * 64
 
 
 class PublicRuntimeGuardStagingTests(unittest.TestCase):
+    def test_transport_diagnostics_use_only_fixed_categories_and_bounded_causes(self):
+        class SecretNamedError(Exception):
+            def __str__(self):
+                raise AssertionError('exception messages must not be inspected')
+            __repr__ = __str__
+
+        cases = ((TimeoutError(), 'timeout'), (OSError(errno.ETIMEDOUT, 'secret'), 'timeout'),
+                 (ConnectionResetError(), 'connection_reset'),
+                 (OSError(errno.ECONNRESET, 'secret'), 'connection_reset'),
+                 (socket.gaierror(), 'dns'), (ssl.SSLError(), 'tls'),
+                 (SecretNamedError(), 'unknown_transport'))
+        for underlying, cause in cases:
+            wrapped = stage.TransportError('secret')
+            wrapped.__cause__ = urllib.error.URLError(underlying)
+            with self.subTest(cause=cause):
+                self.assertEqual(stage.transport_failure(wrapped),
+                                 {'cause': cause, 'timed_out': cause == 'timeout'})
+        cycle = SecretNamedError()
+        cycle.__cause__ = urllib.error.URLError(cycle)
+        self.assertEqual(stage.transport_failure(cycle)['cause'], 'unknown_transport')
+        deep = TimeoutError()
+        for _ in range(9):
+            outer = SecretNamedError()
+            outer.__cause__, deep = deep, outer
+        self.assertEqual(stage.transport_failure(deep)['cause'], 'unknown_transport')
+        # A string URL reason is never interpreted as evidence of a timeout.
+        self.assertEqual(stage.transport_failure(urllib.error.URLError('secret timeout')),
+                         {'cause': 'unknown_transport', 'timed_out': False})
+
+    def test_marker_transport_records_pending_stage_and_failure_without_source_or_secrets(self):
+        from reserve_historical_public_cleanup import HttpResponse
+        faults = ((TimeoutError('secret-error'), 'timeout'),
+                  (ConnectionResetError('secret-error'), 'connection_reset'),
+                  (socket.gaierror('secret-error'), 'dns'),
+                  (ssl.SSLError('secret-error'), 'tls'))
+        for failed_stage in ('oidc_mint', 'endpoint_request'):
+            for fault, cause in faults:
+                with self.subTest(stage=failed_stage, cause=cause), tempfile.TemporaryDirectory() as temp:
+                    directory = pathlib.Path(temp)
+                    _, _, receipt, _ = self.fixture(directory)
+                    calls = []
+                    def command(*args, **kwargs):
+                        if args[1] == '-o':
+                            pathlib.Path(args[2]).write_bytes(b'secret-identity')
+                        return b'age1synthetic'
+                    def request(method, url, headers, body, timeout):
+                        if url.endswith('/healthz'):
+                            return HttpResponse(200, json.dumps(receipt['health']).encode())
+                        stage_name = 'oidc_mint' if method == 'GET' else 'endpoint_request'
+                        calls.append(stage_name)
+                        persisted = stage.load(directory / 'receipt.json')
+                        self.assertEqual(persisted['marker_http'][stage_name],
+                                         {'stage': stage_name, 'state': 'pending',
+                                          'timeout_seconds': 30 if method == 'GET' else 300})
+                        binding = persisted['marker_binding']
+                        self.assertEqual(set(binding), {'schema_version', 'phase', 'request_id',
+                                         'runner_nonce', 'archive_ciphertext_sha256', 'marker_sha256',
+                                         'worker', 'worker_commit', 'worker_version'})
+                        self.assertEqual(binding['worker_commit'], SHA)
+                        self.assertEqual(binding['worker_version'], receipt['worker_version'])
+                        self.assertEqual(binding['phase'], 'runtime-observation')
+                        if stage_name == failed_stage:
+                            wrapped = stage.TransportError('secret-transport')
+                            wrapped.__cause__ = urllib.error.URLError(fault)
+                            raise wrapped
+                        return HttpResponse(200, b'{"value":"secret-minted-token"}')
+                    env = {'CLOUDFLARE_API_TOKEN': '', 'STATE_WRITE_KEY': '',
+                           'ACTIONS_ID_TOKEN_REQUEST_URL': 'https://oidc.invalid/?secret-url',
+                           'ACTIONS_ID_TOKEN_REQUEST_TOKEN': 'secret-request-token'}
+                    with mock.patch.dict(stage.os.environ, env, clear=True), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage.subprocess, 'run', return_value=mock.Mock(stdout=b'secret-ciphertext')), mock.patch.object(stage, 'request_http', side_effect=request), mock.patch.object(stage.time, 'monotonic', side_effect=[10, 11, 20, 21]):
+                        with self.assertRaises(stage.TransportError):
+                            stage.run_case('a-match', directory)
+                    self.assertEqual(calls, ['oidc_mint'] if failed_stage == 'oidc_mint' else ['oidc_mint', 'endpoint_request'])
+                    final = stage.load(directory / 'receipt.json')
+                    self.assertEqual(final['marker_http'][failed_stage],
+                                     {'stage': failed_stage, 'state': 'failed',
+                                      'timeout_seconds': 30 if failed_stage == 'oidc_mint' else 300,
+                                      'elapsed_ms': 1000, 'cause': cause, 'timed_out': cause == 'timeout'})
+                    if failed_stage == 'endpoint_request':
+                        self.assertEqual(final['marker_http']['oidc_mint']['state'], 'responded')
+                    self.assertFalse(final['safe_to_delete'])
+                    self.assertEqual(final['outcome'], 'incomplete')
+                    self.assertNotIn('runtime_readiness', final)
+                    self.assertNotIn('observation_http_destruction', final)
+                    self.assertNotIn('secret-', (directory / 'receipt.json').read_text())
+                    self.assertFalse((directory / 'marker-identity.age').exists())
+
+    def test_optional_http_diagnostics_preserve_response_and_single_marker_post(self):
+        from reserve_historical_public_cleanup import HttpResponse
+        checkpoints = []
+        response = HttpResponse(401, b'{"error":"unauthorized"}')
+        with mock.patch.object(stage, 'request_http', return_value=response) as request, mock.patch.object(stage.time, 'monotonic', side_effect=[5, 5.25]):
+            self.assertEqual(stage.http('https://marker.invalid/staging-acceptance', {}, diagnostics=checkpoints.append),
+                             (401, {'error': 'unauthorized'}))
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[-1], 300)
+        self.assertEqual(checkpoints, [
+            {'stage': 'endpoint_request', 'state': 'pending', 'timeout_seconds': 300},
+            {'stage': 'endpoint_request', 'state': 'responded', 'timeout_seconds': 300, 'elapsed_ms': 250}])
+
     def recorded_application(self):
         # Actual pinned-Wrangler summary/detail shapes from the first staging
         # deployment; provider metadata only, with no execution or credentials.
@@ -634,7 +738,7 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             def command(*args, **kwargs):
                 if args[1] == '-o': pathlib.Path(args[2]).write_bytes(b'disposable test age identity')
                 return b'age1synthetic'
-            def http(url, body=None, oidc=False):
+            def http(url, body=None, oidc=False, diagnostics=None):
                 nonlocal health_left,mint_left,started
                 if url.endswith('/healthz'):
                     if started and health_left:
@@ -652,6 +756,9 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                     self.assertNotIn('source_archive_base64',body)
                     self.assertNotIn('handoff',body)
                     self.assertEqual(persisted['outcome'],'incomplete')
+                    self.assertEqual(persisted['marker_binding']['runner_nonce'], body['runner_nonce'])
+                    self.assertEqual(persisted['marker_binding']['archive_ciphertext_sha256'], body['archive_ciphertext_sha256'])
+                    self.assertEqual(persisted['marker_binding']['marker_sha256'], body['marker_sha256'])
                     if refuse:return refuse
                     if marker_fault=='timeout':raise stage.TransportError('marker start timed out')
                     evidence = {k: body[k] for k in ('schema_version', 'request_id', 'runner_nonce', 'archive_ciphertext_sha256', 'marker_sha256')}
