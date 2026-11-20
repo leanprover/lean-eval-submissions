@@ -98,7 +98,7 @@ class Fixture(Context):
         driver = self.project / '.lake/build/bin/workspace_test'
         driver.parent.mkdir(parents=True)
         driver.write_text(f'#!{self.python}\n' + f'''
-import os,pathlib,subprocess,sys,time
+import json,os,pathlib,subprocess,sys,time
 sys.path.insert(0,'/opt/lean-eval')
 import stock_replay_measurement as s
 p=s.decode(s.read_file(pathlib.Path('/run/lean-eval/stock-measurement-policy.json')))
@@ -117,7 +117,13 @@ for stage in s.STAGES:
   config.write_bytes(s.canonical({'use_stdin':False,'export_file_path':str(export),'permitted_axioms':p['permitted_axioms'],'unpermitted_axiom_hard_error':False,'num_threads':4,'nat_extension':True,'string_extension':True}));config.chmod(0o600)
   command=[p['tools']['nanoda_bin']['path'],str(config)] if stage=='nanoda' else [p['tools']['leanchecker']['path'],'--silent','--from-export',str(export)]
  args=s.sandbox_options(p,stage,config=str(config) if config else None,export=str(export) if config else None)+['--',*command]
- code=subprocess.run(['/opt/lean-eval/replay-measure-stock',*args]).returncode
+ completed=subprocess.run(['/opt/lean-eval/replay-measure-stock',*args],stderr=subprocess.PIPE)
+ code=completed.returncode
+ if code:
+  # Only this owned synthetic driver/tools produce this bounded diagnostic;
+  # actual submitted Lean Source and environment variables are never recorded.
+  diagnostic={'stage':stage,'returncode':code,'stderr':completed.stderr[:4096].decode('utf-8','replace')}
+  (pathlib.Path(p['temporary_directory'])/'synthetic-phase-failure.json').write_text(json.dumps(diagnostic))
  if code:failed=True
  if code and stage not in s.STAGES[5:]:break
 raise SystemExit(1 if failed else 0)
@@ -145,6 +151,23 @@ raise SystemExit(1 if failed else 0)
         self.files.pop(ROOT / 'scripts/stock_replay_measurement.py')
         self.files[measurement] = supervisor.INSTALL / 'stock_replay_measurement.py'
         self.context = context(self.policy, files=self.files)
+
+    def diagnostics(self):
+        """Closed journal fields and controlled synthetic phase stderr only."""
+        value = {}
+        try:
+            trace = json.loads((self.control / 'stock-measurement.json').read_bytes())
+            value['journal'] = {'invalid': trace['invalid'],
+                'active_stage': None if trace['active'] is None else trace['active']['stage'],
+                'invocations': [{'stage': entry['stage'], 'termination': entry['termination']}
+                                for entry in trace['invocations']]}
+        except (OSError, ValueError, KeyError) as error:
+            value['journal_error'] = type(error).__name__
+        try:
+            value['synthetic_phase'] = json.loads((self.temporary / 'synthetic-phase-failure.json').read_bytes())
+        except (OSError, ValueError) as error:
+            value['synthetic_phase_error'] = type(error).__name__
+        return value
 
 
 def context(policy, wall=20000, *, files=None, required=False):
@@ -272,7 +295,7 @@ class StockSupervisorTests(unittest.TestCase):
                 with mock.patch.object(supervisor.Frames, 'read', descheduled):
                     result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
                 self.assertFalse(result['supervisor_failure'], result)
-                self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0})
+                self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, f.diagnostics())
                 deadline = result['generation_started_ns'] + locked_wall * 1_000_000
                 self.assertEqual(result['driver_finished']['finished_ns'] > deadline, over_budget)
                 self.assertGreater(result['generation_stop']['cutoff_ns'], deadline)
@@ -473,7 +496,7 @@ if sys.argv[1:]==['env']:
         before = set(os.listdir('/proc/self/fd'))
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertEqual(set(os.listdir('/proc/self/fd')), before)
-        self.assertEqual(result['verdict']['checker_outcome'], 'accepted', result)
+        self.assertEqual(result['verdict']['checker_outcome'], 'accepted', f.diagnostics())
         probe = json.loads((f.project / '.lake/owner-probe.json').read_bytes())
         self.assertTrue(probe['blocked'])
         self.assertLessEqual(set(probe['descriptors']), {'0', '1', '2'})
@@ -534,7 +557,7 @@ if sys.argv[1:]==['env']:
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertFalse(result['supervisor_failure'], result)
         self.assertTrue(result['generation_stop']['stopped'])
-        self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0})
+        self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, f.diagnostics())
         self.assertEqual(result['driver']['passed'], ['fixture'])
         self.assertEqual(result['verdict']['checker_outcome'], 'accepted', result)
         trace = supervisor.stock.decode((f.control / 'stock-measurement.json').read_bytes())
@@ -555,10 +578,13 @@ if sys.argv[1:]==['env']:
         f = Fixture(self.root, codes={'nanoda_bin': 1})
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 1})
-        self.assertEqual(result['verdict']['checker_outcome'], 'declined', result)
+        self.assertEqual(result['verdict']['checker_outcome'], 'declined', f.diagnostics())
         trace = json.loads((f.control / 'stock-measurement.json').read_bytes())
         self.assertEqual(len(trace['invocations']), 7)
         self.assertEqual(trace['invocations'][-1]['termination']['code'], 0)
+        diagnostic = f.diagnostics()
+        self.assertEqual(diagnostic['synthetic_phase'], {'stage': 'nanoda', 'returncode': 1, 'stderr': ''})
+        self.assertEqual(diagnostic['journal']['invocations'][-1]['stage'], 'native_kernel')
 
     def test_timeout_in_actual_included_phase_uses_private_start_and_kernel_stop_cutoff(self):
         f = Fixture(self.root)
@@ -567,7 +593,7 @@ if sys.argv[1:]==['env']:
         f.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
         f.context = context(f.policy, files=f.files, wall=1200)
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
-        self.assertTrue(result['timed_out'], result)
+        self.assertTrue(result['timed_out'], f.diagnostics())
         trace = json.loads((f.control / 'stock-measurement.json').read_bytes())
         self.assertEqual(trace['active']['stage'], 'solution_build')
         policy = json.loads((f.control / 'stock-measurement-policy.json').read_bytes())
