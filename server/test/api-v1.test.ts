@@ -1195,8 +1195,8 @@ describe("strict API contract", () => {
   it("verifies an exact staging Results blob and atomically records result and release", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
-    // This shared vector is generated and independently checked by the real Python
-    // receipt/completion producers. A long evaluation crosses the month boundary.
+    // This vector specifies the staged v2 producer contract; the separate producer
+    // change checks it with the real Python CLI. The evaluation crosses a month boundary.
     state.views.set(submissionId, { ...acceptedView(submissionId), evaluation: { status: "pending" } });
     const evaluationRequest = () => {
       const request = jsonRequest("/internal/v1/evaluation-completed", terminalVector.completion);
