@@ -15,6 +15,17 @@ import stock_image_208 as image
 
 
 class StockImage208(unittest.TestCase):
+    def test_recipe_preserves_provider_startup_and_documents_explicit_offline_check(self):
+        recipe = (ROOT / 'Dockerfile.stock-replay-208').read_text()
+        directives = [line.split(None, 1)[0] for line in recipe.splitlines()
+                      if line and not line.startswith('#')]
+        self.assertNotIn('ENTRYPOINT', directives)
+        self.assertNotIn('CMD', directives)
+        self.assertIn('/usr/bin/python3 -I -B /opt/lean-eval/stock_image_208.py check-installed', recipe)
+        self.assertIn('--network none --entrypoint /usr/bin/python3 lean-eval-stock208:local -I -B '
+                      '/opt/lean-eval/stock_image_208.py check-installed',
+                      (ROOT / 'docs/stock-image-208.md').read_text())
+
     def test_unknown_action_refuses_before_installed_entry(self):
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/stock_image_208.py'), 'replay'],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)

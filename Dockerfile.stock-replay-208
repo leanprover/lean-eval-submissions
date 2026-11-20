@@ -77,7 +77,6 @@ RUN chmod 0555 /opt/lean-eval/*.py /opt/lean-eval/replay-measure \
     && /usr/bin/python3 -I -B /opt/lean-eval/stock_image_208.py check-installed \
     && test -z "$(find /opt/lean-eval -type d -name __pycache__ -print -quit)"
 
-# Overrides the service base's startup. Default execution is an offline finite
-# installation check, never a web service, dispatcher, Source fetch or replay.
-ENTRYPOINT ["/usr/bin/python3", "-I", "-B", "/opt/lean-eval/stock_image_208.py"]
-CMD ["check-installed"]
+# Preserve the pinned base's Sandbox startup ENTRYPOINT/CMD. Installation CI
+# explicitly overrides the entrypoint for the finite check; no provider image
+# or request3 consumer is activated merely by constructing this source recipe.

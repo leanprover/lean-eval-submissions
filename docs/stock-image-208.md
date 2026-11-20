@@ -81,7 +81,11 @@ requires the four closed schemas at `/opt/schemas`; the installation check prove
 that layout and the offline registry. No module source or C/P schema is patched
 to accommodate installation. `/run/lean-eval` remains a private0700 control root.
 
-The default entry runs a finite offline `check-installed` and exits. It verifies
+The recipe preserves the pinned Cloudflare base's existing Sandbox startup
+ENTRYPOINT/CMD, so later reviewed provider use does not need a rebuild just to
+restore the SDK. This unused image is not deployed and no consumer/admission is
+enabled. Installation CI explicitly overrides that startup to run the fixed
+finite offline `check-installed` command and exit. The check verifies
 actual original Git selections/dependency pins, all312 manifests/ordered296 plan,
 the stock Check.lean bytes against original Lean Git, five binary hashes, original
 Lean launcher/version and closed schema imports. It computes/reports actual
@@ -91,7 +95,7 @@ Its JSON explicitly reports `generation_observed=false`,
 `image_qualified=false`, `runtime_qualified=false`, `request3_admitted=false` and
 `private_Source_supported=false`. This is installation evidence only. It neither
 constructs a Task, overlays Source, starts the supervisor, elaborates Lean Source,
-creates a service nor changes State/publication. The default networknone check
+starts the inherited server nor changes State/publication. The explicit networknone check
 does not exercise the fresh preparer: its original cache fetch/restore phases
 require separately authorized outbound public HTTPS. The actual host must also
 support pidfds and readable own `/proc/self/task/*/children` lists.
@@ -102,7 +106,7 @@ After separate Root build authorization, from this exact source worktree:
 mkdir -p .stock-image-inputs
 cp /tmp/lean-eval-435rc3-checker-compat/lean-4.35.0-rc3-linux.tar.zst .stock-image-inputs/
 DOCKER_BUILDKIT=1 docker build --file Dockerfile.stock-replay-208 --tag lean-eval-stock208:local .
-docker run --rm --network none lean-eval-stock208:local
+docker run --rm --network none --entrypoint /usr/bin/python3 lean-eval-stock208:local -I -B /opt/lean-eval/stock_image_208.py check-installed
 ```
 
 These are proposed commands, not executed results. BuildKit is required for the
@@ -112,8 +116,10 @@ the named public archive, required modules/wrappers/schemas and hash-locked Pyth
 requirements and the fixed consumed public-input record. Do not commit the staged
 archive to Git. Do not pass credentials, private Source, build secrets, host runtime
 prefixes, arbitrary task inputs or Docker sockets. The build necessarily obtains
-public Git/dependency sources and pinned bwrap/Python packages; the default run
-uses no network. Do not publish the tag or wire it into a Worker/controller.
+public Git/dependency sources and pinned bwrap/Python packages; the explicit check
+uses no network and never starts the server. Do not publish the tag or wire it
+into a Worker/controller. A plain default container start retains the base SDK
+behavior; it is not an installation-check invocation or provider qualification.
 
 Before real replay, independently establish a retained immutable image digest,
 original driver and both-kernel positive/negative behavior, exact seven measured
