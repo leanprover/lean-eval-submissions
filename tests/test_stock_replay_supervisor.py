@@ -24,7 +24,8 @@ import stock_replay_supervisor as supervisor
 from test_stock_replay_measurement import Context, BWRAP, PYTHON as HOST_PYTHON
 
 
-def owned_python_launcher(directory, host_python, *, library_directory=None):
+def owned_python_launcher(directory, host_python, *, library_directory=None,
+                          startup_program=None, startup_stderr=None):
     """Keep the test host's runtime layout behind an owned, pinned executable.
 
     Hosted setup-python installs need not meet the production image's strict
@@ -39,9 +40,18 @@ def owned_python_launcher(directory, host_python, *, library_directory=None):
         library_directory = Path(base) / 'lib'
     launcher = Path(directory) / 'python3'
     with launcher.open('x', encoding='utf-8') as output:
+        output.write('#!/bin/sh\n')
+        if startup_stderr is not None:
+            # Capture the outer fake Lake/driver chain before Python's loader
+            # or imports run. Original inner sandboxes cannot open this owned
+            # temporary file; retain their existing stderr pipe in that case.
+            target = shlex.quote(str(startup_stderr))
+            output.write('if [ "$1" = ' + shlex.quote(str(startup_program)) + ' ]; then\n'
+                         + '  if (umask 077; : >> ' + target + ') 2>/dev/null; then\n'
+                         + '    exec 2>> ' + target + '\n  fi\nfi\n')
         # clearenv removes setup-python's loader configuration. Restore only
         # this trusted fixture runtime's lib directory, never inherited paths.
-        output.write('#!/bin/sh\nLD_LIBRARY_PATH=' + shlex.quote(str(library_directory))
+        output.write('LD_LIBRARY_PATH=' + shlex.quote(str(library_directory))
                      + '\nexport LD_LIBRARY_PATH\nexec '
                      + shlex.quote(str(Path(host_python).absolute())) + ' "$@"\n')
     launcher.chmod(0o700)
@@ -76,7 +86,9 @@ class Fixture(Context):
         super().__init__(root, real=real, codes=codes)
         # Every original inner comparator sandbox binds the stock prefix but
         # masks /tmp. Keep its synthetic tool shebangs inside that prefix.
-        self.python = owned_python_launcher(self.prefix / 'bin', HOST_PYTHON)
+        self.python = owned_python_launcher(self.prefix / 'bin', HOST_PYTHON,
+            startup_program=self.prefix / 'bin/lake',
+            startup_stderr=self.temporary / 'synthetic-startup.stderr')
         for tool in self.policy['tools'].values():
             path = Path(tool['path'])
             lines = path.read_text().splitlines(keepends=True)
@@ -167,6 +179,11 @@ raise SystemExit(1 if failed else 0)
             value['synthetic_phase'] = json.loads((self.temporary / 'synthetic-phase-failure.json').read_bytes())
         except (OSError, ValueError) as error:
             value['synthetic_phase_error'] = type(error).__name__
+        try:
+            with (self.temporary / 'synthetic-startup.stderr').open('rb') as handle:
+                value['synthetic_startup_stderr'] = handle.read(4096).decode('utf-8', 'replace')
+        except OSError as error:
+            value['synthetic_startup_error'] = type(error).__name__
         return value
 
 
@@ -295,7 +312,7 @@ class StockSupervisorTests(unittest.TestCase):
                 with mock.patch.object(supervisor.Frames, 'read', descheduled):
                     result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
                 self.assertFalse(result['supervisor_failure'], result)
-                self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, f.diagnostics())
+                self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, (result, f.diagnostics()))
                 deadline = result['generation_started_ns'] + locked_wall * 1_000_000
                 self.assertEqual(result['driver_finished']['finished_ns'] > deadline, over_budget)
                 self.assertGreater(result['generation_stop']['cutoff_ns'], deadline)
@@ -496,7 +513,7 @@ if sys.argv[1:]==['env']:
         before = set(os.listdir('/proc/self/fd'))
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertEqual(set(os.listdir('/proc/self/fd')), before)
-        self.assertEqual(result['verdict']['checker_outcome'], 'accepted', f.diagnostics())
+        self.assertEqual(result['verdict']['checker_outcome'], 'accepted', (result, f.diagnostics()))
         probe = json.loads((f.project / '.lake/owner-probe.json').read_bytes())
         self.assertTrue(probe['blocked'])
         self.assertLessEqual(set(probe['descriptors']), {'0', '1', '2'})
@@ -557,7 +574,7 @@ if sys.argv[1:]==['env']:
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertFalse(result['supervisor_failure'], result)
         self.assertTrue(result['generation_stop']['stopped'])
-        self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, f.diagnostics())
+        self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 0}, (result, f.diagnostics()))
         self.assertEqual(result['driver']['passed'], ['fixture'])
         self.assertEqual(result['verdict']['checker_outcome'], 'accepted', result)
         trace = supervisor.stock.decode((f.control / 'stock-measurement.json').read_bytes())
@@ -574,11 +591,26 @@ if sys.argv[1:]==['env']:
         self.assertIsNone(result['verdict']['checker_outcome'])
         self.assertTrue(result['generation_stop']['stopped'])
 
+    def test_synthetic_startup_failure_is_captured_before_python_imports(self):
+        f = Fixture(self.root)
+        launcher = Path(f.python)
+        original = shlex.quote(str(Path(HOST_PYTHON).absolute())) + ' "$@"'
+        launcher.write_text(launcher.read_text().replace(original, '/fixture-missing-python "$@"'))
+        result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
+        self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 127})
+        self.assertEqual(result['verdict']['failure_reason'], 'verdict_invalid')
+        diagnostic = f.diagnostics()
+        self.assertEqual(diagnostic['journal']['invocations'], [])
+        self.assertIn('/fixture-missing-python', diagnostic['synthetic_startup_stderr'])
+        with (f.temporary / 'synthetic-startup.stderr').open('ab') as handle:
+            handle.write(b'x' * 8192)
+        self.assertEqual(len(f.diagnostics()['synthetic_startup_stderr']), 4096)
+
     def test_real_kernel_failure_remains_declined_when_native_kernel_succeeds(self):
         f = Fixture(self.root, codes={'nanoda_bin': 1})
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
         self.assertEqual(result['driver']['termination'], {'kind': 'exited', 'code': 1})
-        self.assertEqual(result['verdict']['checker_outcome'], 'declined', f.diagnostics())
+        self.assertEqual(result['verdict']['checker_outcome'], 'declined', (result, f.diagnostics()))
         trace = json.loads((f.control / 'stock-measurement.json').read_bytes())
         self.assertEqual(len(trace['invocations']), 7)
         self.assertEqual(trace['invocations'][-1]['termination']['code'], 0)
@@ -593,7 +625,7 @@ if sys.argv[1:]==['env']:
         f.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
         f.context = context(f.policy, files=f.files, wall=1200)
         result = supervisor.supervise(f.policy, f.context, control=f.control, python=PYTHON, files=f.files)
-        self.assertTrue(result['timed_out'], f.diagnostics())
+        self.assertTrue(result['timed_out'], (result, f.diagnostics()))
         trace = json.loads((f.control / 'stock-measurement.json').read_bytes())
         self.assertEqual(trace['active']['stage'], 'solution_build')
         policy = json.loads((f.control / 'stock-measurement-policy.json').read_bytes())
