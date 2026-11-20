@@ -1,9 +1,12 @@
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import pathlib
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -650,6 +653,112 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             state_contract_tree=None,
             state_live_tree=None,
         )
+
+    def _all_false_plan_command(self, *omit: str) -> subprocess.CompletedProcess[str]:
+        arguments = self._arguments()
+        arguments.require_intake_disabled = True
+        arguments.require_launch_gates_disabled = True
+        output = self.directory / "all-false-plan.json"
+        output.unlink(missing_ok=True)
+        command = [sys.executable, "-B", str(ROOT / "scripts/validate_cloudflare_rollback.py"), "plan"]
+        for key, value in vars(arguments).items():
+            flag = "--" + key.replace("_", "-")
+            if flag in omit or value is None or value is False:
+                continue
+            command.append(flag)
+            if value is not True:
+                command.append(str(value))
+        command.extend(["--output", str(output)])
+        return subprocess.run(command, capture_output=True, text=True, check=False)
+
+    def test_real_all_false_plan_accepts_canonical_enabled_config_without_rewriting_it(self) -> None:
+        raw_config = (ROOT / "server/wrangler.jsonc").read_bytes()
+        self.paths["intake_config"].write_bytes(raw_config)
+        completed = self._all_false_plan_command()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        plan = json.loads((self.directory / "all-false-plan.json").read_text())
+        self.assertFalse(plan["intake_enabled"])
+        self.assertEqual(plan["intake_enablement_mode"], "disabled")
+        for key in (
+            "legacy_result_owner_api_enabled", "result_amendment_owner_api_enabled",
+            "result_amendment_maintainer_api_enabled", "model_identity_owner_api_enabled",
+            "model_identity_maintainer_api_enabled", "model_identity_consolidation_api_enabled",
+            "release_opt_in_api_enabled", "release_opt_out_api_enabled",
+            "promotion_canary_enabled", "replay_enabled", "staging_acceptance_enabled",
+        ):
+            self.assertIs(plan[key], False, key)
+        rollback.validate_health(plan, "intake", production_health(), require_intake_disabled=True)
+        with self.assertRaises(rollback.RollbackValidationError):
+            rollback.validate_health(
+                plan, "intake", {**production_health(), "release_opt_in_api_enabled": True},
+                require_intake_disabled=True,
+            )
+        self.assertEqual(self.paths["intake_config"].read_bytes(), raw_config)
+
+    def test_real_all_false_plan_requires_both_disabled_modes_and_explicit_opt_in(self) -> None:
+        self.paths["intake_config"].write_bytes((ROOT / "server/wrangler.jsonc").read_bytes())
+        for flag in ("--require-intake-disabled", "--require-replay-disabled"):
+            with self.subTest(flag=flag):
+                completed = self._all_false_plan_command(flag)
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("all-false rollback requires disabled intake and replay", completed.stderr)
+                self.assertFalse((self.directory / "all-false-plan.json").exists())
+        completed = self._all_false_plan_command("--require-launch-gates-disabled")
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("plain-text bindings differ", completed.stderr)
+
+    def test_real_all_false_plan_rejects_enabled_missing_extra_and_changed_bindings(self) -> None:
+        self.paths["intake_config"].write_bytes((ROOT / "server/wrangler.jsonc").read_bytes())
+        original = copy.deepcopy(self.versions["intake"])
+        changed = []
+        for key, disabled in {"INTAKE_ENABLED": "false", **rollback.DISABLED_LAUNCH_GATE_BINDINGS}.items():
+            version = copy.deepcopy(original)
+            next(b for b in version["resources"]["bindings"] if b["name"] == key)["text"] = (
+                "true" if disabled == "false" else '["unexpected-maintainer"]'
+            )
+            changed.append((key, version))
+        missing = copy.deepcopy(original)
+        missing["resources"]["bindings"] = [
+            b for b in missing["resources"]["bindings"] if b["name"] != "RELEASE_OPT_IN_API_ENABLED"
+        ]
+        changed.append(("missing", missing))
+        extra = copy.deepcopy(original)
+        extra["resources"]["bindings"].append({"type": "plain_text", "name": "INTAKE_LEASE_NONCE", "text": "f" * 64})
+        changed.append(("extra lease", extra))
+        for name, field, value in (
+            ("DEPLOYED_COMMIT", "text", "b" * 40),
+            ("DISPATCH_WORKFLOW_REF", "text", "lean-eval-dispatch/" + "b" * 40),
+            ("GITHUB_BROKER", "service", "different-broker"),
+        ):
+            version = copy.deepcopy(original)
+            next(b for b in version["resources"]["bindings"] if b["name"] == name)[field] = value
+            changed.append((name, version))
+        missing_secret = copy.deepcopy(original)
+        missing_secret["resources"]["bindings"] = [
+            b for b in missing_secret["resources"]["bindings"] if b["name"] != "GITHUB_STATE_TOKEN"
+        ]
+        changed.append(("missing secret", missing_secret))
+        for label, version in changed:
+            with self.subTest(label=label):
+                self._write(self.paths["intake_version"], version)
+                completed = self._all_false_plan_command()
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
+                self.assertFalse((self.directory / "all-false-plan.json").exists())
+
+    def test_real_all_false_plan_retains_state_and_callback_source_checks(self) -> None:
+        self.paths["intake_config"].write_bytes((ROOT / "server/wrangler.jsonc").read_bytes())
+        self._write(self.paths["state_main"], {"commit": PROTECTED_STATE_COMMIT, "protected": False})
+        completed = self._all_false_plan_command()
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("protected", completed.stderr)
+        self._write(self.paths["state_main"], {"commit": PROTECTED_STATE_COMMIT, "protected": True})
+        qualification = json.loads(self.paths["qualification"].read_text())
+        qualification["lifecycle_callback_contract_sha256"] = "0" * 64
+        self._write(self.paths["qualification"], qualification)
+        completed = self._all_false_plan_command()
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("callback implementation differs", completed.stderr)
+        self.assertFalse((self.directory / "all-false-plan.json").exists())
 
     def _descendant_arguments(self) -> argparse.Namespace:
         arguments = self._arguments()

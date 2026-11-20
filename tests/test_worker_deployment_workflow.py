@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -753,6 +757,42 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "Validate and prepare the complete replay-disabled rollback unit", 1
         )[1].split("Preserve source-free pre-mutation recovery state", 1)[0]
         self.assertEqual(plan_step.count("--require-intake-disabled"), 1)
+
+    def test_actual_rollback_intake_command_forces_the_same_closed_disabled_map(self) -> None:
+        from scripts.validate_cloudflare_rollback import DISABLED_LAUNCH_GATE_BINDINGS
+
+        pause = ROLLBACK.split(
+            "      - name: Pause intake by deploying exact target code with current secrets\n", 1
+        )[1].split("      - name: Verify disabled intake before dependency mutation", 1)[0]
+        body = textwrap.dedent(pause.split("        run: |\n", 1)[1])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            capture = root / "arguments.bin"
+            wrangler = root / "lean-eval-rollback/target/server/node_modules/.bin/wrangler"
+            wrangler.parent.mkdir(parents=True)
+            wrangler.write_text('#!/usr/bin/env bash\nprintf "%s\\0" "$@" > "$ARGV_CAPTURE"\n')
+            wrangler.chmod(0o700)
+            completed = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-c", body],
+                env={"PATH": os.environ["PATH"], "RUNNER_TEMP": temporary,
+                     "EXPECTED_COMMIT": "a" * 40, "ARGV_CAPTURE": str(capture)},
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            arguments = capture.read_bytes().decode().rstrip("\0").split("\0")
+        self.assertEqual(arguments[0], "deploy")
+        variables = [arguments[i + 1] for i, item in enumerate(arguments) if item == "--var"]
+        expected = {
+            "DEPLOYED_COMMIT": "a" * 40,
+            "DISPATCH_WORKFLOW_REF": "lean-eval-dispatch/" + "a" * 40,
+            "INTAKE_ENABLED": "false", "INTAKE_ENABLEMENT_MODE": "disabled",
+            **DISABLED_LAUNCH_GATE_BINDINGS,
+        }
+        self.assertEqual(len(variables), len(expected))
+        self.assertEqual(dict(item.split(":", 1) for item in variables), expected)
+        self.assertNotIn("--keep-vars", arguments)
+        self.assertNotIn("--secrets-file", arguments)
+        self.assertEqual(ROLLBACK.count("--require-launch-gates-disabled"), 3)
 
     def test_production_smoke_uses_the_reviewed_intake_configuration(self) -> None:
         production = DEPLOY.split("\n  deploy-production:", 1)[1]

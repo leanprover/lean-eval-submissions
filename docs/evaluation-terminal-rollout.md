@@ -59,6 +59,16 @@ with intake disabled and even when it supports the same State contract.
 Disabling intake prevents new submissions; it does not remove existing callback
 obligations. Preserve original receipts for callback-only repair if needed.
 
+The rollback plan uses the target's unchanged tracked configuration with the
+closed `--require-launch-gates-disabled` mode. This mode also requires disabled
+intake and replay, and replaces only the fixed intake and lifecycle launch gates
+with their all-false values. Every other variable, capability, State proof and
+source binding remains exact. Retain a real all-false intake version with the
+same-source broker and disabled replay versions; an enabled intake version does
+not qualify. The rollback deployment forces that same fixed map and verifies
+all gates remain disabled before and after changing dependencies. Normal
+deployment configuration remains independent of this emergency mode.
+
 Receiver support alone does not repair the old acceptance clock. Keep
 publication paused until the separate safeguard for existing backdated release
 schedules is qualified. The two-calendar-month policy and canonical historical

@@ -930,6 +930,13 @@ def _validate_replay_container(
 def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     if not FULL_COMMIT.fullmatch(args.expected_commit):
         raise RollbackValidationError("expected commit must be a full lowercase Git SHA")
+    disable_launch_gates = getattr(args, "require_launch_gates_disabled", False)
+    if disable_launch_gates and not (
+        args.require_intake_disabled and args.require_replay_disabled
+    ):
+        raise RollbackValidationError(
+            "all-false rollback requires disabled intake and replay"
+        )
     intake_config = _object(args.intake_config)
     broker_config = _object(args.broker_config)
     replay_config = _object(args.replay_config)
@@ -983,6 +990,12 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     intake_expected["DISPATCH_WORKFLOW_REF"] = (
         f"lean-eval-dispatch/{args.expected_commit}"
     )
+    if disable_launch_gates:
+        intake_expected.update(
+            INTAKE_ENABLED="false",
+            INTAKE_ENABLEMENT_MODE="disabled",
+            **DISABLED_LAUNCH_GATE_BINDINGS,
+        )
     broker_expected = _expected_vars(
         broker_selected, args.expected_commit, "broker config"
     )
@@ -2021,6 +2034,7 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--output", type=pathlib.Path, required=True)
     plan.add_argument("--require-replay-disabled", action="store_true")
     plan.add_argument("--require-intake-disabled", action="store_true")
+    plan.add_argument("--require-launch-gates-disabled", action="store_true")
     plan.add_argument("--current-replay-config", type=pathlib.Path, required=True)
     plan.add_argument("--qualification", type=pathlib.Path, required=True)
     plan.add_argument("--target-root", type=pathlib.Path, required=True)
