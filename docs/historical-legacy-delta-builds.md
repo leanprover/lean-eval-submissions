@@ -49,8 +49,11 @@ each selected problem. It removes that problem's committed generated directory
 first, so an unchanged old workspace or a successful no-op cannot establish
 fresh generation. The owned session is claimed before the first invocation;
 failure leaves no success proof and requires a fresh session for another try.
-Generator changes outside `generated/`, symlinks, executable outputs and build
-cache trees are rejected. The existing evaluator's root-manifest/toolchain/
+Changes to original tracked inputs outside `generated/`, symlinks, executable
+outputs and build cache trees are rejected. The tracked-input check does not
+exclude every untracked diagnostic file or isolate the generator from the host;
+the trusted builder must separately enforce its credential-free filesystem,
+network and dependency boundary. The existing evaluator's root-manifest/toolchain/
 require checks are reused without alteration. Original Git pins and derived
 workspace file hashes are recorded separately.
 
