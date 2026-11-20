@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-execution-profile-v3.schema.json",
+  "title": "Inactive stock replay execution profile v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_family",
+    "runner_profile",
+    "vm_image_digest",
+    "toolchain",
+    "cpu_model",
+    "architecture",
+    "kernel_release",
+    "cache_state",
+    "measurement_command",
+    "benchmark_configuration_digest",
+    "source_capability",
+    "components",
+    "release_artifact",
+    "binary_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "execution_family": {
+      "const": "stock_lake_bwrap_v1"
+    },
+    "runner_profile": {
+      "const": "cloudflare-sandbox-standard-4-v1"
+    },
+    "vm_image_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "toolchain": {
+      "$ref": "#/$defs/toolchain"
+    },
+    "cpu_model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "architecture": {
+      "const": "x86_64"
+    },
+    "kernel_release": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "cache_state": {
+      "const": "cold"
+    },
+    "measurement_command": {
+      "const": [
+        "/opt/lean-eval/replay-measure-stock"
+      ]
+    },
+    "benchmark_configuration_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "source_capability": {
+      "$ref": "#/$defs/source_capability"
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lean",
+        "lake",
+        "leanexport",
+        "leanchecker",
+        "nanoda",
+        "bubblewrap"
+      ],
+      "properties": {
+        "lean": {
+          "$ref": "#/$defs/component"
+        },
+        "lake": {
+          "$ref": "#/$defs/component"
+        },
+        "leanexport": {
+          "$ref": "#/$defs/component"
+        },
+        "leanchecker": {
+          "$ref": "#/$defs/component"
+        },
+        "nanoda": {
+          "$ref": "#/$defs/component"
+        },
+        "bubblewrap": {
+          "$ref": "#/$defs/component"
+        }
+      }
+    },
+    "release_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "platform",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^lean-4\\.(?:35\\.0(?:-rc3)?|36\\.0-rc2)-linux\\.tar\\.zst$(?![\\s\\S])"
+        },
+        "platform": {
+          "const": "linux_x86_64"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "bytes": {
+          "$ref": "#/$defs/positive"
+        }
+      }
+    },
+    "binary_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lean",
+        "lake",
+        "leanexport",
+        "leanchecker",
+        "nanoda",
+        "bubblewrap"
+      ],
+      "properties": {
+        "lean": {
+          "$ref": "#/$defs/digest"
+        },
+        "lake": {
+          "$ref": "#/$defs/digest"
+        },
+        "leanexport": {
+          "$ref": "#/$defs/digest"
+        },
+        "leanchecker": {
+          "$ref": "#/$defs/digest"
+        },
+        "nanoda": {
+          "$ref": "#/$defs/digest"
+        },
+        "bubblewrap": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$(?![\\s\\S])"
+    },
+    "toolchain": {
+      "enum": [
+        "leanprover/lean4:v4.35.0-rc3",
+        "leanprover/lean4:v4.35.0",
+        "leanprover/lean4:v4.36.0-rc2"
+      ]
+    },
+    "positive": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit"
+      ],
+      "properties": {
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "commit": {
+          "$ref": "#/$defs/commit"
+        }
+      }
+    },
+    "source_capability": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fetch_method",
+            "archive_capacity_class"
+          ],
+          "properties": {
+            "fetch_method": {
+              "const": "git"
+            },
+            "archive_capacity_class": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fetch_method",
+            "archive_capacity_class"
+          ],
+          "properties": {
+            "fetch_method": {
+              "const": "archive"
+            },
+            "archive_capacity_class": {
+              "const": "legacy_10mib"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

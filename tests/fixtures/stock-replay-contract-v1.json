@@ -1,0 +1,210 @@
+{
+  "authority_raw_utf8": "{\"benchmark_commit\":\"8955681b9914d7ebc7d286414843021b7d6c9de1\",\"result_id\":\"r2_4d6bbeb476e793ac877e5cfbd0fcbdcadf154931b2e520fb77afefa178544666\",\"run_attempt\":1,\"run_id\":123,\"schema_version\":1,\"toolchain\":\"leanprover/lean4:v4.35.0\"}\n",
+  "benchmark_files_utf8": {
+    "LeanEval/Generate.lean": "-- Synthetic generator bytes, never executed\n",
+    "scripts/prepare_toolchain.py": "# Synthetic selector bytes, never executed\n",
+    "supported-toolchains.json": "{\"configurations\": {\"leanprover/lean4:v4.35.0\": \"toolchains/v4.35.0\"}}\n",
+    "templates/WorkspaceTest.lean": "-- Synthetic driver bytes, never executed\n",
+    "toolchains/v4.35.0/lake-manifest.json": "{\"synthetic\":true}\n",
+    "toolchains/v4.35.0/lakefile.toml": "# Synthetic fixture; not a real benchmark configuration\n",
+    "toolchains/v4.35.0/lean-toolchain": "leanprover/lean4:v4.35.0\n"
+  },
+  "expected": {
+    "configuration_digest": "b822ebb198131374b6193175e1d0e8b144d3f47e6285751dfda2e61835e3a8fe",
+    "execution_profile_digest": "d39c6bbd449d4c9cf698f15d1841b45623ef44862bbe83e5b9377df593641b4c",
+    "measurement_config_digest": "d0f5a84e1346e4fd75c30203eb7e2428a6274bdcbae5a7e39f99393be658ae33",
+    "replay_task_id": "rt1_ae65a16fb37ab5bab9862c4fc0614662c943d00124985af580ba6c4d75dd7c84"
+  },
+  "fixture_kind": "synthetic_inactive_stock_contract",
+  "legacy_schema_sha256": {
+    "replay-execution-profile-v1.schema.json": "79edef16a72bda8f7f3d540b07767121737ed350ef6d545d0c545494cc1107fe",
+    "replay-execution-profile-v2.schema.json": "1325627329f9050f3c0865bcf89dd5b7c2862ac4cb021e3d996726b2565117e7",
+    "replay-execution-request-v1.schema.json": "0623ae82d8357abe1fd3fec8b83c0516097ae97194abe4edea4f8bd15ecca806",
+    "replay-execution-request-v2.schema.json": "232c2867ae0739290c6c96a1bf89802562aef0715b88f26b46b66b7fc8b6731c",
+    "replay-measurement-config-v1.schema.json": "80597824f9779ab88dbe0756b81314e88be6ca503d9ba215a3ad373b7a9a0959"
+  },
+  "notice": "Synthetic byte bindings at bounded configuration identities. Not genuine Git provenance, qualification, source classification, task authority, or accepted replay evidence.",
+  "request": {
+    "attempt": 1,
+    "benchmark": {
+      "commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+      "configuration_authority": {
+        "commit": "1111111111111111111111111111111111111111",
+        "kind": "verification_receipt_v1",
+        "path": "verification/r2_4d6bbeb476e793ac877e5cfbd0fcbdcadf154931b2e520fb77afefa178544666.json",
+        "repository": "leanprover/lean-eval-submissions",
+        "run_attempt": 1,
+        "run_id": 123,
+        "sha256": "13fa85ff414dc2b2471f554e5420a1f059924a5baae485cbaedea8aa799b2475"
+      },
+      "configuration_lock": {
+        "benchmark_commit": "8955681b9914d7ebc7d286414843021b7d6c9de1",
+        "benchmark_repository": "leanprover/lean-eval",
+        "benchmark_tree": "e1d860fb72dc13bf5d15ed0fb29c49043aa3440b",
+        "generator_source_binding": {
+          "command": [
+            "lake",
+            "exe",
+            "lean-eval",
+            "generate"
+          ],
+          "derived_output_manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "sources": [
+            {
+              "git_blob": "ce0887b3a633a4e609ab8934a3605197a4ebebd8",
+              "path": "LeanEval/Generate.lean",
+              "sha256": "d60db8358aa0b76192378e4b6dedd050a5f88f3c7b652b4efc02db2f8fcd3908"
+            }
+          ]
+        },
+        "kind": "stock_benchmark_configuration_lock",
+        "manifest_layout": "per_problem_v1",
+        "prepare_toolchain": {
+          "git_blob": "48674a4ddddf39f0a148f006017d2a877490a4ba",
+          "path": "scripts/prepare_toolchain.py",
+          "sha256": "2aa8efd61dc1dfeb36842a501f1ad347c0defceec7c29f85d822cf81ba593433"
+        },
+        "problem_statement_revisions": {
+          "synthetic_problem": 1
+        },
+        "schema_version": 1,
+        "selected_files": {
+          "lake-manifest.json": {
+            "git_blob": "13003ae0521bdd960eadfb0cada1fc6ed36e645f",
+            "sha256": "cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8"
+          },
+          "lakefile.toml": {
+            "git_blob": "5fa65a2fe2d720d1270eb1ffd889c8920bb26354",
+            "sha256": "879077cb529f9ce5e02a2d37987a9e8760907cad40f561709cfce6d5c349bf89"
+          },
+          "lean-toolchain": {
+            "git_blob": "a6aff065db2882c535684f8c5bcd4f16e9a23915",
+            "sha256": "ca5f1f601d34c49079e38d7e7041eb0f2a9c227fbc1df0f404820069a052330c"
+          }
+        },
+        "selection": {
+          "kind": "toolchain_directory",
+          "path": "toolchains/v4.35.0"
+        },
+        "supported_toolchains": {
+          "git_blob": "3944ca7ada4d8c640f34b97cc30d0d5725abbe28",
+          "path": "supported-toolchains.json",
+          "sha256": "7dfd6db78e53ed367af0feae959c0e6effb103f5210f8671140ea708e94fe1a8"
+        },
+        "toolchain": "leanprover/lean4:v4.35.0",
+        "workspace_driver": {
+          "git_blob": "af2784aa17f13cb8d19a443953a900fb77bad20b",
+          "path": "templates/WorkspaceTest.lean",
+          "sha256": "2c47e6bb14cb910ca3ada7b806ee9a147487ad055bb20b22a440a0c99de775fe"
+        }
+      },
+      "repository": "leanprover/lean-eval",
+      "toolchain": "leanprover/lean4:v4.35.0"
+    },
+    "checker": "nanoda",
+    "execution_profile": {
+      "architecture": "x86_64",
+      "benchmark_configuration_digest": "b822ebb198131374b6193175e1d0e8b144d3f47e6285751dfda2e61835e3a8fe",
+      "binary_sha256": {
+        "bubblewrap": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "lake": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "lean": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "leanchecker": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "leanexport": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "nanoda": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "cache_state": "cold",
+      "components": {
+        "bubblewrap": {
+          "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repository": "containers/bubblewrap"
+        },
+        "lake": {
+          "commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+          "repository": "leanprover/lean4"
+        },
+        "lean": {
+          "commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+          "repository": "leanprover/lean4"
+        },
+        "leanchecker": {
+          "commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+          "repository": "leanprover/lean4"
+        },
+        "leanexport": {
+          "commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+          "repository": "leanprover/lean4"
+        },
+        "nanoda": {
+          "commit": "3a2407216ee84a75f9e1aead6803d0578be06ae7",
+          "repository": "ammkrn/nanoda_lib"
+        }
+      },
+      "cpu_model": "synthetic-unqualified-cpu-\u03bb",
+      "execution_family": "stock_lake_bwrap_v1",
+      "kernel_release": "synthetic-unqualified-kernel",
+      "measurement_command": [
+        "/opt/lean-eval/replay-measure-stock"
+      ],
+      "release_artifact": {
+        "bytes": 123,
+        "name": "lean-4.35.0-linux.tar.zst",
+        "platform": "linux_x86_64",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "runner_profile": "cloudflare-sandbox-standard-4-v1",
+      "schema_version": 3,
+      "source_capability": {
+        "archive_capacity_class": "legacy_10mib",
+        "fetch_method": "archive"
+      },
+      "toolchain": "leanprover/lean4:v4.35.0",
+      "vm_image_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+    },
+    "execution_profile_digest": "d39c6bbd449d4c9cf698f15d1841b45623ef44862bbe83e5b9377df593641b4c",
+    "measurement_config": {
+      "checker_sequence": [
+        "bundled_nanoda",
+        "bundled_leanchecker"
+      ],
+      "memory_limit_bytes": 12884901888,
+      "phase_semantics": "stock_lake_solution_build_export_dual_kernel_v1",
+      "retired_instructions": {
+        "perf_event": "instructions:u",
+        "required": false
+      },
+      "schema_version": 2,
+      "wall_time_limit_ms": 21600000
+    },
+    "measurement_config_digest": "d0f5a84e1346e4fd75c30203eb7e2428a6274bdcbae5a7e39f99393be658ae33",
+    "network": {
+      "fetch_phase": "controller_pinned_archive_only",
+      "untrusted_execution_phase": "disabled"
+    },
+    "replay_task_id": "rt1_ae65a16fb37ab5bab9862c4fc0614662c943d00124985af580ba6c4d75dd7c84",
+    "result": {
+      "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "problem_id": "synthetic_problem",
+      "result_id": "r2_4d6bbeb476e793ac877e5cfbd0fcbdcadf154931b2e520fb77afefa178544666",
+      "statement_revision": 1,
+      "submission_id": "0198abcd-0000-7000-8000-000000000001",
+      "tree_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "schema_version": 3,
+    "source": {
+      "archive": {
+        "archive_ciphertext_sha256": "983266402224a2b837e2a1b9babd4f804d12b8af6caa4a3ec08a07c8f9e94ec2",
+        "archive_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "archive_path": "archives/01/0198abcd-0000-7000-8000-000000000001.tar.age",
+        "archive_repository": "leanprover/lean-eval-audit",
+        "encrypted": true,
+        "schema_version": 1,
+        "submission_id": "0198abcd-0000-7000-8000-000000000001"
+      },
+      "archive_capacity_class": "legacy_10mib",
+      "fetch_method": "archive",
+      "visibility": "private"
+    },
+    "untrusted_environment": {}
+  }
+}
