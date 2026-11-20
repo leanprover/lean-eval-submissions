@@ -27,12 +27,14 @@ export type AuthoritativeReplayInput = {
   runner_nonce: string;
   request: Record<string, unknown>;
   archive_expectation: {
-    schema_version: 1 | 2;
+    schema_version: 1 | 2 | 3;
     submission_id: string;
     archive_ciphertext_sha256: string;
     plaintext_tar_sha256: string;
     plaintext_tar_size: number;
     key_material_type?: "age-file-key-v1";
+    source_visibility?: "public" | "private";
+    archive_capacity_class?: "legacy_10mib";
   };
   archive_ciphertext_bytes: number;
   archive_part_count: number;
@@ -134,6 +136,7 @@ export async function readAuthoritativeReplayRequest(
   reviewedProfileDigest: string,
   reviewedMeasurementDigest: string,
   reviewedVmImageDigest: string,
+  reviewedArchiveCapacityClass?: string,
 ): Promise<AuthoritativeReplayInput> {
   requireReviewedDigests(
     reviewedProfileDigest,
@@ -185,7 +188,35 @@ export async function readAuthoritativeReplayRequest(
     throw new AuthoritativeReplayContractError("VM image is not reviewed");
   }
   const source = object(execution.source, "execution source");
-  if (source.visibility !== "private") {
+  const archiveV2 = execution.schema_version === 2;
+  if (archiveV2) {
+    exactFields(execution, [
+      "schema_version", "replay_task_id", "attempt", "source", "benchmark", "result", "checker",
+      "execution_profile_digest", "measurement_config_digest", "execution_profile", "measurement_config",
+      "network", "untrusted_environment",
+    ], "archive execution request");
+    exactFields(executionProfile, [
+      "schema_version", "runner_profile", "vm_image_digest", "toolchain", "go_toolchain", "rust_toolchain",
+      "cpu_model", "architecture", "kernel_release", "cache_state", "measurement_command", "components",
+      "archive_capacity_class",
+    ], "archive execution profile");
+    const network = object(execution.network, "archive network");
+    exactFields(network, ["fetch_phase", "untrusted_execution_phase"], "archive network");
+    if (network.fetch_phase !== "controller_pinned_archive_only" || network.untrusted_execution_phase !== "disabled") {
+      throw new AuthoritativeReplayContractError("archive network policy differs");
+    }
+    exactFields(object(execution.untrusted_environment, "archive untrusted environment"), [], "archive untrusted environment");
+    exactFields(source, ["visibility", "fetch_method", "archive"], "archived source");
+    if (
+      (source.visibility !== "public" && source.visibility !== "private")
+      || source.fetch_method !== "archive"
+      || reviewedArchiveCapacityClass !== "legacy_10mib"
+      || executionProfile.schema_version !== 2
+      || executionProfile.archive_capacity_class !== reviewedArchiveCapacityClass
+    ) {
+      throw new AuthoritativeReplayContractError("archive source or capacity is not reviewed");
+    }
+  } else if (source.visibility !== "private" || reviewedArchiveCapacityClass !== undefined) {
     throw new AuthoritativeReplayContractError("authoritative endpoint requires private source");
   }
   const archive = object(source.archive, "execution archive");
@@ -197,11 +228,11 @@ export async function readAuthoritativeReplayRequest(
     throw new AuthoritativeReplayContractError("archive identity is invalid");
   }
   const expectation = object(outer.archive_expectation, "archive expectation");
-  // The envelope version lives here and is independent of the transport version
-  // above: v1 sealed the archive to an age identity, v2 to a 16-byte file key.
-  const envelopeVersion = expectation.schema_version;
-  if (envelopeVersion !== 1 && envelopeVersion !== 2) {
-    throw new AuthoritativeReplayContractError("archive expectation schema_version must be integer 1 or 2");
+  // Expectation versions 1/2 select the legacy identity/file-key forms.
+  // Version 3 adds original visibility and small capacity; its envelope stays v2.
+  const expectationVersion = expectation.schema_version;
+  if (expectationVersion !== 1 && expectationVersion !== 2 && expectationVersion !== 3) {
+    throw new AuthoritativeReplayContractError("archive expectation schema_version must be integer 1, 2 or 3");
   }
   exactFields(expectation, [
     "schema_version",
@@ -209,8 +240,18 @@ export async function readAuthoritativeReplayRequest(
     "archive_ciphertext_sha256",
     "plaintext_tar_sha256",
     "plaintext_tar_size",
-    ...(envelopeVersion === 2 ? ["key_material_type"] : []),
+    ...(expectationVersion !== 1 ? ["key_material_type"] : []),
+    ...(expectationVersion === 3 ? ["source_visibility", "archive_capacity_class"] : []),
   ], "archive expectation");
+  if (
+    (expectationVersion === 3) !== archiveV2
+    || (archiveV2 && (
+      expectation.source_visibility !== source.visibility
+      || expectation.archive_capacity_class !== reviewedArchiveCapacityClass
+    ))
+  ) {
+    throw new AuthoritativeReplayContractError("archive expectation source or capacity differs");
+  }
   const plaintextDigest = text(expectation.plaintext_tar_sha256, "plaintext digest", 64);
   const plaintextSize = safeInteger(expectation.plaintext_tar_size, "plaintext size", MAX_PLAINTEXT_BYTES);
   if (
@@ -220,7 +261,7 @@ export async function readAuthoritativeReplayRequest(
   ) {
     throw new AuthoritativeReplayContractError("archive expectation does not match execution request");
   }
-  if (envelopeVersion === 2 && expectation.key_material_type !== "age-file-key-v1") {
+  if (expectationVersion !== 1 && expectation.key_material_type !== "age-file-key-v1") {
     throw new AuthoritativeReplayContractError("archive expectation key material type is invalid");
   }
   const keyMaterialType = outer.key_material_type;
@@ -229,7 +270,7 @@ export async function readAuthoritativeReplayRequest(
   }
   // The envelope decides which key form can open the archive, so a request that
   // names the other one is refused rather than handed to the image to fail on.
-  if ((envelopeVersion === 2) !== (keyMaterialType === "age-file-key-v1")) {
+  if ((expectationVersion !== 1) !== (keyMaterialType === "age-file-key-v1")) {
     throw new AuthoritativeReplayContractError("key material type does not match the archive envelope");
   }
   const keyMaterial = canonicalBase64(
@@ -254,12 +295,16 @@ export async function readAuthoritativeReplayRequest(
     runner_nonce: runnerNonce,
     request: execution,
     archive_expectation: {
-      schema_version: envelopeVersion,
+      schema_version: expectationVersion,
       submission_id: submissionId,
       archive_ciphertext_sha256: archiveDigest,
       plaintext_tar_sha256: plaintextDigest,
       plaintext_tar_size: plaintextSize,
-      ...(envelopeVersion === 2 ? { key_material_type: "age-file-key-v1" as const } : {}),
+      ...(expectationVersion !== 1 ? { key_material_type: "age-file-key-v1" as const } : {}),
+      ...(expectationVersion === 3 ? {
+        source_visibility: source.visibility,
+        archive_capacity_class: "legacy_10mib" as const,
+      } : {}),
     },
     archive_ciphertext_bytes: archiveBytes,
     archive_part_count: partCount,

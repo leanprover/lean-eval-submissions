@@ -290,7 +290,8 @@ def _validate_archive(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     request = plan["request"]
     source = request["source"]
-    if source.get("visibility") != "private":
+    archive_v2 = request["schema_version"] == 2
+    if not archive_v2 and source.get("visibility") != "private":
         raise ReplayControllerError(
             "credentialed controller requires a private replay plan"
         )
@@ -341,6 +342,11 @@ def _validate_archive(
             "archive plaintext identity exceeds the executor contract"
         )
     envelope = validate_envelope(sidecar.get("key_envelope"))
+    if archive_v2 and (
+        sidecar.get("submission_public") is not (source["visibility"] == "public")
+        or envelope["schema_version"] != 2
+    ):
+        raise ReplayControllerError("archive source visibility or file-key envelope differs")
     if (
         envelope["submission_id"] != expected_submission
         or envelope["archive_ciphertext_sha256"] != actual_digest
@@ -485,6 +491,12 @@ def build_executor_request(
     }
     if envelope["schema_version"] == 2:
         archive_expectation["key_material_type"] = AGE_FILE_KEY_MATERIAL_TYPE
+    if plan["request"]["schema_version"] == 2:
+        archive_expectation.update(
+            schema_version=3,
+            source_visibility=plan["request"]["source"]["visibility"],
+            archive_capacity_class=plan["request"]["execution_profile"]["archive_capacity_class"],
+        )
     # The archive itself is not in this request; it was uploaded in parts and
     # assembled in the Sandbox before the capability above was consumed. These
     # two fields only name that upload so the Worker can match it.

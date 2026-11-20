@@ -270,6 +270,10 @@ def _verify_worker(
         "expected_replay_task_id": variables["EXPECTED_REPLAY_TASK_ID"],
         "expected_replay_attempt": variables["EXPECTED_REPLAY_ATTEMPT"],
     }
+    if "REVIEWED_ARCHIVE_CAPACITY_CLASS" in variables:
+        if variables["REVIEWED_ARCHIVE_CAPACITY_CLASS"] != "legacy_10mib":
+            raise OwnershipError("historical archive capacity class is unsupported")
+        expected_health["reviewed_archive_capacity_class"] = variables["REVIEWED_ARCHIVE_CAPACITY_CLASS"]
     if health != expected_health:
         raise OwnershipError("Worker health identity differs from the rendered contract")
     return version_id, settings_namespaces

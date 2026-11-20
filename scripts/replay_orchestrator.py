@@ -238,6 +238,9 @@ def validate_measurement_config(value: Any) -> dict[str, Any]:
 
 def validate_execution_profile(value: Any) -> dict[str, Any]:
     profile = _object(value, "execution profile")
+    version = profile.get("schema_version")
+    if type(version) is not int or version not in {1, 2}:
+        raise ReplayError("execution profile schema_version must be integer 1 or 2")
     _fields(
         profile,
         {
@@ -253,11 +256,11 @@ def validate_execution_profile(value: Any) -> dict[str, Any]:
             "cache_state",
             "measurement_command",
             "components",
-        },
+        } | ({"archive_capacity_class"} if version == 2 else set()),
         "execution profile",
     )
-    if profile["schema_version"] != 1 or isinstance(profile["schema_version"], bool):
-        raise ReplayError("execution profile schema_version must be integer 1")
+    if version == 2 and profile["archive_capacity_class"] != "legacy_10mib":
+        raise ReplayError("archive execution profile capacity class is not qualified")
     _string(profile["runner_profile"], "runner_profile")
     vm_digest = _string(profile["vm_image_digest"], "vm_image_digest")
     if re.fullmatch(r"sha256:[0-9a-f]{64}", vm_digest) is None:
@@ -414,6 +417,8 @@ def plan_next(
 ) -> dict[str, Any]:
     queue = validate_queue(queue_value)
     profile = validate_execution_profile(profile_value)
+    if profile["schema_version"] != 1:
+        raise ReplayError("ordinary replay planning requires a version-1 execution profile")
     measurement = validate_measurement_config(measurement_value)
     if not queue["tasks"]:
         return {"schema_version": 1, "kind": "empty"}
@@ -549,8 +554,9 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
         },
         "plan.request",
     )
-    if request["schema_version"] != 1 or isinstance(request["schema_version"], bool):
-        raise ReplayError("request schema_version must be integer 1")
+    version = request["schema_version"]
+    if type(version) is not int or version not in {1, 2}:
+        raise ReplayError("request schema_version must be integer 1 or 2")
     task_identity = _match(REPLAY_ID, request["replay_task_id"], "request.replay_task_id")
     attempt = _integer(request["attempt"], "request.attempt", 1)
     if attempt > MAX_REPLAY_ATTEMPTS:
@@ -558,7 +564,13 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
             f"request.attempt must be no greater than {MAX_REPLAY_ATTEMPTS}"
         )
     source = _object(request["source"], "request.source")
-    if source.get("visibility") == "public":
+    if version == 2:
+        _fields(source, {"visibility", "fetch_method", "archive"}, "request.source")
+        if not isinstance(source["visibility"], str) or source["visibility"] not in {"public", "private"} or source["fetch_method"] != "archive":
+            raise ReplayError("version-2 source requires truthful visibility and archive retrieval")
+        archive = validate_private_replay_locator(source["archive"])
+        expected_fetch_phase = "controller_pinned_archive_only"
+    elif source.get("visibility") == "public":
         _fields(source, {"repository", "commit", "visibility"}, "request.source")
         _match(REPOSITORY, source["repository"], "request.source.repository")
         _match(COMMIT, source["commit"], "request.source.commit")
@@ -603,6 +615,8 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
     if request["checker"] != "nanoda":
         raise ReplayError("request checker must be nanoda")
     profile = validate_execution_profile(request["execution_profile"])
+    if profile["schema_version"] != version:
+        raise ReplayError("request and execution-profile versions differ")
     measurement = validate_measurement_config(request["measurement_config"])
     if benchmark["toolchain"] != profile["toolchain"]:
         raise ReplayError("request benchmark and execution-profile toolchains differ")
@@ -629,7 +643,7 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
         "untrusted_execution_phase": "disabled",
     }:
         raise ReplayError("request network policy is not canonical")
-    if source["visibility"] == "private" and archive["submission_id"] != result["submission_id"]:
+    if (version == 2 or source["visibility"] == "private") and archive["submission_id"] != result["submission_id"]:
         raise ReplayError("private archive submission differs from replay result")
     environment = _object(request["untrusted_environment"], "request.untrusted_environment")
     if environment:

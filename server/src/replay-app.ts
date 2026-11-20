@@ -61,6 +61,7 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   EXPECTED_REPLAY_TASK_ID?: string;
   EXPECTED_REPLAY_ATTEMPT?: string;
   EXECUTOR_OWNERSHIP_TAG?: string;
+  REVIEWED_ARCHIVE_CAPACITY_CLASS?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
@@ -1785,6 +1786,9 @@ function health(env: ReplayRuntimeEnv): Response {
     reviewed_execution_profile_digest: env.REVIEWED_EXECUTION_PROFILE_DIGEST,
     reviewed_measurement_config_digest: env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
     reviewed_vm_image_digest: env.REVIEWED_VM_IMAGE_DIGEST,
+    ...(env.REVIEWED_ARCHIVE_CAPACITY_CLASS === undefined ? {} : {
+      reviewed_archive_capacity_class: env.REVIEWED_ARCHIVE_CAPACITY_CLASS,
+    }),
     ...(env.EXECUTOR_OWNERSHIP_TAG === undefined ? {} : {
       executor_ownership_tag: env.EXECUTOR_OWNERSHIP_TAG,
       expected_replay_task_id: env.EXPECTED_REPLAY_TASK_ID,
@@ -2102,6 +2106,7 @@ export async function handleReplayRequest(
         env.REVIEWED_EXECUTION_PROFILE_DIGEST,
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
+        env.REVIEWED_ARCHIVE_CAPACITY_CLASS,
       );
       requireHistoricalPrivateBinding(env, {
         replay_task_id: String(input.request.replay_task_id),

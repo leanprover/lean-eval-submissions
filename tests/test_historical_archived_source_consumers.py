@@ -83,6 +83,36 @@ def recovered_history(*, running: bool = False) -> list[dict]:
 
 
 class ArchivedHistoricalConsumerTests(unittest.TestCase):
+    def test_archive_decoder_accepts_exact_recovered_public_queue(self):
+        from scripts import historical_private_replay_controller as archived
+        path = pathlib.Path(__file__).parent / "fixtures/historical-public-archive-recovery-queue-v2.json"
+        queue = json.loads(path.read_text())
+        self.assertEqual(queue, archived.validate_queue(queue))
+        for marker in (True, 1, 3, "2"):
+            wrong = copy.deepcopy(queue)
+            wrong["tasks"][0]["source_recovery_version"] = marker
+            with self.subTest(marker=marker), self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+                archived.validate_queue(wrong)
+        for field, value in (
+            ("source_visibility", "private"),
+            ("fetch_method", "git"),
+            ("archive_capacity_class", "archive_single_blob_30m"),
+            ("archive_ciphertext_size", 12 * 1024 * 1024),
+            ("archive_benchmark_relation", "unknown"),
+        ):
+            wrong = copy.deepcopy(queue)
+            wrong["tasks"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+                archived.validate_queue(wrong)
+        wrong = copy.deepcopy(queue)
+        wrong["schema_version"] = 1
+        with self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+            archived.validate_queue(wrong)
+        wrong = copy.deepcopy(queue)
+        wrong["tasks"][0]["archive_authority_version"] = 2
+        with self.assertRaisesRegex(archived.HistoricalPrivateReplayControllerError, "standalone"):
+            archived.validate_queue(wrong)
+
     def test_original_public_identity_is_independent_of_replacement_profile(self):
         fixture = legacy.Fixture()
         task = copy.deepcopy(fixture.task)
