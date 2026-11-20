@@ -93,25 +93,18 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             self.assertEqual(result['outcome'], 'incomplete')
             self.assertNotIn('observation_http_destruction', result)
 
-    def test_unknown_start_never_invents_http_receipt_before_exact_ownership(self):
+    def test_interrupted_start_fence_does_not_mix_oidc_with_control_plane_credentials(self):
         with tempfile.TemporaryDirectory() as temp:
-            directory = pathlib.Path(temp)
-            _, _, receipt, request = self.fixture(directory)
-            receipt.update(safe_to_delete=False, phase='guarded-replay')
-            stage.save(directory / 'receipt.json', receipt)
-            binding = {k: request[k] for k in ('schema_version', 'replay_task_id', 'attempt')}
-            for status, body, confirmed in ((503, {}, False), (200, {**binding, 'destruction':'confirmed'}, True)):
-                stage.save(directory / 'receipt.json', receipt)
-                def http(url, *args):
-                    if url.endswith('/healthz'): return 200, receipt['health']
-                    self.assertEqual(args, (binding, True))
-                    return status, body
-                with mock.patch.object(stage, 'http', side_effect=http), mock.patch.object(stage, 'ownership', side_effect=ValueError('stop after ownership')) as own:
-                    with self.assertRaisesRegex(ValueError, 'stop after ownership'):
-                        stage.cleanup('a-match', directory)
-                    own.assert_called_once()
-                result = stage.load(directory / 'receipt.json')
-                self.assertEqual(result.get('public_http_destruction') == 'confirmed', confirmed)
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt.update(safe_to_delete=False,phase='guarded-replay')
+            stage.save(directory/'receipt.json',receipt)
+            with mock.patch.object(stage,'http') as http, mock.patch.object(stage,'ownership',side_effect=ValueError('unknown ownership')):
+                with self.assertRaisesRegex(ValueError,'unknown ownership'):stage.cleanup('a-match',directory)
+                http.assert_not_called()
+            final=stage.load(directory/'receipt.json')
+            self.assertEqual(final['outcome'],'incomplete')
+            self.assertNotIn('public_http_destruction',final)
 
     def test_changed_original_ownership_stops_before_stub(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -125,47 +118,67 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
     def test_retire_verify_delete_app_verify_delete_worker_then_absence(self): self.cleanup_order_fixture(False)
     def test_ambiguous_owned_fixture_uses_control_plane_fence_without_faking_http_proof(self): self.cleanup_order_fixture(True)
 
-    def cleanup_order_fixture(self, incomplete):
+    def cleanup_order_fixture(self, incomplete, resume=False):
         with tempfile.TemporaryDirectory() as temp:
-            directory = pathlib.Path(temp)
-            _, _, receipt, _ = self.fixture(directory)
-            if incomplete:
-                receipt.update(safe_to_delete=False,phase='runtime-observation')
-                stage.save(directory/'receipt.json',receipt)
-            own = {k: receipt[k] for k in ('worker_version', 'namespaces', 'application_id', 'application_version', 'application_created_at')}
-            app = {k: receipt[k] for k in ('application_id', 'application_version', 'application_created_at')}
-            calls = []
-            def cmd(*args, **kwargs): calls.append(('command', args))
-            def retired(*args):
-                calls.append(('verified-stub',))
-                return 'stub'
-            def cf(path, method='GET', **kwargs):
-                calls.append(('cf', method, path))
-                return None
-            with mock.patch.object(stage, 'ROOT', directory), mock.patch.object(stage, 'ownership', return_value=own), mock.patch.object(stage, 'command', side_effect=cmd), mock.patch.object(stage, 'retired_identity', side_effect=retired), mock.patch.object(stage, 'applications', return_value=[]), mock.patch.object(stage, '_verify_application', side_effect=[app, None]), mock.patch.object(stage, 'cf', side_effect=cf), mock.patch.object(stage, 'namespaces', return_value=[]):
-                (directory / 'server').mkdir()
-                stage.cleanup('a-match', directory)
-                self.assertEqual([c[0] for c in calls], ['command', 'verified-stub', 'verified-stub', 'command', 'verified-stub', 'cf', 'cf'])
-                self.assertEqual(calls[3][1][-1], receipt['application_id'])
-                self.assertEqual(calls[5][1], 'DELETE')
-                stub = stage.load(directory / 'server/.public-guard-retired-a-match.json')
-                self.assertEqual(stub['migrations'][-1], {'tag': 'v3-retired', 'deleted_classes': ['ReplaySandbox', 'ReplayTerminalReceipt']})
-                self.assertEqual(stub['durable_objects'], {'bindings': []})
-                self.assertEqual(stage.load(directory / 'receipt.json')['cleanup'], 'confirmed')
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            if incomplete:receipt.update(safe_to_delete=False,phase='runtime-observation')
+            if resume:receipt.update(retirement_phase='disabled',disabled_worker_version='disabled-version')
+            stage.save(directory/'receipt.json',receipt)
+            own={k:receipt[k] for k in ('worker_version','namespaces','health','application_id','application_version','application_created_at')}
+            app={k:receipt[k] for k in ('application_id','application_version','application_created_at')}
+            calls=[]
+            reads=0
+            def command(*args,**kwargs):
+                if 'deploy' in args:
+                    path=directory/'server'/args[args.index('--config')+1]
+                    config=stage.load(path)
+                    final=not config['durable_objects']['bindings']
+                    calls.append('deploy-final' if final else 'deploy-disabled')
+                    self.assertEqual(config['containers'],[])
+                    if final:self.assertEqual(config['migrations'][-1]['deleted_classes'],['ReplaySandbox','ReplayTerminalReceipt'])
+                    else:
+                        self.assertEqual(config['migrations'][-1]['tag'],'v2')
+                        self.assertEqual(len(config['durable_objects']['bindings']),2)
+                else:
+                    self.assertEqual(args[-1],receipt['application_id'])
+                    calls.append('delete-app')
+            def identity(config,*args,**kwargs):
+                final=not config['durable_objects']['bindings']
+                calls.append('verify-final' if final else 'verify-disabled')
+                return 'stub-version' if final else 'disabled-version'
+            def cf(path,method='GET',**kwargs):
+                nonlocal reads
+                calls.append('delete-worker' if method=='DELETE' else 'read-worker')
+                if method=='DELETE':return {'success':True}
+                reads+=1
+                return {'present':True} if reads==1 else None
+            with mock.patch.object(stage,'ROOT',directory), mock.patch.object(stage,'ownership',return_value=own) as original, mock.patch.object(stage,'command',side_effect=command), mock.patch.object(stage,'retired_identity',side_effect=identity), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'_verify_application',side_effect=[app,None,None,None]), mock.patch.object(stage,'cf',side_effect=cf), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage.time,'sleep'):
+                (directory/'server').mkdir()
+                stage.cleanup('a-match',directory)
+                if resume:original.assert_not_called()
+                else:
+                    original.assert_called_once()
+                    self.assertEqual(calls[0],'deploy-disabled')
+                self.assertLess(calls.index('delete-app'),calls.index('deploy-final'))
+                self.assertLess(calls.index('deploy-final'),calls.index('delete-worker'))
+                self.assertEqual(calls[calls.index('delete-app')-1],'verify-disabled')
+                self.assertEqual(calls[calls.index('delete-worker')-1],'verify-final')
                 final=stage.load(directory/'receipt.json')
                 self.assertEqual(final['control_plane_cleanup'],'confirmed')
                 if incomplete:
-                    self.assertEqual(final['cleanup_mode'],'owned-control-plane-fence')
                     self.assertEqual(final['outcome'],'incomplete')
                     self.assertNotIn('observation_http_destruction',final)
                     self.assertNotIn('public_http_destruction',final)
+
+    def test_known_disabled_checkpoint_can_resume_without_adopting_original_app(self):self.cleanup_order_fixture(True,True)
 
     def test_changed_container_id_after_retirement_is_not_deleted(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, _ = self.fixture(directory)
             own = {k: receipt[k] for k in ('worker_version', 'namespaces', 'application_id', 'application_version', 'application_created_at')}
-            with mock.patch.object(stage, 'ROOT', directory), mock.patch.object(stage, 'ownership', return_value=own), mock.patch.object(stage, 'command') as cmd, mock.patch.object(stage, 'retired_identity', return_value='stub'), mock.patch.object(stage, 'applications', return_value=[]), mock.patch.object(stage, '_verify_application', return_value={'application_id': 'foreign'}), mock.patch.object(stage, 'cf') as cf:
+            with mock.patch.object(stage, 'ROOT', directory), mock.patch.object(stage, 'ownership', return_value=own), mock.patch.object(stage, 'command') as cmd, mock.patch.object(stage, 'retired_identity', return_value='disabled-version'), mock.patch.object(stage, 'applications', return_value=[]), mock.patch.object(stage, '_verify_application', return_value={'application_id': 'foreign'}), mock.patch.object(stage, 'cf') as cf:
                 (directory / 'server').mkdir()
                 with self.assertRaisesRegex(ValueError, 'container identity changed'):
                     stage.cleanup('a-match', directory)
@@ -206,6 +219,96 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'foreign'): stage.wait_retired({}, {}, {})
             self.assertEqual(verify.call_count,1)
 
+    def test_ownership_retry_is_bounded_and_missing_creation_record_is_explicit(self):
+        with mock.patch.object(stage,'ownership',side_effect=[stage.TransientRpcError('listing lag'),{'worker_version':'captured'}]) as owner, mock.patch.object(stage.time,'sleep'):
+            self.assertEqual(stage.wait_ownership({}),{'worker_version':'captured'})
+            self.assertEqual(owner.call_count,2)
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            del receipt['worker_version']
+            stage.save(directory/'receipt.json',receipt)
+            with mock.patch.object(stage,'ownership') as owner:
+                with self.assertRaisesRegex(ValueError,'ownership never recorded; controlled recovery'):stage.cleanup('a-match',directory)
+                owner.assert_not_called()
+            self.assertEqual(stage.load(directory/'receipt.json')['recovery_required'],'creation-ownership-unrecorded')
+
+    def test_deploy_records_ownership_before_bounded_rollout_timeout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt['created']=False
+            stage.save(directory/'receipt.json',receipt)
+            captured={'worker_version':'new-recorded-version'}
+            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage,'wait_ownership',return_value=captured), mock.patch.object(stage.subprocess,'run',side_effect=stage.subprocess.TimeoutExpired('rollout',900)) as run:
+                with self.assertRaises(stage.subprocess.TimeoutExpired):stage.deploy('a-match',directory)
+                self.assertEqual(stage.load(directory/'receipt.json')['worker_version'],'new-recorded-version')
+                self.assertEqual(run.call_args.kwargs['timeout'],900)
+                self.assertIn('--attempts',run.call_args.args[0])
+
+    def test_known_intermediate_drift_stops_without_application_or_class_deletion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt.update(retirement_phase='disabled',disabled_worker_version='expected')
+            stage.save(directory/'receipt.json',receipt)
+            with mock.patch.object(stage,'wait_retired',return_value='foreign'), mock.patch.object(stage,'command') as command:
+                with self.assertRaisesRegex(ValueError,'disabled Worker changed'):stage.cleanup('a-match',directory)
+                command.assert_not_called()
+
+    def test_partial_unrecorded_retirement_refuses_without_guessing_versions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt['retirement_phase']='disabling'
+            stage.save(directory/'receipt.json',receipt)
+            with mock.patch.object(stage,'command') as command, mock.patch.object(stage,'cf') as cf:
+                with self.assertRaisesRegex(ValueError,'version was not recorded; controlled recovery'):stage.cleanup('a-match',directory)
+                command.assert_not_called()
+                cf.assert_not_called()
+
+    def test_application_absent_checkpoint_finishes_classes_without_redeleting_app(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt.update(retirement_phase='application-absent',disabled_worker_version='disabled')
+            stage.save(directory/'receipt.json',receipt)
+            def identity(config,*args,**kwargs):return 'stub' if not config['durable_objects']['bindings'] else 'disabled'
+            with mock.patch.object(stage,'ROOT',directory), mock.patch.object(stage,'ownership') as owner, mock.patch.object(stage,'command') as command, mock.patch.object(stage,'retired_identity',side_effect=identity), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'_verify_application',return_value=None), mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'namespaces',return_value=[]):
+                (directory/'server').mkdir()
+                stage.cleanup('a-match',directory)
+                owner.assert_not_called()
+                self.assertEqual(command.call_count,1)
+                self.assertIn('deploy',command.call_args.args)
+                self.assertEqual(stage.load(directory/'receipt.json')['control_plane_cleanup'],'confirmed')
+
+    def test_worker_delete_and_namespace_absence_recover_after_transient_readbacks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            receipt.update(retirement_phase='retired',stub_version='stub')
+            stage.save(directory/'receipt.json',receipt)
+            gets=0
+            deletes=0
+            def cf(path,method='GET',**kwargs):
+                nonlocal gets,deletes
+                if method=='DELETE':
+                    deletes+=1
+                    if deletes==1:raise stage.TransportError('lost response')
+                    return {'success':True}
+                gets+=1
+                return None if gets==3 else {'present':True}
+            with mock.patch.object(stage,'cf',side_effect=cf), mock.patch.object(stage,'wait_retired',return_value='stub'), mock.patch.object(stage,'_verify_application',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces_absent',side_effect=[False,stage.TransientRpcError('lag'),True]), mock.patch.object(stage.time,'sleep'):
+                stage.cleanup('a-match',directory)
+                self.assertEqual(deletes,2)
+                self.assertEqual(stage.load(directory/'receipt.json')['control_plane_cleanup'],'confirmed')
+
+    def test_actual_mint_transient_stops_before_any_source_post(self):
+        with mock.patch.dict(stage.os.environ,{'ACTIONS_ID_TOKEN_REQUEST_URL':'https://token.example/?q=1','ACTIONS_ID_TOKEN_REQUEST_TOKEN':'private-token'}), mock.patch.object(stage,'request_http',return_value=mock.Mock(status=503,body=b'{}')) as request:
+            with self.assertRaises(stage.TransientRpcError):stage.http('https://fixed.example/api/v1/historical-public-replay/status',{},True)
+            self.assertEqual(request.call_count,1)
+            self.assertTrue(request.call_args.args[1].startswith('https://token.example/'))
+
     def test_rollout_uses_locked_server_cwd_and_relative_config(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
@@ -242,10 +345,12 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
     def test_typed_observation_refusal_does_not_claim_sandbox_destruction(self): self.run_fixture('a-match',False,refuse=(401,{'error':'unauthorized'}))
     def test_ambiguous_observation_preserves_unknown_http_outcome(self): self.run_fixture('a-match',False,refuse=(503,{'error':'transport_response_invalid'}))
     def test_two_transient_status_rpcs_can_recover_to_actual_acceptance(self): self.run_fixture('a-match',False,rpc_failures=2)
+    def test_health_and_mint_share_poll_allowance_and_recover(self): self.run_fixture('a-match',False,health_faults=1,mint_faults=1)
+    def test_third_combined_health_mint_failure_is_incomplete(self): self.run_fixture('a-match',False,health_faults=2,mint_faults=1)
     def test_third_status_rpc_failure_stops_without_success(self): self.run_fixture('a-match',False,rpc_failures=3)
     def test_positive_deadline_is_incomplete_and_cleans_without_mathematical_timeout(self): self.run_fixture('a-match',False,expire=True)
 
-    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False):
+    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False, health_faults=0, mint_faults=0):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, request = self.fixture(directory, case)
@@ -256,11 +361,18 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             observed = stage.load(directory / 'profile.json')
             if drift: observed['kernel_release'] = 'observed-different-host'
             routes = []
+            health_left=health_faults
+            mint_left=mint_faults
+            started=False
             def command(*args, **kwargs):
                 if args[1] == '-o': pathlib.Path(args[2]).write_bytes(b'disposable test age identity')
                 return b'age1synthetic'
             def http(url, body=None, oidc=False):
+                nonlocal health_left,mint_left,started
                 if url.endswith('/healthz'):
+                    if started and health_left:
+                        health_left-=1
+                        return 502,{'error':'transport_response_invalid'}
                     self.assertFalse(oidc)
                     return 200, receipt['health']
                 routes.append(url.rsplit('/', 1)[-1])
@@ -273,8 +385,13 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                     return 200, evidence
                 binding = {k: body[k] for k in ('schema_version', 'replay_task_id', 'attempt')}
                 if routes[-1] == 'cleanup-reservation': return 200, {**binding, 'status': 'reserved'}
-                if routes[-1] == 'historical-public-replay': return 202, {**binding, 'status': 'running'}
+                if routes[-1] == 'historical-public-replay':
+                    started=True
+                    return 202, {**binding, 'status': 'running'}
                 if routes[-1] == 'status':
+                    if mint_left:
+                        mint_left-=1
+                        raise stage.TransientRpcError('synthetic transient mint failure')
                     if routes.count('status')<=rpc_failures:return 500,{'error':'executor_failed','reason':'command_rpc_failed'}
                     if case.endswith('mismatch'):
                         return 500, dict(error='executor_failed', reason='command_failed', detail=detail)
@@ -290,7 +407,7 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                     self.assertEqual(final['safe_to_delete'],refuse[0]==401)
                     self.assertNotIn('observation_http_destruction',final)
                     return
-                if expire or rpc_failures>2:
+                if expire or rpc_failures+health_faults+mint_faults>2:
                     with self.assertRaisesRegex(ValueError,'incomplete' if expire else 'RPC did not recover'):stage.run_case(case,directory)
                     final=stage.load(directory/'receipt.json')
                     self.assertEqual(final['public_http_destruction'],'confirmed')
@@ -307,11 +424,11 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                     else:
                         with self.assertRaisesRegex(ValueError, 'exact failure'):
                             stage.run_case(case, directory)
-                    self.assertEqual(routes, ['staging-acceptance', 'cleanup-reservation', 'historical-public-replay']+['status']*(rpc_failures+1)+['cleanup'])
+                    self.assertEqual(routes, ['staging-acceptance', 'cleanup-reservation', 'historical-public-replay']+['status']*(rpc_failures+mint_faults+1)+['cleanup'])
                     if detail == 'runtime_profile_mismatch':
                         self.assertEqual(stage.load(directory / 'receipt.json')['outcome'], 'expected-runtime-mismatch' if case.endswith('mismatch') else 'accepted-nanoda')
                     else:
-                        self.assertNotIn('outcome', stage.load(directory / 'receipt.json'))
+                        self.assertEqual(stage.load(directory / 'receipt.json')['outcome'],'incomplete')
                 self.assertTrue(stage.load(directory / 'receipt.json')['safe_to_delete'])
                 self.assertFalse((directory / 'marker-identity.age').exists())
 
@@ -319,10 +436,11 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             config, _, receipt, _ = self.fixture(pathlib.Path(temp))
             config['durable_objects'] = {'bindings': []}
+            config['migrations'].append({'tag':'v3-retired','deleted_classes':['ReplaySandbox','ReplayTerminalReceipt']})
             bindings = [dict(type='plain_text', name=k, text=v) for k,v in config['vars'].items()]
             service = {'result': {'default_environment': {'script': {'etag': 'exact'}}}}
             version = {'result': {'id': 'stub', 'resources': {'bindings': bindings, 'script': {'etag': 'exact'}, 'script_runtime': {'containers': [], 'migration_tag': 'v3-retired'}}}}
-            def cf(path):
+            def cf(path, **kwargs):
                 if '/versions/' in path: return version
                 if path.endswith('/settings'): return {'result': {'bindings': bindings, 'compatibility_date': config['compatibility_date'], 'compatibility_flags': config['compatibility_flags']}}
                 return service

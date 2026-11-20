@@ -58,6 +58,19 @@ class RetirementPending(ValueError):
     pass
 
 
+class TransientRpcError(ValueError):
+    pass
+
+
+def remaining_timeout(deadline, maximum):
+    if deadline is None:
+        return maximum
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TransientRpcError("bounded readback deadline expired")
+    return min(maximum, remaining)
+
+
 def command(*argv, cwd=ROOT, timeout=180):
     try:
         return subprocess.check_output(argv, cwd=cwd, timeout=timeout, stderr=subprocess.PIPE)
@@ -75,13 +88,15 @@ def command(*argv, cwd=ROOT, timeout=180):
         raise CommandFailure(f"{pathlib.Path(argv[0]).name} failed with exit {error.returncode}; {detail}") from None
 
 
-def cf(path, method="GET", allow_missing=False):
+def cf(path, method="GET", allow_missing=False, timeout=30):
     if os.environ.get("CLOUDFLARE_ACCOUNT_ID") != ACCOUNT:
         raise ValueError("unexpected Cloudflare account")
     token = os.environ["CLOUDFLARE_API_TOKEN"]
-    r = request_http(method, f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/{path}", {"Authorization": "Bearer " + token}, None, 30)
+    r = request_http(method, f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/{path}", {"Authorization": "Bearer " + token}, None, timeout)
     if allow_missing and r.status == 404:
         return None
+    if r.status in (429, 500, 502, 503, 504):
+        raise TransientRpcError("Cloudflare control-plane response temporarily unavailable")
     if r.status != 200:
         raise ValueError(f"Cloudflare {method} returned HTTP {r.status}")
     if method == "DELETE" and not r.body:
@@ -92,10 +107,10 @@ def cf(path, method="GET", allow_missing=False):
     return data
 
 
-def namespaces():
+def namespaces(deadline=None):
     rows, total = [], None
     for page in range(1, 21):
-        data = cf(f"workers/durable_objects/namespaces?per_page=100&page={page}")
+        data = cf(f"workers/durable_objects/namespaces?per_page=100&page={page}", timeout=remaining_timeout(deadline, 30))
         info, batch = data["result_info"], data["result"]
         count = info["total_count"]
         if (type(count) is not int or not 0 <= count <= 2000 or info["page"] != page
@@ -113,15 +128,17 @@ def namespaces():
     raise ValueError("namespace inventory exceeds its closed limit")
 
 
-def applications():
-    return json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "list", "--json"))
+def applications(timeout=180):
+    return json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "list", "--json", timeout=timeout))
 
 
-def http(url, body=None, oidc=False):
+def http(url, body=None, oidc=False, timeout_budget=None):
     headers = {}
     if oidc:
         token_url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=lean-eval-replay-staging"
         token = request_http("GET", token_url, {"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]}, None, 30)
+        if token.status in (429, 500, 502, 503, 504):
+            raise TransientRpcError("staging OIDC mint temporarily unavailable")
         if token.status != 200:
             raise ValueError("staging OIDC mint failed")
         headers["Authorization"] = "Bearer " + json.loads(token.body)["value"]
@@ -129,6 +146,8 @@ def http(url, body=None, oidc=False):
     if raw is not None:
         headers["Content-Type"] = "application/json"
     timeout = 30 if body is None else 300 if url.endswith(("/staging-acceptance", "/historical-public-replay")) else 60
+    if timeout_budget is not None:
+        timeout = min(timeout, timeout_budget)
     r = request_http("GET" if body is None else "POST", url, headers, raw, timeout)
     try:
         return r.status, json.loads(r.body)
@@ -140,6 +159,8 @@ def http(url, body=None, oidc=False):
 
 def endpoint_health(url, receipt):
     status, health = http(url + "/healthz")
+    if status in (429, 500, 502, 503, 504) and health.get("status") != "retired":
+        raise TransientRpcError("temporary endpoint health unavailable")
     if status != 200 or health != receipt["health"]:
         raise ValueError("temporary endpoint health identity changed")
 
@@ -200,38 +221,54 @@ def prepare(case, directory):
     save(directory / "receipt.json", {"case": case, "worker": config["name"], "application": config["containers"][0]["name"], "commit": commit, "safe_to_delete": True, "created": False, "qualified_profile_digest": digest, "configured_profile_digest": body["execution_profile_digest"], "vm_image_digest": body["vm_image_digest"]})
 
 
-def ownership(config):
+def ownership(config, deadline=None):
+    deadline = time.monotonic() + 180 if deadline is None else deadline
+    def read(path):
+        return cf(path, timeout=remaining_timeout(deadline, 30))
     worker = config["name"]
-    service = cf(f"workers/services/{worker}")
-    settings = cf(f"workers/scripts/{worker}/settings")
-    deployments = cf(f"workers/scripts/{worker}/deployments")
+    service = read(f"workers/services/{worker}")
+    settings = read(f"workers/scripts/{worker}/settings")
+    deployments = read(f"workers/scripts/{worker}/deployments")
     version, _ = _active_version(service, deployments, worker)
-    version_data = cf(f"workers/scripts/{worker}/versions/{version}")
-    status, health = http(f"https://{worker}.lean-eval.workers.dev/healthz")
+    version_data = read(f"workers/scripts/{worker}/versions/{version}")
+    status, health = http(f"https://{worker}.lean-eval.workers.dev/healthz", timeout_budget=remaining_timeout(deadline, 30))
     if status != 200:
         raise ValueError("owned staging health unavailable")
     actual_version, ids = _verify_worker(config, service, settings, deployments, version_data, health)
-    inventory = {n["id"]: n for n in namespaces()}
+    inventory = {n["id"]: n for n in namespaces(deadline)}
     for binding in config["durable_objects"]["bindings"]:
-        row = inventory[ids[binding["name"]]]
+        row = inventory.get(ids[binding["name"]])
+        if row is None:
+            raise TransientRpcError("created namespace listing has not converged")
         if row["script"] != worker or row["class"] != binding["class_name"]:
             raise ValueError("bound namespace belongs to a different script or class")
-    app = _verify_application(config, applications())
+    app = _verify_application(config, applications(timeout=remaining_timeout(deadline, 60)))
     if app is None:
         raise ValueError("owned staging container is missing")
     return {"worker_version": actual_version, "namespaces": ids, "health": health, **app}
 
 
+def wait_ownership(config):
+    deadline = time.monotonic() + 180
+    for retry in range(10):
+        try:
+            return ownership(config, deadline)
+        except (ValueError, KeyError, TransportError):
+            if retry == 9 or time.monotonic() >= deadline:
+                raise ValueError("created ownership readback did not converge; controlled recovery required") from None
+            time.sleep(min(5, remaining_timeout(deadline, 5)))
+
+
 def deploy(case, directory):
     config, receipt = load(directory / "config.json"), load(directory / "receipt.json")
-    if cf(f"workers/services/{config['name']}", allow_missing=True) is not None or any(a["name"] == receipt["application"] for a in applications()) or any(n["script"] == config["name"] for n in namespaces()):
+    if cf(f"workers/services/{config['name']}", allow_missing=True) is not None or any(a["name"] == receipt["application"] for a in applications(timeout=60)) or any(n["script"] == config["name"] for n in namespaces(time.monotonic() + 60)):
         raise ValueError("temporary resource name collision; refuse adoption")
     receipt["created"] = True
     save(directory / "receipt.json", receipt)
     command("npx", "wrangler", "deploy", "--config", f".public-guard-{case}.json", "--env", "staging", cwd=ROOT / "server")
-    subprocess.run([sys.executable, "../scripts/wait_replay_container_rollout.py", "--config", f".public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"]], cwd=ROOT / "server", check=True, timeout=1500)
-    receipt.update(ownership(config))
+    receipt.update(wait_ownership(config))
     save(directory / "receipt.json", receipt)
+    subprocess.run([sys.executable, "../scripts/wait_replay_container_rollout.py", "--config", f".public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"], "--attempts", "40", "--interval-seconds", "10", "--command-timeout-seconds", "10"], cwd=ROOT / "server", check=True, timeout=900)
 
 
 def run_case(case, directory):
@@ -300,10 +337,10 @@ def run_case(case, directory):
             try:
                 endpoint_health(url, receipt)
                 status, response = http(url + "/api/v1/historical-public-replay/status", status_request, True)
-            except TransportError:
+            except (TransportError, TransientRpcError):
                 rpc_failures += 1
                 if rpc_failures > 2:
-                    raise ValueError("staging status transport did not recover") from None
+                    raise ValueError("staging status RPC did not recover") from None
                 continue
             transient = (status in (502, 503, 504) and response == {"error": "transport_response_invalid"}
                          or status == 500 and response.get("error") == "executor_failed"
@@ -327,140 +364,203 @@ def run_case(case, directory):
             if status != 200 or validate_executor_verdict(request, response)["checker_outcome"] != "accepted":
                 raise ValueError("matching tiny fixture was not accepted")
             outcome = "accepted-nanoda"
-    finally:
-        endpoint_health(url, receipt)
-        status, response = http(url + "/api/v1/historical-public-replay/cleanup", binding, True)
-        if status != 200 or response != {**binding, "destruction": "confirmed"}:
-            raise ValueError("exact sandbox destruction is unconfirmed")
-        receipt["safe_to_delete"] = True
-        receipt["public_http_destruction"] = "confirmed"
+    except Exception:
+        receipt["outcome"] = "incomplete"
         save(directory / "receipt.json", receipt)
+        raise
+    finally:
+        try:
+            endpoint_health(url, receipt)
+            status, response = http(url + "/api/v1/historical-public-replay/cleanup", binding, True)
+            if status != 200 or response != {**binding, "destruction": "confirmed"}:
+                raise ValueError("exact sandbox destruction is unconfirmed")
+            receipt["safe_to_delete"] = True
+            receipt["public_http_destruction"] = "confirmed"
+        except Exception:
+            receipt["outcome"] = "incomplete"
+            raise
+        finally:
+            save(directory / "receipt.json", receipt)
     receipt["outcome"] = outcome
     save(directory / "receipt.json", receipt)
 
 
-def retired_identity(config, receipt, original=None):
-    """Read back the fixed stub, active version and emptied namespace scope."""
+def retired_identity(config, receipt, original=None, deadline=None):
+    """Verify either fixed no-container phase; never infer identity from names."""
+    def read(path):
+        return cf(path, timeout=remaining_timeout(deadline, 30))
     worker = config["name"]
-    service, deployments = cf(f"workers/services/{worker}"), cf(f"workers/scripts/{worker}/deployments")
+    service, deployments = read(f"workers/services/{worker}"), read(f"workers/scripts/{worker}/deployments")
     version, _ = _active_version(service, deployments, worker)
-    settings = cf(f"workers/scripts/{worker}/settings")["result"]
-    active = cf(f"workers/scripts/{worker}/versions/{version}")["result"]
-    inventory, bound_ids = _binding_inventory(settings["bindings"], "retired settings")
+    settings = read(f"workers/scripts/{worker}/settings")["result"]
+    active = read(f"workers/scripts/{worker}/versions/{version}")["result"]
+    inventory, bound_ids = _binding_inventory(settings["bindings"], "retirement settings")
     resources = active["resources"]
-    version_inventory, version_ids = _binding_inventory(resources["bindings"], "retired version")
+    version_inventory, version_ids = _binding_inventory(resources["bindings"], "retirement version")
+    expected_ids = receipt["namespaces"] if config["durable_objects"]["bindings"] else {}
+    expected_inventory = _expected_inventory(config)
     if original is not None:
         old_inventory = _expected_inventory(original)
-        old_settings = inventory == old_inventory and bound_ids == receipt["namespaces"]
-        old_version = version_inventory == old_inventory and version_ids == receipt["namespaces"]
-        if old_settings or old_version:
-            if version != receipt["worker_version"] and not (
-                    version_inventory == _expected_inventory(config) and not version_ids
-                    and resources["script_runtime"]["migration_tag"] == "v3-retired"):
+        if old_inventory != expected_inventory and (inventory == old_inventory or version_inventory == old_inventory):
+            known = {receipt["worker_version"], receipt.get("disabled_worker_version")}
+            target = version_inventory == expected_inventory and version_ids == expected_ids
+            if version not in known and not target:
                 raise ValueError("unexpected Worker version during retirement")
             raise RetirementPending("known previous Worker view still visible")
-    if (inventory != _expected_inventory(config) or bound_ids or version_ids
+    if (inventory != expected_inventory or bound_ids != expected_ids or version_ids != expected_ids
             or version_inventory != inventory or active["id"] != version
             or settings["compatibility_date"] != config["compatibility_date"]
             or sorted(settings["compatibility_flags"]) != sorted(config["compatibility_flags"])
             or resources["script"]["etag"] != service["result"]["default_environment"]["script"]["etag"]
             or resources["script_runtime"].get("containers", []) != []
-            or resources["script_runtime"]["migration_tag"] != "v3-retired"):
-        raise ValueError("retired Worker settings or active code identity differ")
-    status, body = http(f"https://{worker}.lean-eval.workers.dev/healthz")
-    if (original is not None and status == 200 and body == receipt["health"]):
-        raise RetirementPending("known previous health view still visible")
+            or resources["script_runtime"]["migration_tag"] != config["migrations"][-1]["tag"]):
+        raise ValueError("retirement Worker settings or active code identity differ")
+    status, body = http(f"https://{worker}.lean-eval.workers.dev/healthz", timeout_budget=remaining_timeout(deadline, 30))
     if status in (404, 502, 504) or response_is_transient(status, body):
-        raise RetirementPending("retired edge response still unavailable")
-    if status != 503 or body != {"status": "retired", "commit": receipt["commit"], "ownership": config["vars"]["EXECUTOR_OWNERSHIP_TAG"]}:
-        raise ValueError("retired Worker code/commit/tag is unconfirmed")
-    remaining = [n for n in namespaces() if n["id"] in receipt["namespaces"].values() or n["script"] == worker]
+        raise RetirementPending("retirement edge response still unavailable")
+    disabled_health = {**receipt["health"], "replay_enabled": False,
+                       "historical_public_replay_enabled": False, "staging_acceptance_enabled": False}
+    final = not expected_ids
+    wanted = {"status": "retired", "commit": receipt["commit"], "ownership": config["vars"]["EXECUTOR_OWNERSHIP_TAG"]} if final else disabled_health
+    if status != (503 if final else 200) or body != wanted:
+        if original is not None and status == 200 and body in (receipt["health"], disabled_health):
+            raise RetirementPending("known previous health view still visible")
+        raise ValueError("retirement Worker code/commit/tag is unconfirmed")
+    if final and not namespaces_absent(receipt, worker, deadline):
+        raise RetirementPending("recorded owned namespace deletion still propagating")
+    return version
+
+
+def namespaces_absent(receipt, worker, deadline=None):
+    remaining = [n for n in namespaces(deadline) if n["id"] in receipt["namespaces"].values() or n["script"] == worker]
     for row in remaining:
         expected = {receipt["namespaces"]["REPLAY_SANDBOX"]: "ReplaySandbox",
                     receipt["namespaces"]["REPLAY_TERMINAL_RECEIPT"]: "ReplayTerminalReceipt"}
         if row["id"] not in expected or row["script"] != worker or row["class"] != expected[row["id"]]:
             raise ValueError("unexpected namespace identity during retirement")
-    if remaining:
-        raise RetirementPending("recorded owned namespace deletion still propagating")
-    return version
+    return not remaining
 
 
 def response_is_transient(status, body):
     return status in (502, 503, 504) and body == {"error": "transport_response_invalid"}
 
 
-def wait_retired(config, original, receipt):
+def wait_retired(config, original, receipt, deadline=None):
     for retry in range(10):
         try:
-            return retired_identity(config, receipt, original)
-        except (RetirementPending, TransportError):
+            return retired_identity(config, receipt, original, deadline)
+        except (RetirementPending, TransportError, TransientRpcError):
             if retry == 9:
                 raise ValueError("retirement readback did not converge") from None
-            time.sleep(3)
+            time.sleep(remaining_timeout(deadline, 3))
 
 
 def cleanup(case, directory):
     config, receipt = load(directory / "config.json"), load(directory / "receipt.json")
     if not receipt["created"]:
         return
-    if not receipt["safe_to_delete"] and receipt.get("phase") == "guarded-replay":
-        # An interrupted start/status may have left a live exact reserved sandbox.
-        # The existing idempotent cleanup route is the only destruction authority.
-        request = load(directory / "request.json")
-        binding = {k: request[k] for k in ("schema_version", "replay_task_id", "attempt")}
-        try:
-            url = "https://" + config["name"] + ".lean-eval.workers.dev"
-            endpoint_health(url, receipt)
-            status, response = http(url + "/api/v1/historical-public-replay/cleanup", binding, True)
-            if status == 200 and response == {**binding, "destruction": "confirmed"}:
-                receipt["safe_to_delete"] = True
-                receipt["public_http_destruction"] = "confirmed"
-        except (TransportError, ValueError):
-            pass
-    # Only these newly created synthetic/public case resources may be fenced
-    # without an HTTP receipt. This does not authorize production/State cleanup.
+    deadline = time.monotonic() + 540  # Leave one minute inside the step for receipts.
+    required = {"worker_version", "namespaces", "health", "application_id", "application_version", "application_created_at"}
+    if not required.issubset(receipt):
+        receipt.update(recovery_required="creation-ownership-unrecorded", outcome="incomplete")
+        save(directory / "receipt.json", receipt)
+        raise ValueError("resources created but ownership never recorded; controlled recovery required")
     receipt["cleanup_mode"] = "http-confirmed-or-not-started" if receipt["safe_to_delete"] else "owned-control-plane-fence"
     if not receipt["safe_to_delete"]:
         receipt["outcome"] = "incomplete"
     save(directory / "receipt.json", receipt)
-    current = ownership(config)
-    if any(current[k] != receipt[k] for k in current):
-        raise ValueError("resource ownership changed; refuse deletion")
-    stub = copy.deepcopy(config)
-    stub.update(main="../runtime-guard-staging/retired.js", containers=[], durable_objects={"bindings": []})
+    disabled = copy.deepcopy(config)
+    disabled["containers"] = []
+    disabled["vars"].update(REPLAY_ENABLED="false", HISTORICAL_PUBLIC_REPLAY_ENABLED="false", STAGING_ACCEPTANCE_ENABLED="false")
+    stub = copy.deepcopy(disabled)
+    stub.update(main="../runtime-guard-staging/retired.js", durable_objects={"bindings": []})
     stub["migrations"].append({"tag": "v3-retired", "deleted_classes": ["ReplaySandbox", "ReplayTerminalReceipt"]})
-    stub["vars"].update(REPLAY_ENABLED="false", HISTORICAL_PUBLIC_REPLAY_ENABLED="false", STAGING_ACCEPTANCE_ENABLED="false")
-    path = ROOT / f"server/.public-guard-retired-{case}.json"
-    save(path, {**stub, "env": {"staging": stub}})
-    # Retire only the previously captured, freshly reverified namespace pair.
-    command("npx", "wrangler", "deploy", "--config", path.name, "--env", "staging", cwd=ROOT / "server")
-    stub_version = wait_retired(stub, config, receipt)
-    app = _verify_application(config, applications())
-    if app is not None:
-        if app != {k: receipt[k] for k in app}:
-            raise ValueError("container identity changed before deletion")
-        if retired_identity(stub, receipt) != stub_version:
-            raise ValueError("retired Worker changed before container deletion")
-        command("npx", "--prefix", "server", "wrangler", "containers", "delete", receipt["application_id"])
+    def deploy_config(rendered, suffix):
+        path = ROOT / f"server/.public-guard-{suffix}-{case}.json"
+        save(path, {**rendered, "env": {"staging": rendered}})
+        command("npx", "wrangler", "deploy", "--config", path.name, "--env", "staging", cwd=ROOT / "server", timeout=remaining_timeout(deadline, 120))
+    phase = receipt.get("retirement_phase", "original")
+    if phase == "original":
+        current = ownership(config, deadline)
+        if any(current[k] != receipt[k] for k in current):
+            raise ValueError("resource ownership changed; refuse deletion")
+        receipt["retirement_phase"] = "disabling"
+        save(directory / "receipt.json", receipt)
+        try:
+            deploy_config(disabled, "disabled")
+        except (CommandFailure, subprocess.TimeoutExpired):
+            pass  # Only exact readback can establish whether deployment applied.
+        receipt["disabled_worker_version"] = wait_retired(disabled, config, receipt, deadline)
+        receipt["retirement_phase"] = "disabled"
+        save(directory / "receipt.json", receipt)
+        phase = "disabled"
+    if phase in ("disabling", "retiring-classes"):
+        raise ValueError("retirement version was not recorded; controlled recovery required")
+    if phase in ("disabled", "application-absent"):
+        disabled_version = receipt["disabled_worker_version"]
+        if wait_retired(disabled, None, receipt, deadline) != disabled_version:
+            raise ValueError("disabled Worker changed before application deletion")
+        # Official order: remove Container config, delete app/instances, THEN class.
+        for retry in range(4):
+            app = _verify_application(config, applications(timeout=remaining_timeout(deadline, 60)))
+            if app is None:
+                break
+            if app != {k: receipt[k] for k in app}:
+                raise ValueError("container identity changed before deletion")
+            if retry == 3:
+                raise ValueError("owned container remains after deletion")
+            if wait_retired(disabled, None, receipt, deadline) != disabled_version:
+                raise ValueError("disabled Worker changed before application deletion")
+            receipt["application_delete_requested"] = True
+            save(directory / "receipt.json", receipt)
+            try:
+                command("npx", "--prefix", "server", "wrangler", "containers", "delete", receipt["application_id"], timeout=remaining_timeout(deadline, 60))
+            except (CommandFailure, subprocess.TimeoutExpired):
+                pass
+            time.sleep(remaining_timeout(deadline, 3))
+        receipt["retirement_phase"] = "application-absent"
+        save(directory / "receipt.json", receipt)
+        if wait_retired(disabled, None, receipt, deadline) != disabled_version:
+            raise ValueError("disabled Worker changed before class deletion")
+        receipt["retirement_phase"] = "retiring-classes"
+        save(directory / "receipt.json", receipt)
+        try:
+            deploy_config(stub, "retired")
+        except (CommandFailure, subprocess.TimeoutExpired):
+            pass
+        receipt["stub_version"] = wait_retired(stub, disabled, receipt, deadline)
+        receipt["retirement_phase"] = "retired"
+        save(directory / "receipt.json", receipt)
+    if receipt.get("retirement_phase") != "retired":
+        raise ValueError("unknown retirement checkpoint; controlled recovery required")
+    if _verify_application(config, applications(timeout=remaining_timeout(deadline, 60))) is not None:
+        raise ValueError("application absence changed before Worker deletion")
+    worker, stub_version = config["name"], receipt["stub_version"]
+    for retry in range(5):
+        try:
+            if cf(f"workers/services/{worker}", allow_missing=True, timeout=remaining_timeout(deadline, 30)) is None:
+                break
+            if retry == 4:
+                raise ValueError("temporary Worker remains")
+            if wait_retired(stub, None, receipt, deadline) != stub_version:
+                raise ValueError("retired Worker changed before deletion")
+            cf(f"workers/services/{worker}", method="DELETE", allow_missing=True, timeout=remaining_timeout(deadline, 30))
+        except (TransportError, TransientRpcError):
+            if retry == 4:
+                raise ValueError("temporary Worker absence did not converge") from None
+        time.sleep(remaining_timeout(deadline, 5))
     for retry in range(10):
-        if _verify_application(config, applications()) is None:
-            break
+        try:
+            if namespaces_absent(receipt, worker, deadline):
+                break
+        except (TransportError, TransientRpcError):
+            pass
         if retry == 9:
-            raise ValueError("owned container remains after deletion")
-        time.sleep(3)
-    if retired_identity(stub, receipt) != stub_version:
-        raise ValueError("retired Worker version changed before deletion")
-    worker = config["name"]
-    cf(f"workers/services/{worker}", method="DELETE")
-    for retry in range(4):
-        if cf(f"workers/services/{worker}", allow_missing=True) is None:
-            break
-        if retry == 3:
-            raise ValueError("temporary Worker remains")
-        time.sleep(5)
-    if any(n["id"] in receipt["namespaces"].values() or n["script"] == worker for n in namespaces()):
-        raise ValueError("temporary namespace remains")
-    receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed", stub_version=stub_version)
+            raise ValueError("temporary namespace absence did not converge")
+        time.sleep(remaining_timeout(deadline, 3))
+    if _verify_application(config, applications(timeout=remaining_timeout(deadline, 60))) is not None:
+        raise ValueError("temporary application reappeared; refuse adoption")
+    receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed")
     save(directory / "receipt.json", receipt)
 
 

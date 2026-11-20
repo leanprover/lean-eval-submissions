@@ -29,7 +29,10 @@ It does not restrict the workflow filename or compare caller SHA to deployed
 SHA. Any workflow admitted by that environment and immutable-ref policy has
 that staging authority. The fixed client independently checks complete endpoint
 health identity immediately before every POST. Temporary environment policy
-must remain bound to the approved tag until cleanup is complete.
+must remain bound to the approved tag until cleanup is complete. This admission
+also permits other matching workflows at that tag, including `set-staging-intake.yml`
+(which changes normal staging intake) and read-only `verify-state-writer.yml`;
+only this campaign is to be dispatched during the window.
 
 The two existing `two_plus_two` fixtures cover both remaining immutable PUBLIC
 image-source families. Each family runs with its qualified profile and with
@@ -87,16 +90,32 @@ setup/tail. Four serial cases cost at most 560 job-minutes, with one Sandbox at
 a time. Ambiguous transport stays distinct from typed pre-Sandbox refusals;
 only exact known 400/401/503 refusal bodies establish that no Sandbox began.
 Tool diagnostics are bounded and redact credentials; requests/keys are not logged.
+Health, OIDC mint and status transport failures share the same two-failure poll
+allowance. A terminal poll failure records incomplete. Deployment uses bounded
+read-only ownership capture before waiting for rollout, so rollout failure
+retains IDs; an unrecorded creation has an explicit controlled-recovery notice.
+The deploy phase bounds preflight to 2.5 minutes, CLI to 3, ownership to 3 and rollout
+to 15, leaving 3.5 minutes within its 27-minute cap. Cleanup has no OIDC credential;
+HTTP destruction is attempted only by the execution step without a CF token.
 
-Cleanup verifies full original ownership, including recorded active version,
-health/code/tag, application ID/version/date and namespace IDs/script/class.
-Known old stub/edge views and recorded namespace deletion may converge with
-bounded retries; foreign identities are refused. A fixed 503-only stub deletes
-exactly the captured namespace pair. Its active version/etag, complete bindings,
-empty container runtime, migration and health must match before deleting the
-recorded application. Stub identity is rechecked before deleting the Worker;
-final application, Worker and namespace absence is required. There is no
-force-delete or wildcard adoption.
+Cleanup follows the [documented Container retirement order](https://developers.cloudflare.com/containers/guides/migrate-to-durable-object-scheduling-policy/#move-the-application).
+First it verifies complete original Worker/app/namespace ownership. It deploys
+the same entrypoint with execution flags false and `containers: []`, keeping
+both old DO classes, bindings and migrations. Removing Container configuration
+does not delete the app. Exact disabled code/health/tag/version and namespace
+IDs are verified before deleting the recorded app; the API deletion cancels its
+instances. App absence is required before a fixed 503-only stub deletes exactly
+the recorded DO classes/bindings. Only then can namespace and Worker absence be
+proved. No exports, runtime implementation or scheduling policy is changed.
+
+Known propagation and transient failures have bounded retries, including every
+stub recheck, Worker re-delete and final namespace listing. Foreign identities
+are refused. Successful checkpoints record the disabled/stub version, allowing
+known intermediate recovery; unrecorded versions require controlled recovery.
+The whole cleanup has a shared nine-minute deadline inside its ten-minute step,
+including both deploys, app deletion and all readbacks. There is no force delete.
+The exact current SDK/provider sequence still needs its first live verification;
+any actual constraint stops for root without broadening deletion authority.
 
 For these owned synthetic/public fixtures only, ambiguous observation or a
 staging timeout may use that exact ownership-verified control-plane fence and
@@ -110,6 +129,8 @@ and retains the source-free target for controlled recovery.
 Only `receipt.json` is uploaded: source-free identities, runtime, outcome and
 cleanup state. Requests, archives, age identities, tokens and config are not.
 Cloudflare's [namespace inventory API](https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/methods/list/)
-is paginated using `total_count`, not optional `total_pages`. No staging result
+is paginated using `total_count`, not optional `total_pages`. Live preflight must
+exercise this exact helper against the account and validate its paging fields
+and 64 KiB response cap before any resource creation. No staging result
 retroactively attests the old pilot or grants State qualification authority.
 A production public chain needs its own fresh State/source readiness packet.
