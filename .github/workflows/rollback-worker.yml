@@ -70,6 +70,10 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "production rollback requires the current main workflow" >&2
+            exit 1
+          fi
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
             echo "expected_commit must be a full lowercase Git SHA" >&2
             exit 1
@@ -99,6 +103,10 @@ jobs:
           mkdir -p "$plan_dir"
           git worktree add --detach "$plan_dir/target" "$EXPECTED_COMMIT"
           target="$plan_dir/target/server"
+
+          python ../scripts/validate_cloudflare_rollback.py evaluation-callback-floor \
+            --qualification "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json" \
+            --target-root "$plan_dir/target"
 
           npx wrangler deployments status --config wrangler.jsonc \
             --env production --json > "$plan_dir/original-intake-status.json"
@@ -208,6 +216,7 @@ jobs:
             --state-schema "$plan_dir/state-schema.json" \
             --require-replay-disabled \
             --require-intake-disabled \
+            --require-launch-gates-disabled \
             --output "$plan_dir/plan.json"
 
           for component in intake broker replay; do
@@ -269,7 +278,18 @@ jobs:
             --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \
             --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$EXPECTED_COMMIT" \
             --var "INTAKE_ENABLED:false" \
-            --var "INTAKE_ENABLEMENT_MODE:disabled"
+            --var "INTAKE_ENABLEMENT_MODE:disabled" \
+            --var "LEGACY_RESULT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_MAINTAINER_API_ENABLED:false" \
+            --var 'RESULT_AMENDMENT_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_OWNER_API_ENABLED:false" \
+            --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
+            --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_IN_API_ENABLED:false" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:false" \
+            --var "PROMOTION_CANARY_ENABLED:false"
 
       - name: Verify disabled intake before dependency mutation
         env:
@@ -293,7 +313,7 @@ jobs:
             --config "$plan_dir/target/server/wrangler.jsonc" \
             --version "$plan_dir/deployed-intake-version.json" \
             --version-id "$deployed_version" \
-            --require-intake-disabled
+            --require-intake-disabled --require-launch-gates-disabled
           curl --fail --silent --show-error --max-time 10 \
             --retry 12 --retry-all-errors --retry-delay 5 \
             https://lean-eval-submission-server.lean-eval.workers.dev/healthz \
@@ -440,7 +460,8 @@ jobs:
             --environment production \
             --config "$plan_dir/target/server/wrangler.jsonc" \
             --version "$plan_dir/final-intake-version.json" \
-            --version-id "$deployed_version" --require-intake-disabled
+            --version-id "$deployed_version" --require-intake-disabled \
+            --require-launch-gates-disabled
           curl --fail --silent --show-error --proto '=https' --max-redirs 0 --max-time 10 \
             --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 120 \
             https://lean-eval-submission-server.lean-eval.workers.dev/healthz \

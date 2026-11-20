@@ -81,6 +81,50 @@ the evaluation-acceptance timestamp plus two calendar months, clamped to the
 last day of the target month. Withheld and open-conjecture results are not
 scheduled.
 
+New server workflows freeze `evaluation-terminal.json` on the original selected
+standard/large evaluation runner, immediately after evaluation and before metric
+collection or artifact upload. Its start is the trusted attempt-job start,
+including setup; its terminal timestamp is sampled once after evaluation returns.
+The receipt binds submission, immutable workflow/run/original attempt, selected
+runner tier, source and metadata digest, benchmark/toolchain, problem/revision,
+job outcome and exact result bytes. Only a successful attempt status produces a
+success receipt; other statuses produce a failure receipt if the receipt step
+can finish. The aggregate still excludes cancellation of the whole workflow,
+selects the standard/large attempt, and requires that attempt to succeed for
+aggregate success; a failure receipt cannot create acceptance. Non-success aggregate results must
+still be exactly failure for a failure callback, never cancelled or skipped.
+The receipt is source-free and receives no callback, State, recorder or AWS
+credential. A failure before checkout, a missing start/identity, runner loss,
+or cancellation/timeout that prevents receipt or artifact cleanup leaves
+completion unproved. The local failure-path tests do not establish that GitHub
+will finish cleanup or invoke the aggregate after an actual cancellation or
+job timeout. No missing receipt acquires a fallback completion clock.
+
+The source-free callback validates the selected receipt against its original
+run and inputs. A callback-only retry may have a later run-attempt number but
+must reuse the original receipt and result bytes; it cannot replace acceptance
+time with its retry clock. Completion API version2 carries both `occurred_at`
+(attempt start) and `completed_at` (terminal acceptance/rejection/failure). The
+Worker uses `completed_at` exactly for the terminal event and hence the embargo.
+Version2 lifecycle identities bind the complete validated callback, including
+start, terminal time, attempt, benchmark/toolchain and outcome. Changed terminal
+payloads conflict; semantically identical retries survive canonical Git key
+ordering. Consecutive retryable failed evaluations retain their existing retry
+policy. Version1 event IDs keep their original derivation.
+Version1 callbacks remain accepted unchanged for already dispatched workflows;
+their historical archive-relative timestamps are not silently corrected.
+Deploy through the existing coupled Worker/workflow promotion so the compatible
+Worker is present before its version2 dispatch tag is used.
+
+The immutable base Result's `accepted_at` remains its original Results recording
+time, often later than evaluation completion; it is not a replacement checker
+clock. Existing events, schedules and Results are unchanged. Existing scheduled
+records with archive-relative acceptance require a separately reviewed audit and
+publication eligibility guard before publication resumes. Do not rewrite old
+canonical events or treat a newly generated callback clock as historical proof.
+The existing seven-day artifact retention remains; an expired receipt requires
+separate recovery evidence, never a fabricated fallback timestamp.
+
 If the deterministic result ID is already guarded by an earlier `claimed` or
 `recorded` authority, the first authority remains canonical. Instead of
 retrying forever or adopting that authority, the callback atomically appends

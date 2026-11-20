@@ -136,6 +136,7 @@ jobs:
       contents: read
     with:
       runner_tier: standard
+      submission_id: ${{ inputs.submission_id }}
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
       source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
@@ -211,6 +212,7 @@ jobs:
       contents: read
     with:
       runner_tier: large
+      submission_id: ${{ inputs.submission_id }}
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
       source_metadata_sha256: ${{ needs.archive.outputs.source_metadata_sha256 }}
@@ -236,6 +238,7 @@ jobs:
       benchmark_commit: ${{ needs.archive.outputs.benchmark_commit }}
       toolchain: ${{ needs.archive.outputs.toolchain }}
       results_artifact: ${{ needs.escalation.outputs.retry == 'true' && 'submission-results-large' || 'submission-results-standard' }}
+      runner_tier: ${{ needs.escalation.outputs.retry == 'true' && 'large' || 'standard' }}
       allowlist_required: ${{ needs.escalation.outputs.allowlist_required }}
     steps:
       - name: Require a completed final evaluation
@@ -882,6 +885,12 @@ jobs:
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
           ALLOWLIST_REQUIRED: ${{ needs.evaluate.outputs.allowlist_required }}
           EVALUATOR_VERSION: ${{ github.sha }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          SOURCE_COMMIT: ${{ needs.archive.outputs.source_commit }}
+          SOURCE_METADATA_SHA256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+          STATEMENT_REVISION: ${{ inputs.statement_revision }}
+          RUNNER_TIER: ${{ needs.evaluate.outputs.runner_tier }}
           PROBLEM_ID: ${{ inputs.problem_id }}
           TOOLCHAIN: ${{ needs.evaluate.outputs.toolchain }}
         run: |
@@ -897,6 +906,12 @@ jobs:
             --benchmark-commit "$BENCHMARK_COMMIT" \
             --toolchain "$TOOLCHAIN" \
             --evaluator-version "$EVALUATOR_VERSION" \
+            --submission-id "$SUBMISSION_ID" \
+            --terminal-receipt /tmp/evaluation-results/evaluation-terminal.json \
+            --workflow-run-id "$GITHUB_RUN_ID" --current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-repository "$SOURCE_REPOSITORY" --source-commit "$SOURCE_COMMIT" \
+            --source-metadata-sha256 "$SOURCE_METADATA_SHA256" \
+            --statement-revision "$STATEMENT_REVISION" --runner-tier "$RUNNER_TIER" \
             --allowlist-required "$ALLOWLIST_REQUIRED" \
             --output /tmp/evaluation-completion.json \
             "${results_flag[@]}"
