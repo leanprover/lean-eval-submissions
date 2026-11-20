@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
+import errno
 import hashlib
 import io
 import json
@@ -12,10 +13,14 @@ import os
 import pathlib
 import re
 import secrets
+import socket
+import ssl
 import subprocess
 import sys
 import tarfile
 import time
+import uuid
+import urllib.error
 
 SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPT_DIRECTORY) not in sys.path:
@@ -135,21 +140,101 @@ def applications(timeout=180):
         raise TransientRpcError("container inventory temporarily unavailable") from None
 
 
-def wait_applications(deadline):
+def application_details(config, namespace_id, deadline):
+    """Resolve only the named summary to its account- and namespace-bound detail."""
+    rows = applications(timeout=remaining_timeout(deadline, 60))
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("container summary inventory is invalid")
+    name = config["containers"][0]["name"]
+    matches = [row for row in rows if row.get("name") == name]
+    if len(matches) > 1:
+        raise ValueError("container application identity is ambiguous")
+    if not matches:
+        return []  # Absence must come from a successful, fresh inventory read.
+    summary = matches[0]
+    identity = summary.get("id")
+    try:
+        if not isinstance(identity, str) or str(uuid.UUID(identity)) != identity:
+            raise ValueError
+    except ValueError:
+        raise ValueError("container summary identity is invalid") from None
+    try:
+        detail = json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "info", identity, "--json", timeout=remaining_timeout(deadline, 60)))
+    except (CommandFailure, subprocess.TimeoutExpired):
+        # An info failure, including disappearance between list and info, is
+        # never absence or deletion authority. Retry the bounded inventory read.
+        raise TransientRpcError("container detail temporarily unavailable") from None
+    if not isinstance(detail, dict):
+        raise ValueError("container application detail is invalid")
+    if any(detail.get(key) != summary.get(key) for key in ("id", "name", "version", "created_at")):
+        raise ValueError("container summary and detail identities disagree")
+    if (detail.get("account_id") != ACCOUNT
+            or detail.get("durable_objects") != {"namespace_id": namespace_id}):
+        raise ValueError("container application account or namespace differs")
+    configuration = detail.get("configuration")
+    if not isinstance(configuration, dict) or summary.get("image") != configuration.get("image"):
+        raise ValueError("container summary and detail images disagree")
+    return [detail]  # Preserve the full provider record for the strict verifier.
+
+
+def wait_applications(deadline, config, namespace_id):
     for retry in range(10):
         try:
-            return applications(timeout=remaining_timeout(deadline, 60))
+            return application_details(config, namespace_id, deadline)
         except (TransientRpcError, TransportError):
             if retry == 9:
                 raise ValueError("container inventory did not converge") from None
             time.sleep(remaining_timeout(deadline, 3))
 
 
-def http(url, body=None, oidc=False, timeout_budget=None):
+def transport_failure(error):
+    """Classify a bounded exception graph without copying messages or context."""
+    pending, seen = [error], set()
+    for _ in range(8):
+        if not pending:
+            break
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, TimeoutError) or isinstance(current, OSError) and current.errno == errno.ETIMEDOUT:
+            return {"cause": "timeout", "timed_out": True}
+        if isinstance(current, ConnectionResetError) or isinstance(current, OSError) and current.errno == errno.ECONNRESET:
+            return {"cause": "connection_reset", "timed_out": False}
+        if isinstance(current, socket.gaierror):
+            return {"cause": "dns", "timed_out": False}
+        if isinstance(current, ssl.SSLError):
+            return {"cause": "tls", "timed_out": False}
+        if isinstance(current, BaseException) and isinstance(current.__cause__, BaseException):
+            pending.append(current.__cause__)
+        if isinstance(current, urllib.error.URLError) and isinstance(current.reason, BaseException):
+            pending.append(current.reason)
+    return {"cause": "unknown_transport", "timed_out": False}
+
+
+def diagnostic_request(method, url, headers, body, timeout, diagnostics, stage):
+    if diagnostics is None:
+        return request_http(method, url, headers, body, timeout)
+    started = time.monotonic()
+    checkpoint = {"stage": stage, "timeout_seconds": timeout}
+    diagnostics({**checkpoint, "state": "pending"})
+    try:
+        response = request_http(method, url, headers, body, timeout)
+    except TransportError as error:
+        diagnostics({**checkpoint, "state": "failed",
+                     "elapsed_ms": max(0, int((time.monotonic() - started) * 1000)),
+                     **transport_failure(error)})
+        raise
+    diagnostics({**checkpoint, "state": "responded",
+                 "elapsed_ms": max(0, int((time.monotonic() - started) * 1000))})
+    return response
+
+
+def http(url, body=None, oidc=False, timeout_budget=None, diagnostics=None):
     headers = {}
     if oidc:
         token_url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=lean-eval-replay-staging"
-        token = request_http("GET", token_url, {"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]}, None, 30)
+        token = diagnostic_request("GET", token_url, {"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]}, None, 30, diagnostics, "oidc_mint")
         if token.status in (429, 500, 502, 503, 504):
             raise TransientRpcError("staging OIDC mint temporarily unavailable")
         if token.status != 200:
@@ -161,7 +246,7 @@ def http(url, body=None, oidc=False, timeout_budget=None):
     timeout = 30 if body is None else 300 if url.endswith(("/staging-acceptance", "/historical-public-replay")) else 60
     if timeout_budget is not None:
         timeout = min(timeout, timeout_budget)
-    r = request_http("GET" if body is None else "POST", url, headers, raw, timeout)
+    r = diagnostic_request("GET" if body is None else "POST", url, headers, raw, timeout, diagnostics, "endpoint_request")
     try:
         return r.status, json.loads(r.body)
     except (ValueError, UnicodeError):
@@ -257,7 +342,7 @@ def ownership(config, deadline=None):
             raise TransientRpcError("created namespace listing has not converged")
         if row["script"] != worker or row["class"] != binding["class_name"]:
             raise ValueError("bound namespace belongs to a different script or class")
-    app = _verify_application(config, applications(timeout=remaining_timeout(deadline, 60)))
+    app = _verify_application(config, application_details(config, ids["REPLAY_SANDBOX"], deadline))
     if app is None:
         raise ValueError("owned staging container is missing")
     return {"worker_version": actual_version, "namespaces": ids, "health": health, **app}
@@ -287,14 +372,19 @@ def deploy(case, directory):
     command("npx", "wrangler", "deploy", "--config", f".public-guard-{case}.json", "--env", "staging", cwd=ROOT / "server")
     receipt.update(wait_ownership(config))
     save(directory / "receipt.json", receipt)
-    subprocess.run([sys.executable, "../scripts/wait_replay_container_rollout.py", "--config", f".public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"], "--attempts", "40", "--interval-seconds", "10", "--command-timeout-seconds", "10"], cwd=ROOT / "server", check=True, timeout=900)
+    # These resources were absent before deployment and the exact new namespace,
+    # application and immutable image are now verified. There is no previous
+    # application image to roll out. run_case must establish execution readiness
+    # through the existing source-free marker before sending any public Source.
+    # Application-wide provisioning counters do not establish that readiness.
 
 
 def run_case(case, directory):
     if os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("STATE_WRITE_KEY"):
         raise ValueError("deployment or State writer credential reached execution")
     config, receipt, request = load(directory / "config.json"), load(directory / "receipt.json"), load(directory / "request.json")
-    if not receipt.get("worker_version"):
+    required = {"worker_version", "namespaces", "health", "application_id", "application_version", "application_created_at"}
+    if not receipt.get("created") or not required.issubset(receipt) or any(not receipt[k] for k in required):
         raise ValueError("exact ownership was not established")
     url = "https://" + config["name"] + ".lean-eval.workers.dev"
     # The existing synthetic route reports actual host identity and destroys
@@ -314,8 +404,23 @@ def run_case(case, directory):
     endpoint_health(url, receipt)
     receipt["safe_to_delete"] = False
     receipt["phase"] = "runtime-observation"
+    receipt["outcome"] = "incomplete"
+    receipt.pop("runtime_readiness", None)
+    receipt["marker_binding"] = {
+        "schema_version": 1, "phase": "runtime-observation",
+        **{key: observation[key] for key in ("request_id", "runner_nonce", "archive_ciphertext_sha256", "marker_sha256")},
+        "worker": config["name"], "worker_commit": receipt["commit"],
+        "worker_version": receipt["worker_version"],
+    }
+    receipt["marker_http"] = {}
     save(directory / "receipt.json", receipt)
-    status, evidence = http(url + "/api/v1/staging-acceptance", observation, True)
+
+    def record_marker_http(checkpoint):
+        receipt["marker_http"][checkpoint["stage"]] = checkpoint
+        save(directory / "receipt.json", receipt)
+
+    status, evidence = http(url + "/api/v1/staging-acceptance", observation, True,
+                            diagnostics=record_marker_http)
     refusal = {401: {"error": "unauthorized"}, 400: {"error": "invalid_request"},
                503: {"error": "staging_acceptance_disabled"}}
     if status in refusal and evidence == refusal[status]:
@@ -331,6 +436,8 @@ def run_case(case, directory):
     save(directory / "receipt.json", receipt)
     if any(evidence[k] != load(directory / "profile.json")[k] for k in receipt["observed_runtime"]):
         raise ValueError("observed runtime differs from the frozen profile; stop")
+    receipt["runtime_readiness"] = "source-free-marker-confirmed"
+    save(directory / "receipt.json", receipt)
     binding = {k: request[k] for k in ("schema_version", "replay_task_id", "attempt")}
     endpoint_health(url, receipt)
     status, response = http(url + "/api/v1/historical-public-replay/cleanup-reservation", binding, True)
@@ -523,7 +630,7 @@ def cleanup(case, directory):
             raise ValueError("disabled Worker changed before application deletion")
         # Official order: remove Container config, delete app/instances, THEN class.
         for retry in range(10):
-            app = _verify_application(config, wait_applications(deadline))
+            app = _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"]))
             if app is None:
                 break
             if app != {k: receipt[k] for k in app}:
@@ -554,7 +661,7 @@ def cleanup(case, directory):
         save(directory / "receipt.json", receipt)
     if receipt.get("retirement_phase") != "retired":
         raise ValueError("unknown retirement checkpoint; controlled recovery required")
-    if _verify_application(config, wait_applications(deadline)) is not None:
+    if _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"])) is not None:
         raise ValueError("application absence changed before Worker deletion")
     worker, stub_version = config["name"], receipt["stub_version"]
     for retry in range(5):
@@ -579,7 +686,7 @@ def cleanup(case, directory):
         if retry == 9:
             raise ValueError("temporary namespace absence did not converge")
         time.sleep(remaining_timeout(deadline, 3))
-    if _verify_application(config, wait_applications(deadline)) is not None:
+    if _verify_application(config, wait_applications(deadline, config, receipt["namespaces"]["REPLAY_SANDBOX"])) is not None:
         raise ValueError("temporary application reappeared; refuse adoption")
     receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed")
     save(directory / "receipt.json", receipt)

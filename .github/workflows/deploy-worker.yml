@@ -638,8 +638,8 @@ jobs:
             commit=$(python ../scripts/validate_cloudflare_rollback.py \
               production-state-readiness --response "$proof" \
               --http-status "$http_status" \
-              --expected-contract e2dd6314f04df175966ff105709b855053949d97 \
-              --expected-schema c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e) \
+              --qualification ../.audit/cloudflare-rollback-qualification-v1.json \
+              --target-root ..) \
               || classification=$?
             if [ "$classification" -eq 0 ]; then break; fi
             if [ "$classification" -ne 75 ] || [ "$attempt" -eq 6 ]; then
@@ -652,7 +652,11 @@ jobs:
             echo "production State readiness returned no qualified commit" >&2
             exit 1
           fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          {
+            echo "commit=$commit"
+            echo "contract=$(jq -er .state_contract_commit "$proof")"
+            echo "schema=$(jq -er .state_event_schema_sha256 "$proof")"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare the exact Worker-enforced intake lease
         if: steps.production-intake.outputs.enabled == 'true'
@@ -717,6 +721,8 @@ jobs:
           INTAKE_LEASE_EXPIRES_AT: ${{ steps.intake-lease.outputs.expires_at }}
           EXPECTED_LIFECYCLE_ENABLED: ${{ steps.production-lifecycle.outputs.enabled }}
           QUALIFIED_STATE_COMMIT: ${{ steps.production-state.outputs.commit }}
+          QUALIFIED_STATE_CONTRACT: ${{ steps.production-state.outputs.contract }}
+          QUALIFIED_STATE_SCHEMA: ${{ steps.production-state.outputs.schema }}
           READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
@@ -781,8 +787,8 @@ jobs:
             --response-output "$plan_dir/intake-lease-smoke-response.json" \
             --state-proof-output "$plan_dir/post-smoke-state-proof.json" \
             --expected-expires-at "$INTAKE_LEASE_EXPIRES_AT" \
-            --expected-contract e2dd6314f04df175966ff105709b855053949d97 \
-            --expected-schema c7993f8038a4937659ea2bd40fce8b97100c6f63bb1565605d841b67091f8a9e
+            --expected-contract "$QUALIFIED_STATE_CONTRACT" \
+            --expected-schema "$QUALIFIED_STATE_SCHEMA"
           state_commit=$(jq -er '
             select(.status == "lease_smoke_consumed" or .status == "lease_smoke_already_consumed") |
             select(.environment == "production") |

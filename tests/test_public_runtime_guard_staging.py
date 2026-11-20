@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import copy
 import contextlib
+import errno
 import io
+import json
 import pathlib
+import socket
+import ssl
 import tempfile
 import types
 import unittest
+import urllib.error
 from unittest import mock
 import importlib.util
 
@@ -20,6 +25,248 @@ TASK = 'rt1_' + 'b' * 64
 
 
 class PublicRuntimeGuardStagingTests(unittest.TestCase):
+    def test_transport_diagnostics_use_only_fixed_categories_and_bounded_causes(self):
+        class SecretNamedError(Exception):
+            def __str__(self):
+                raise AssertionError('exception messages must not be inspected')
+            __repr__ = __str__
+
+        cases = ((TimeoutError(), 'timeout'), (OSError(errno.ETIMEDOUT, 'secret'), 'timeout'),
+                 (ConnectionResetError(), 'connection_reset'),
+                 (OSError(errno.ECONNRESET, 'secret'), 'connection_reset'),
+                 (socket.gaierror(), 'dns'), (ssl.SSLError(), 'tls'),
+                 (SecretNamedError(), 'unknown_transport'))
+        for underlying, cause in cases:
+            wrapped = stage.TransportError('secret')
+            wrapped.__cause__ = urllib.error.URLError(underlying)
+            with self.subTest(cause=cause):
+                self.assertEqual(stage.transport_failure(wrapped),
+                                 {'cause': cause, 'timed_out': cause == 'timeout'})
+        cycle = SecretNamedError()
+        cycle.__cause__ = urllib.error.URLError(cycle)
+        self.assertEqual(stage.transport_failure(cycle)['cause'], 'unknown_transport')
+        deep = TimeoutError()
+        for _ in range(9):
+            outer = SecretNamedError()
+            outer.__cause__, deep = deep, outer
+        self.assertEqual(stage.transport_failure(deep)['cause'], 'unknown_transport')
+        # A string URL reason is never interpreted as evidence of a timeout.
+        self.assertEqual(stage.transport_failure(urllib.error.URLError('secret timeout')),
+                         {'cause': 'unknown_transport', 'timed_out': False})
+
+    def test_marker_transport_records_pending_stage_and_failure_without_source_or_secrets(self):
+        from reserve_historical_public_cleanup import HttpResponse
+        faults = ((TimeoutError('secret-error'), 'timeout'),
+                  (ConnectionResetError('secret-error'), 'connection_reset'),
+                  (socket.gaierror('secret-error'), 'dns'),
+                  (ssl.SSLError('secret-error'), 'tls'))
+        for failed_stage in ('oidc_mint', 'endpoint_request'):
+            for fault, cause in faults:
+                with self.subTest(stage=failed_stage, cause=cause), tempfile.TemporaryDirectory() as temp:
+                    directory = pathlib.Path(temp)
+                    _, _, receipt, _ = self.fixture(directory)
+                    calls = []
+                    def command(*args, **kwargs):
+                        if args[1] == '-o':
+                            pathlib.Path(args[2]).write_bytes(b'secret-identity')
+                        return b'age1synthetic'
+                    def request(method, url, headers, body, timeout):
+                        if url.endswith('/healthz'):
+                            return HttpResponse(200, json.dumps(receipt['health']).encode())
+                        stage_name = 'oidc_mint' if method == 'GET' else 'endpoint_request'
+                        calls.append(stage_name)
+                        persisted = stage.load(directory / 'receipt.json')
+                        self.assertEqual(persisted['marker_http'][stage_name],
+                                         {'stage': stage_name, 'state': 'pending',
+                                          'timeout_seconds': 30 if method == 'GET' else 300})
+                        binding = persisted['marker_binding']
+                        self.assertEqual(set(binding), {'schema_version', 'phase', 'request_id',
+                                         'runner_nonce', 'archive_ciphertext_sha256', 'marker_sha256',
+                                         'worker', 'worker_commit', 'worker_version'})
+                        self.assertEqual(binding['worker_commit'], SHA)
+                        self.assertEqual(binding['worker_version'], receipt['worker_version'])
+                        self.assertEqual(binding['phase'], 'runtime-observation')
+                        if stage_name == failed_stage:
+                            wrapped = stage.TransportError('secret-transport')
+                            wrapped.__cause__ = urllib.error.URLError(fault)
+                            raise wrapped
+                        return HttpResponse(200, b'{"value":"secret-minted-token"}')
+                    env = {'CLOUDFLARE_API_TOKEN': '', 'STATE_WRITE_KEY': '',
+                           'ACTIONS_ID_TOKEN_REQUEST_URL': 'https://oidc.invalid/?secret-url',
+                           'ACTIONS_ID_TOKEN_REQUEST_TOKEN': 'secret-request-token'}
+                    with mock.patch.dict(stage.os.environ, env, clear=True), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage.subprocess, 'run', return_value=mock.Mock(stdout=b'secret-ciphertext')), mock.patch.object(stage, 'request_http', side_effect=request), mock.patch.object(stage.time, 'monotonic', side_effect=[10, 11, 20, 21]):
+                        with self.assertRaises(stage.TransportError):
+                            stage.run_case('a-match', directory)
+                    self.assertEqual(calls, ['oidc_mint'] if failed_stage == 'oidc_mint' else ['oidc_mint', 'endpoint_request'])
+                    final = stage.load(directory / 'receipt.json')
+                    self.assertEqual(final['marker_http'][failed_stage],
+                                     {'stage': failed_stage, 'state': 'failed',
+                                      'timeout_seconds': 30 if failed_stage == 'oidc_mint' else 300,
+                                      'elapsed_ms': 1000, 'cause': cause, 'timed_out': cause == 'timeout'})
+                    if failed_stage == 'endpoint_request':
+                        self.assertEqual(final['marker_http']['oidc_mint']['state'], 'responded')
+                    self.assertFalse(final['safe_to_delete'])
+                    self.assertEqual(final['outcome'], 'incomplete')
+                    self.assertNotIn('runtime_readiness', final)
+                    self.assertNotIn('observation_http_destruction', final)
+                    self.assertNotIn('secret-', (directory / 'receipt.json').read_text())
+                    self.assertFalse((directory / 'marker-identity.age').exists())
+
+    def test_optional_http_diagnostics_preserve_response_and_single_marker_post(self):
+        from reserve_historical_public_cleanup import HttpResponse
+        checkpoints = []
+        response = HttpResponse(401, b'{"error":"unauthorized"}')
+        with mock.patch.object(stage, 'request_http', return_value=response) as request, mock.patch.object(stage.time, 'monotonic', side_effect=[5, 5.25]):
+            self.assertEqual(stage.http('https://marker.invalid/staging-acceptance', {}, diagnostics=checkpoints.append),
+                             (401, {'error': 'unauthorized'}))
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[-1], 300)
+        self.assertEqual(checkpoints, [
+            {'stage': 'endpoint_request', 'state': 'pending', 'timeout_seconds': 300},
+            {'stage': 'endpoint_request', 'state': 'responded', 'timeout_seconds': 300, 'elapsed_ms': 250}])
+
+    def recorded_application(self):
+        # Actual pinned-Wrangler summary/detail shapes from the first staging
+        # deployment; provider metadata only, with no execution or credentials.
+        fixtures = ROOT / 'tests/fixtures/public-runtime-guard'
+        summary = stage.load(fixtures / 'application-summary.json')
+        detail = stage.load(fixtures / 'application-detail.json')
+        qualified = stage.load(ROOT / f'evidence/public-replay/profiles/{stage.FAMILIES["a"][0]}.json')
+        config, _ = stage.render('a-match', qualified, SHA, TASK)
+        return config, summary, detail
+
+    def test_recorded_summary_resolves_full_detail_for_real_strict_verifier(self):
+        config, summary, detail = self.recorded_application()
+        namespace = detail['durable_objects']['namespace_id']
+        self.assertNotIn('configuration', summary[0])
+        with mock.patch.object(stage, 'command', side_effect=[json.dumps(summary).encode(), json.dumps(detail).encode()]) as command, mock.patch.object(stage.time, 'monotonic', side_effect=[100, 107]):
+            candidates = stage.application_details(config, namespace, 120)
+            self.assertEqual(candidates, [detail])
+            self.assertEqual(stage._verify_application(config, candidates), {
+                'application_id': detail['id'], 'application_version': detail['version'],
+                'application_created_at': detail['created_at']})
+            self.assertEqual(command.call_args_list, [
+                mock.call('npx', '--prefix', 'server', 'wrangler', 'containers', 'list', '--json', timeout=20),
+                mock.call('npx', '--prefix', 'server', 'wrangler', 'containers', 'info', detail['id'], '--json', timeout=13)])
+
+    def test_detail_lookup_refuses_summary_identity_image_account_and_namespace_drift(self):
+        config, summary, original = self.recorded_application()
+        for path, changed in ((('id',), '11111111-1111-1111-1111-111111111111'),
+                              (('name',), 'foreign'), (('version',), 2),
+                              (('created_at',), '2026-11-20T03:14:23.000Z'),
+                              (('account_id',), 'foreign'),
+                              (('durable_objects', 'namespace_id'), 'foreign'),
+                              (('configuration', 'image'), 'foreign')):
+            detail = copy.deepcopy(original)
+            target = detail
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = changed
+            with self.subTest(path=path), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+                with self.assertRaises(ValueError):
+                    stage.application_details(config, original['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+
+    def test_detail_lookup_preserves_configuration_for_strict_rejection(self):
+        config, summary, original = self.recorded_application()
+        for path, changed in ((('configuration', 'command'), ['unexpected']),
+                              (('configuration', 'memory_mib'), 24576),
+                              (('max_instances',), 2)):
+            detail = copy.deepcopy(original)
+            target = detail
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = changed
+            with self.subTest(path=path), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+                candidates = stage.application_details(config, original['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+                with self.assertRaisesRegex(ValueError, 'rendered settings'):
+                    stage._verify_application(config, candidates)
+
+    def test_detail_lookup_refuses_ambiguous_or_invalid_summary_before_info(self):
+        config, summary, detail = self.recorded_application()
+        invalid_id = copy.deepcopy(summary)
+        invalid_id[0]['id'] = '--config'
+        for rows in (summary+summary, invalid_id, {}, [None]):
+            with self.subTest(rows=rows), mock.patch.object(stage, 'applications', return_value=rows), mock.patch.object(stage, 'command') as command:
+                with self.assertRaises(ValueError):
+                    stage.application_details(config, detail['durable_objects']['namespace_id'], stage.time.monotonic()+120)
+                command.assert_not_called()
+
+    def test_detail_disappearance_requires_new_successful_inventory_for_absence(self):
+        config, summary, detail = self.recorded_application()
+        for error in (stage.CommandFailure('not found'), stage.subprocess.TimeoutExpired('wrangler', 1)):
+            with self.subTest(error=type(error).__name__), mock.patch.object(stage, 'applications', side_effect=[summary, []]) as inventory, mock.patch.object(stage, 'command', side_effect=error) as info, mock.patch.object(stage.time, 'sleep'):
+                self.assertEqual(stage.wait_applications(stage.time.monotonic()+120, config, detail['durable_objects']['namespace_id']), [])
+                self.assertEqual(inventory.call_count, 2)
+                info.assert_called_once()
+
+    def test_detail_failure_never_becomes_absence_when_inventory_keeps_application(self):
+        config, summary, detail = self.recorded_application()
+        with mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', side_effect=stage.CommandFailure('not found')) as info, mock.patch.object(stage.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'did not converge'):
+                stage.wait_applications(stage.time.monotonic()+120, config, detail['durable_objects']['namespace_id'])
+            self.assertEqual(info.call_count, 10)
+
+    def test_unrelated_applications_are_not_fetched_and_named_collision_is_not_adopted(self):
+        config, summary, detail = self.recorded_application()
+        unrelated = copy.deepcopy(summary)
+        unrelated[0]['name'] = 'unrelated'
+        with mock.patch.object(stage, 'applications', return_value=unrelated), mock.patch.object(stage, 'command') as info:
+            self.assertEqual(stage.application_details(config, detail['durable_objects']['namespace_id'], stage.time.monotonic()+120), [])
+            info.assert_not_called()
+        with tempfile.TemporaryDirectory() as temp:
+            directory = pathlib.Path(temp)
+            _, _, receipt, _ = self.fixture(directory)
+            receipt['created'] = False
+            stage.save(directory / 'receipt.json', receipt)
+            with mock.patch.object(stage, 'cf', return_value=None), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command') as command:
+                with self.assertRaisesRegex(ValueError, 'collision'):
+                    stage.deploy('a-match', directory)
+                command.assert_not_called()
+            self.assertFalse(stage.load(directory / 'receipt.json')['created'])
+
+    def test_detail_read_deadline_exhaustion_stops_before_info(self):
+        config, summary, detail = self.recorded_application()
+        with mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command') as info, mock.patch.object(stage.time, 'monotonic', side_effect=[100, 121]):
+            with self.assertRaisesRegex(stage.TransientRpcError, 'deadline expired'):
+                stage.application_details(config, detail['durable_objects']['namespace_id'], 120)
+            info.assert_not_called()
+
+    def test_real_ownership_consumes_recorded_detail_with_verified_worker_namespace(self):
+        config, summary, detail = self.recorded_application()
+        ids = {'REPLAY_SANDBOX': detail['durable_objects']['namespace_id'], 'REPLAY_TERMINAL_RECEIPT': '2ba29b2f501544e48e5846d7ce3459f5'}
+        rows = [{'id': ids[b['name']], 'script': config['name'], 'class': b['class_name']} for b in config['durable_objects']['bindings']]
+        with mock.patch.object(stage, 'cf', return_value={}), mock.patch.object(stage, '_active_version', return_value=('version', {})), mock.patch.object(stage, 'http', return_value=(200, {'status': 'ok'})), mock.patch.object(stage, '_verify_worker', return_value=('version', ids)), mock.patch.object(stage, 'namespaces', return_value=rows), mock.patch.object(stage, 'applications', return_value=summary), mock.patch.object(stage, 'command', return_value=json.dumps(detail).encode()):
+            proof = stage.ownership(config)
+            self.assertEqual(proof['application_id'], detail['id'])
+            self.assertEqual(proof['namespaces'], ids)
+
+    def test_cleanup_resolves_recorded_detail_then_proves_fresh_application_absence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = pathlib.Path(temp)
+            self.fixture(directory)
+            config, summary, detail = self.recorded_application()
+            receipt = stage.load(directory / 'receipt.json')
+            receipt.update(application_id=detail['id'], application_version=detail['version'], application_created_at=detail['created_at'], retirement_phase='disabled', disabled_worker_version='disabled')
+            receipt['namespaces']['REPLAY_SANDBOX'] = detail['durable_objects']['namespace_id']
+            stage.save(directory / 'receipt.json', receipt)
+            (directory / 'server').mkdir()
+            present = True
+            calls = []
+            def command(*args, **kwargs):
+                nonlocal present
+                operation = next(item for item in ('list', 'info', 'delete', 'deploy') if item in args)
+                calls.append(operation)
+                if operation == 'list': return json.dumps(summary if present else []).encode()
+                if operation == 'info': return json.dumps(detail).encode()
+                if operation == 'delete':
+                    self.assertEqual(args[-1], detail['id'])
+                    present = False
+                return b''
+            def retired(rendered, *args, **kwargs):
+                return 'disabled' if rendered['durable_objects']['bindings'] else 'stub'
+            with mock.patch.object(stage, 'ROOT', directory), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage, 'wait_retired', side_effect=retired), mock.patch.object(stage, 'cf', return_value=None), mock.patch.object(stage, 'namespaces', return_value=[]), mock.patch.object(stage.time, 'sleep'):
+                stage.cleanup('a-match', directory)
+            self.assertEqual(calls, ['list', 'info', 'delete', 'list', 'deploy', 'list', 'list'])
+            self.assertEqual(stage.load(directory / 'receipt.json')['control_plane_cleanup'], 'confirmed')
+
     def fixture(self, directory, case='a-match'):
         qualified = stage.load(ROOT / f'evidence/public-replay/profiles/{stage.FAMILIES[case[0]][0]}.json')
         config, profile = stage.render(case, qualified, SHA, TASK)
@@ -195,8 +442,9 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
         for fault in (stage.CommandFailure('CLI unavailable'), stage.subprocess.TimeoutExpired('wrangler',1)):
             with self.subTest(fault=type(fault).__name__), mock.patch.object(stage,'command',side_effect=fault):
                 with self.assertRaises(stage.TransientRpcError):stage.applications(timeout=1)
+        config, _, detail = self.recorded_application()
         with mock.patch.object(stage,'applications',side_effect=[stage.TransientRpcError('edge unavailable'),[]]) as read, mock.patch.object(stage.time,'monotonic',return_value=100), mock.patch.object(stage.time,'sleep'):
-            self.assertEqual(stage.wait_applications(120),[])
+            self.assertEqual(stage.wait_applications(120, config, detail['durable_objects']['namespace_id']),[])
             self.assertEqual(read.call_args_list,[mock.call(timeout=20),mock.call(timeout=20)])
 
     def test_cleanup_ownership_reuses_shared_deadline_and_rejects_identity_drift(self):
@@ -291,18 +539,19 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 owner.assert_not_called()
             self.assertEqual(stage.load(directory/'receipt.json')['recovery_required'],'creation-ownership-unrecorded')
 
-    def test_deploy_records_ownership_before_bounded_rollout_timeout(self):
+    def test_fresh_deploy_records_ownership_without_waiting_for_application_health(self):
         with tempfile.TemporaryDirectory() as temp:
             directory=pathlib.Path(temp)
             _,_,receipt,_=self.fixture(directory)
             receipt['created']=False
             stage.save(directory/'receipt.json',receipt)
             captured={'worker_version':'new-recorded-version'}
-            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage,'wait_ownership',return_value=captured), mock.patch.object(stage.subprocess,'run',side_effect=stage.subprocess.TimeoutExpired('rollout',900)) as run:
-                with self.assertRaises(stage.subprocess.TimeoutExpired):stage.deploy('a-match',directory)
+            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage,'wait_ownership',return_value=captured), mock.patch.object(stage.subprocess,'run') as run, mock.patch.object(stage,'http') as http:
+                stage.deploy('a-match',directory)
                 self.assertEqual(stage.load(directory/'receipt.json')['worker_version'],'new-recorded-version')
-                self.assertEqual(run.call_args.kwargs['timeout'],900)
-                self.assertIn('--attempts',run.call_args.args[0])
+                self.assertNotIn('runtime_readiness',stage.load(directory/'receipt.json'))
+                run.assert_not_called()
+                http.assert_not_called()
 
     def test_known_intermediate_drift_stops_without_application_or_class_deletion(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -367,18 +616,73 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             self.assertEqual(request.call_count,1)
             self.assertTrue(request.call_args.args[1].startswith('https://token.example/'))
 
-    def test_rollout_uses_locked_server_cwd_and_relative_config(self):
+    def test_deploy_uses_locked_server_cwd_and_relative_config(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, _ = self.fixture(directory)
             receipt['created']=False
             stage.save(directory/'receipt.json',receipt)
-            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command'), mock.patch.object(stage.subprocess,'run') as run, mock.patch.object(stage,'ownership',return_value={}):
+            with mock.patch.object(stage,'cf',return_value=None), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage,'command') as command, mock.patch.object(stage,'ownership',return_value={}):
                 stage.deploy('a-match',directory)
-                self.assertEqual(run.call_args.kwargs['cwd'],ROOT/'server')
-                args=run.call_args.args[0]
-                self.assertIn('../scripts/wait_replay_container_rollout.py',args)
+                self.assertEqual(command.call_args.kwargs['cwd'],ROOT/'server')
+                args=command.call_args.args
+                self.assertEqual(args[:3],('npx','wrangler','deploy'))
                 self.assertEqual(args[args.index('--config')+1],'.public-guard-a-match.json')
+
+    def test_fresh_recorded_provisioning_application_reaches_only_owned_source_free_marker(self):
+        config, summary, detail = self.recorded_application()
+        self.assertEqual(detail['health']['instances']['starting'],1)
+        self.assertEqual(detail['health']['instances']['healthy'],0)
+        ids={'REPLAY_SANDBOX':detail['durable_objects']['namespace_id'],
+             'REPLAY_TERMINAL_RECEIPT':'2ba29b2f501544e48e5846d7ce3459f5'}
+        rows=[{'id':ids[b['name']],'script':config['name'],'class':b['class_name']} for b in config['durable_objects']['bindings']]
+        with tempfile.TemporaryDirectory() as temp:
+            directory=pathlib.Path(temp)
+            _,_,receipt,_=self.fixture(directory)
+            for key in ('worker_version','namespaces','health','application_id','application_version','application_created_at'):
+                receipt.pop(key)
+            receipt['created']=False
+            stage.save(directory/'receipt.json',receipt)
+            calls=[]
+            def command(*args,**kwargs):
+                if 'deploy' in args:calls.append('deploy');return b''
+                if 'list' in args:return json.dumps(summary).encode()
+                if 'info' in args:return json.dumps(detail).encode()
+                if args[1]=='-o':pathlib.Path(args[2]).write_bytes(b'disposable test identity')
+                return b'age1synthetic'
+            def http(url,body=None,oidc=False,**kwargs):
+                if url.endswith('/healthz'):return 200,{'status':'ok'}
+                self.assertTrue(url.endswith('/staging-acceptance'))
+                self.assertNotIn('source_archive_base64',body)
+                captured=stage.load(directory/'receipt.json')
+                self.assertEqual(captured['application_id'],detail['id'])
+                self.assertEqual(captured['namespaces'],ids)
+                self.assertEqual(captured['worker_version'],'version')
+                calls.append('owned-marker')
+                return 401,{'error':'unauthorized'}
+            with mock.patch.dict(stage.os.environ,{'CLOUDFLARE_API_TOKEN':'','STATE_WRITE_KEY':''}), mock.patch.object(stage,'cf',side_effect=lambda path,**kw:None if kw.get('allow_missing') else {}), mock.patch.object(stage,'_active_version',return_value=('version',{})), mock.patch.object(stage,'_verify_worker',return_value=('version',ids)), mock.patch.object(stage,'namespaces',side_effect=[[],rows]), mock.patch.object(stage,'applications',side_effect=[[],summary]), mock.patch.object(stage,'command',side_effect=command), mock.patch.object(stage,'http',side_effect=http), mock.patch.object(stage.subprocess,'run',return_value=mock.Mock(stdout=b'ciphertext')) as run:
+                stage.deploy('a-match',directory)
+                run.assert_not_called()
+                with self.assertRaisesRegex(ValueError,'observation refused'):
+                    stage.run_case('a-match',directory)
+            self.assertEqual(calls,['deploy','owned-marker'])
+            final=stage.load(directory/'receipt.json')
+            self.assertEqual(final['outcome'],'incomplete')
+            self.assertNotIn('runtime_readiness',final)
+            self.assertNotIn('control_plane_cleanup',final)
+
+    def test_execution_requires_complete_recorded_ownership_before_marker(self):
+        for missing in ('created','worker_version','namespaces','health','application_id','application_version','application_created_at'):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as temp:
+                directory=pathlib.Path(temp)
+                _,_,receipt,_=self.fixture(directory)
+                del receipt[missing]
+                stage.save(directory/'receipt.json',receipt)
+                with mock.patch.object(stage,'command') as command, mock.patch.object(stage,'http') as http:
+                    with self.assertRaisesRegex(ValueError,'exact ownership'):
+                        stage.run_case('a-match',directory)
+                    command.assert_not_called()
+                    http.assert_not_called()
 
     def test_helper_and_all_finite_paths_do_not_match_normal_deploy_filters(self):
         import fnmatch,re
@@ -401,17 +705,26 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
     def test_guard_internal_error_is_not_accepted_as_negative_case(self): self.run_fixture('a-mismatch', False, 'runtime_profile_guard_failed')
 
     def test_typed_observation_refusal_does_not_claim_sandbox_destruction(self): self.run_fixture('a-match',False,refuse=(401,{'error':'unauthorized'}))
+    def test_all_exact_marker_refusals_stop_before_source(self):
+        for status,error in ((400,'invalid_request'),(401,'unauthorized'),(503,'staging_acceptance_disabled')):
+            with self.subTest(status=status):self.run_fixture('a-match',False,refuse=(status,{'error':error}))
     def test_ambiguous_observation_preserves_unknown_http_outcome(self): self.run_fixture('a-match',False,refuse=(503,{'error':'transport_response_invalid'}))
+    def test_marker_start_timeout_stops_before_source_and_remains_incomplete(self): self.run_fixture('a-match',False,marker_fault='timeout')
+    def test_marker_identity_drift_stops_before_source(self): self.run_fixture('a-match',False,marker_fault='identity')
+    def test_marker_unconfirmed_destruction_stops_before_source(self): self.run_fixture('a-match',False,marker_fault='destruction')
     def test_two_transient_status_rpcs_can_recover_to_actual_acceptance(self): self.run_fixture('a-match',False,rpc_failures=2)
     def test_health_and_mint_share_poll_allowance_and_recover(self): self.run_fixture('a-match',False,health_faults=1,mint_faults=1)
     def test_third_combined_health_mint_failure_is_incomplete(self): self.run_fixture('a-match',False,health_faults=2,mint_faults=1)
     def test_third_status_rpc_failure_stops_without_success(self): self.run_fixture('a-match',False,rpc_failures=3)
     def test_positive_deadline_is_incomplete_and_cleans_without_mathematical_timeout(self): self.run_fixture('a-match',False,expire=True)
 
-    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False, health_faults=0, mint_faults=0):
+    def run_fixture(self, case, drift, detail='runtime_profile_mismatch', refuse=None, rpc_failures=0, expire=False, health_faults=0, mint_faults=0, marker_fault=None):
         with tempfile.TemporaryDirectory() as temp:
             directory = pathlib.Path(temp)
             _, _, receipt, request = self.fixture(directory, case)
+            if marker_fault:
+                receipt['runtime_readiness']='source-free-marker-confirmed'
+                stage.save(directory/'receipt.json',receipt)
             from tests.test_historical_replay_controller import Fixture
             canonical = Fixture()
             request['handoff'] = {'request_id':canonical.task['request_id'], 'result':{'result_id':canonical.task['result_id']}}
@@ -425,7 +738,7 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
             def command(*args, **kwargs):
                 if args[1] == '-o': pathlib.Path(args[2]).write_bytes(b'disposable test age identity')
                 return b'age1synthetic'
-            def http(url, body=None, oidc=False):
+            def http(url, body=None, oidc=False, diagnostics=None):
                 nonlocal health_left,mint_left,started
                 if url.endswith('/healthz'):
                     if started and health_left:
@@ -436,11 +749,25 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 routes.append(url.rsplit('/', 1)[-1])
                 self.assertTrue(oidc)
                 if routes[-1] == 'staging-acceptance':
+                    persisted=stage.load(directory/'receipt.json')
+                    self.assertTrue(persisted['created'])
+                    for key in ('worker_version','namespaces','health','application_id','application_version','application_created_at'):
+                        self.assertEqual(persisted[key],receipt[key])
+                    self.assertNotIn('source_archive_base64',body)
+                    self.assertNotIn('handoff',body)
+                    self.assertEqual(persisted['outcome'],'incomplete')
+                    self.assertEqual(persisted['marker_binding']['runner_nonce'], body['runner_nonce'])
+                    self.assertEqual(persisted['marker_binding']['archive_ciphertext_sha256'], body['archive_ciphertext_sha256'])
+                    self.assertEqual(persisted['marker_binding']['marker_sha256'], body['marker_sha256'])
                     if refuse:return refuse
+                    if marker_fault=='timeout':raise stage.TransportError('marker start timed out')
                     evidence = {k: body[k] for k in ('schema_version', 'request_id', 'runner_nonce', 'archive_ciphertext_sha256', 'marker_sha256')}
                     evidence.update(service='lean-eval-replay-executor', environment='staging', network_policy='disabled', network_probe='blocked', destruction='confirmed', staging_memory_limit_bytes=12*1024**3, production_memory_gate_bytes=12*1024**3)
                     evidence.update({k: observed[k] for k in ('architecture', 'kernel_release', 'cpu_model')})
+                    if marker_fault=='identity':evidence['runner_nonce']='foreign'
+                    if marker_fault=='destruction':evidence['destruction']='unconfirmed'
                     return 200, evidence
+                self.assertEqual(stage.load(directory/'receipt.json')['runtime_readiness'],'source-free-marker-confirmed')
                 binding = {k: body[k] for k in ('schema_version', 'replay_task_id', 'attempt')}
                 if routes[-1] == 'cleanup-reservation': return 200, {**binding, 'status': 'reserved'}
                 if routes[-1] == 'historical-public-replay':
@@ -458,11 +785,13 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 if routes[-1] == 'cleanup': return 200, {**binding, 'destruction': 'confirmed'}
                 raise AssertionError('unexpected route')
             with mock.patch.dict(stage.os.environ, {'CLOUDFLARE_API_TOKEN': '', 'STATE_WRITE_KEY': ''}), mock.patch.object(stage, 'command', side_effect=command), mock.patch.object(stage.subprocess, 'run', return_value=mock.Mock(stdout=b'ciphertext')), mock.patch.object(stage, 'http', side_effect=http), mock.patch.object(stage.time, 'sleep'), mock.patch.object(stage.time,'monotonic',side_effect=[0,3601] if expire else None, wraps=None if expire else stage.time.monotonic):
-                if refuse:
-                    with self.assertRaises(ValueError):stage.run_case(case,directory)
+                if refuse or marker_fault:
+                    with self.assertRaises((ValueError,stage.TransportError)):stage.run_case(case,directory)
                     self.assertEqual(routes,['staging-acceptance'])
                     final=stage.load(directory/'receipt.json')
-                    self.assertEqual(final['safe_to_delete'],refuse[0]==401)
+                    self.assertEqual(final['safe_to_delete'],bool(refuse and refuse[1] in ({'error':'invalid_request'},{'error':'unauthorized'},{'error':'staging_acceptance_disabled'})))
+                    self.assertEqual(final['outcome'],'incomplete')
+                    self.assertNotIn('runtime_readiness',final)
                     self.assertNotIn('observation_http_destruction',final)
                     return
                 if expire or rpc_failures+health_faults+mint_faults>2:
@@ -476,6 +805,9 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 if drift:
                     with self.assertRaisesRegex(ValueError, 'differs from the frozen profile'): stage.run_case(case, directory)
                     self.assertEqual(routes, ['staging-acceptance'])
+                    final=stage.load(directory/'receipt.json')
+                    self.assertEqual(final['outcome'],'incomplete')
+                    self.assertNotIn('runtime_readiness',final)
                 else:
                     if detail == 'runtime_profile_mismatch':
                         stage.run_case(case, directory)

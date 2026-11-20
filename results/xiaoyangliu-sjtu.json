@@ -904,6 +904,65 @@
         "ref": "95c9a6c59d9a832a416e4acd3c0ee750efa38e33",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-20T03:05:57Z",
+      "benchmark_commit": "ca7725af7a1bd2c35af4daee1cd32456a9dad054",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1f6b6-e9e9-7307-b4b3-ba62b580ffa1"
+      },
+      "problem_id": "smooth_knot_has_quadrisecant",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_3d51796f9e8e5d13bb612ba4b107d758533fe4cc157bcb71676365b9892b78e3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5d0dd8b10aee8fdf8d2a54e872559ba679346737",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-11-20T03:09:55Z",
+      "benchmark_commit": "ddef5dec7c0b8a1481004728ac3632afac458bf8",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1f6be-4c89-7a48-85a9-bca7a9dc00ac"
+      },
+      "problem_id": "pardon_torus_knot_distortion",
+      "production_metadata": {},
+      "result_id": "r2_bb07b9ad9e4d744c3f0fdcbea9029440ccb8f9f18dba1eea002fc20ccd5efc8a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "479ce51483442451ee6585ccd0c32a589de1addc",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
+    },
+    {
+      "accepted_at": "2026-11-20T04:40:40Z",
+      "benchmark_commit": "ddef5dec7c0b8a1481004728ac3632afac458bf8",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1f6f1-a129-7ec9-9d98-e5a10e6d3f6a"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {},
+      "result_id": "r2_60cd40fa3024c9114793c75ef9b33b04d6fe6133ea5ba1b3cbd43bcb493a9c5c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0107e917361a6e6679a19bebfb66a44c5f5b5184",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,

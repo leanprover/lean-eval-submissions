@@ -1082,8 +1082,11 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         }
         self.assertTrue(recursive_keys(queue).isdisjoint(forbidden))
 
+        archive_v2 = copy.deepcopy(self.fixture.queue)
+        archive_v2["schema_version"] = 2
+        self.assertEqual(archive_v2, controller.validate_queue(archive_v2))
         modern = copy.deepcopy(self.fixture.queue)
-        modern["schema_version"] = 2
+        modern["schema_version"] = 3
         with self.assertRaisesRegex(
             controller.HistoricalPrivateReplayControllerError, "identity"
         ):

@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-public-archive-recovery-v2.schema.json",
+  "title": "Finite historical public archive recovery manifest version 2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "task_count",
+    "task_id_set_sha256",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "historical_public_archive_recovery"
+    },
+    "task_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "task_id_set_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replay_task_id",
+        "measurement_config_digest",
+        "checker",
+        "superseded_enqueue_event_id",
+        "superseded_qualification_event_id",
+        "superseded_execution_profile_digest",
+        "reason_code",
+        "source_visibility",
+        "crosswalk_repository",
+        "crosswalk_commit",
+        "crosswalk_path",
+        "crosswalk_sha256",
+        "crosswalk_entry_sha256",
+        "archive_plan_entry_sha256",
+        "archive_submission_id",
+        "archive_schema_version",
+        "archive_repository",
+        "archive_commit",
+        "archive_path",
+        "archive_sidecar_path",
+        "archive_ciphertext_sha256",
+        "archive_sidecar_sha256",
+        "archive_key_envelope_sha256",
+        "archive_plaintext_tar_sha256",
+        "archive_plaintext_tar_size",
+        "archive_capacity_class",
+        "archive_ciphertext_size",
+        "archive_result_evidence",
+        "archive_benchmark_relation",
+        "source_recovery_version",
+        "original_authority_event_id",
+        "candidate_execution_profile_digest",
+        "candidate_qualification_repository",
+        "candidate_qualification_commit",
+        "candidate_qualification_path",
+        "candidate_qualification_sha256",
+        "result_id"
+      ],
+      "properties": {
+        "replay_task_id": {
+          "type": "string",
+          "pattern": "^rt1_[0-9a-f]{64}$"
+        },
+        "measurement_config_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "checker": {
+          "const": "nanoda"
+        },
+        "superseded_enqueue_event_id": {
+          "$ref": "#/$defs/uuid7"
+        },
+        "superseded_qualification_event_id": {
+          "$ref": "#/$defs/uuid7"
+        },
+        "superseded_execution_profile_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "accepted_source_archive_recovery"
+          ]
+        },
+        "source_visibility": {
+          "const": "public"
+        },
+        "crosswalk_repository": {
+          "const": "leanprover/lean-eval-submissions"
+        },
+        "crosswalk_commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "crosswalk_path": {
+          "type": "string",
+          "pattern": "^evidence/historical-replay/archive-crosswalks/[0-9a-f]{64}\\.json$"
+        },
+        "crosswalk_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "crosswalk_entry_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_plan_entry_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_submission_id": {
+          "$ref": "#/$defs/uuid7"
+        },
+        "archive_schema_version": {
+          "const": 3
+        },
+        "archive_repository": {
+          "const": "leanprover/lean-eval-audit"
+        },
+        "archive_commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "archive_path": {
+          "type": "string",
+          "pattern": "^archives/[0-9a-f]{2}/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.tar\\.age$"
+        },
+        "archive_sidecar_path": {
+          "type": "string",
+          "pattern": "^archives/[0-9a-f]{2}/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "archive_ciphertext_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_sidecar_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_key_envelope_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_plaintext_tar_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "archive_plaintext_tar_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "archive_capacity_class": {
+          "const": "legacy_10mib"
+        },
+        "archive_ciphertext_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 11534336
+        },
+        "archive_result_evidence": {
+          "type": "string",
+          "enum": [
+            "confirmed_pass",
+            "legacy_unrecorded"
+          ]
+        },
+        "archive_benchmark_relation": {
+          "type": "string",
+          "enum": [
+            "archive_recorded_different",
+            "same"
+          ]
+        },
+        "source_recovery_version": {
+          "type": "integer",
+          "enum": [
+            2
+          ]
+        },
+        "original_authority_event_id": {
+          "$ref": "#/$defs/uuid7"
+        },
+        "candidate_execution_profile_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "candidate_qualification_repository": {
+          "const": "leanprover/lean-eval-submissions"
+        },
+        "candidate_qualification_commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "candidate_qualification_path": {
+          "type": "string",
+          "pattern": "^evidence/archive-replay/profiles/[0-9a-f]{64}\\.json$"
+        },
+        "candidate_qualification_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "result_id": {
+          "type": "string",
+          "pattern": "^r2_[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

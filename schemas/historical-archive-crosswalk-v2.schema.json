@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-archive-crosswalk-v2.schema.json",
+  "title": "Historical prepared archive crosswalk version2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "results_repository",
+    "results_commit",
+    "results_store_sha256",
+    "audit_repository",
+    "audit_commit",
+    "migration_plan",
+    "result_count",
+    "archive_count",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "historical_archive_crosswalk"
+    },
+    "results_repository": {
+      "const": "leanprover/lean-eval-submissions"
+    },
+    "results_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "results_store_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "audit_repository": {
+      "const": "leanprover/lean-eval-audit"
+    },
+    "audit_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "migration_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "path",
+        "sha256",
+        "inventory_digest"
+      ],
+      "properties": {
+        "repository": {
+          "const": "leanprover/lean-eval-submissions"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^evidence/historical-replay/archive-migration-plans/[0-9a-f]{64}\\.json$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "inventory_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "result_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "archive_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "result_id",
+          "classification",
+          "source_visibility",
+          "submission_id",
+          "archive_plan_entry_sha256",
+          "archive_schema_version",
+          "archive_result_evidence",
+          "benchmark_relation",
+          "archive_commit",
+          "archive_ciphertext_sha256",
+          "archive_ciphertext_size",
+          "archive_sidecar_sha256",
+          "archive_key_envelope_sha256",
+          "archive_plaintext_tar_sha256",
+          "archive_plaintext_tar_size",
+          "archive_capacity_class"
+        ],
+        "properties": {
+          "result_id": {
+            "type": "string",
+            "pattern": "^r2_[0-9a-f]{64}$"
+          },
+          "classification": {
+            "const": "bound"
+          },
+          "source_visibility": {
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
+          "submission_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "archive_plan_entry_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_schema_version": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          },
+          "archive_result_evidence": {
+            "enum": [
+              "confirmed_pass",
+              "legacy_unrecorded"
+            ]
+          },
+          "benchmark_relation": {
+            "enum": [
+              "same",
+              "archive_recorded_different"
+            ]
+          },
+          "archive_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "archive_ciphertext_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_ciphertext_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 11534336
+          },
+          "archive_sidecar_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_key_envelope_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_plaintext_tar_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_plaintext_tar_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760
+          },
+          "archive_capacity_class": {
+            "const": "legacy_10mib"
+          }
+        }
+      }
+    }
+  }
+}

@@ -83,6 +83,36 @@ def recovered_history(*, running: bool = False) -> list[dict]:
 
 
 class ArchivedHistoricalConsumerTests(unittest.TestCase):
+    def test_archive_decoder_accepts_exact_recovered_public_queue(self):
+        from scripts import historical_private_replay_controller as archived
+        path = pathlib.Path(__file__).parent / "fixtures/historical-public-archive-recovery-queue-v2.json"
+        queue = json.loads(path.read_text())
+        self.assertEqual(queue, archived.validate_queue(queue))
+        for marker in (True, 1, 3, "2"):
+            wrong = copy.deepcopy(queue)
+            wrong["tasks"][0]["source_recovery_version"] = marker
+            with self.subTest(marker=marker), self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+                archived.validate_queue(wrong)
+        for field, value in (
+            ("source_visibility", "private"),
+            ("fetch_method", "git"),
+            ("archive_capacity_class", "archive_single_blob_30m"),
+            ("archive_ciphertext_size", 12 * 1024 * 1024),
+            ("archive_benchmark_relation", "unknown"),
+        ):
+            wrong = copy.deepcopy(queue)
+            wrong["tasks"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+                archived.validate_queue(wrong)
+        wrong = copy.deepcopy(queue)
+        wrong["schema_version"] = 1
+        with self.assertRaises(archived.HistoricalPrivateReplayControllerError):
+            archived.validate_queue(wrong)
+        wrong = copy.deepcopy(queue)
+        wrong["tasks"][0]["archive_authority_version"] = 2
+        with self.assertRaisesRegex(archived.HistoricalPrivateReplayControllerError, "standalone"):
+            archived.validate_queue(wrong)
+
     def test_original_public_identity_is_independent_of_replacement_profile(self):
         fixture = legacy.Fixture()
         task = copy.deepcopy(fixture.task)
@@ -160,6 +190,20 @@ class ArchivedHistoricalConsumerTests(unittest.TestCase):
                 _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
         events = recovered_history()
         events[4]["causation_event_id"] = events[1]["event_id"]
+        with self.assertRaises(HistoricalReplayControllerError):
+            _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
+
+    def test_unused_later_qualification_does_not_replace_enqueue_binding(self):
+        events = json.loads((pathlib.Path(__file__).parent / "fixtures/historical-public-archive-recovery-v2.json").read_text())
+        unused = copy.deepcopy(events[2])
+        unused.update(event_id="0198abcd-0000-7000-8000-000000000017", occurred_at="2026-10-20T06:08:23.000Z")
+        unused["payload"]["execution_profile_digest"] = "f" * 64
+        unused["payload"]["qualification_path"] = "evidence/public-replay/profiles/" + "f" * 64 + ".json"
+        events.insert(4, unused)
+        task_id = events[-1]["subject_id"]
+        states = _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
+        self.assertEqual(("queued", 0), (states[task_id]["status"], states[task_id]["attempt"]))
+        events[5]["payload"]["superseded_qualification_event_id"] = unused["event_id"]
         with self.assertRaises(HistoricalReplayControllerError):
             _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
 
