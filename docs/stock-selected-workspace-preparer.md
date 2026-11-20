@@ -145,6 +145,34 @@ original driver environment: invoking PATH, filtered comparator-inherited PATH,
 resolved PATH and LEAN_PATH. Probe timing occurs before Source overlay/C freeze;
 it cannot silently change cache bytes under a previously frozen C.
 
+After the LAST trusted build/priming/Lake environment probe and before C freeze
+or ANY Source, known owned public dependency artifact hardlinks are detached.
+Stock Lake saves/restores cached artifacts by hardlink; this layout does not meet
+the supervisor's unchanged strict nlink1 requirement. Only untracked regular
+`.lake/build` files under the fresh owned exact-pin dependency roots are eligible.
+The helper accounts for EVERY old inode name across those explicit roots and the
+owned `home/.cache/lake/artifacts` root; an unknown/outside-session alias refuses.
+It never writes/chmods the old inode or home-cache alias. It copies to an
+exclusive owned sibling, verifies exact bytes, preserves mode/mtime, atomically
+replaces the eligible entry and requires a new inode/nlink1. Directory-fd traversal,
+no-follow opens, canonical root/UID/mode/size/stat-identity fences prevent redirecting
+the operation to Source, tracked originals, symlinks or other cache trees.
+
+The new post-prime phase shares ONE at-most300-second deadline (the existing
+trusted-preparation timeout), with at most1000000 scanned entries,8GiB copied
+bytes total and the unchanged256MiB per-file bound. It does not reset/increase the
+inventory1200, selected-generation300 or runtime M/T budgets. Original pristine
+Submission bytes/no consumed marker are checked before mutation, and ALL tracked
+dependency source bytes are reverified against retained pinned Git objects both
+before and after detaching, even after Git metadata removal. The normal STRICT
+full workspace manifest is then required; no predicate/file is ignored.
+Partial copy/race/deadline removes owned temporary files and emits no C/context;
+already detached files remain only in a failed owned preparation session. Outside
+target home-artifact bytes/mode/mtime remain unchanged; nlink naturally decreases,
+so no claim of every stat field remaining unchanged is made. This is trusted
+exclusive/quiescent preparation before Source, not a malicious same-UID concurrent
+writer boundary or arbitrary cache authenticity mechanism.
+
 Per-problem configuration is represented within the existing schema by exactly
 one original problem/revision in problem_statement_revisions and that problem's
 prepared manifest digest. Different prepared problem trees have distinct C and
