@@ -11,6 +11,7 @@ import hashlib
 import contextlib
 import copy
 import ctypes
+import functools
 import math
 import os
 from pathlib import Path
@@ -42,6 +43,7 @@ INVENTORY_CONCURRENCY = 4
 INVENTORY_ADDRESS_SPACE = 32 * 1024**3
 DETACH_MAX_FILES = 1_000_000
 DETACH_MAX_BYTES = 8 * 1024**3
+MAX_ADOPTED_CHILDREN = 4096
 
 
 _GENERATION_SEAL = object()
@@ -66,6 +68,41 @@ class Invalid(ValueError):
 def require(condition):
     if not condition:
         raise Invalid('original stock workspace preparation is unproved')
+
+
+def _process_children():
+    """Only this process's thread child lists; never a system process scan."""
+    tasks = tuple((Path('/proc/self/task')).iterdir())
+    children = set()
+    for task in tasks:
+        children.update(int(value) for value in (task / 'children').read_text().split())
+    return tasks, children
+
+
+def _require_dedicated():
+    # This inactive API is a dedicated synchronous job, not a shared server.
+    # Refuse BEFORE handlers, PRCTL, umask, files or subprocesses are changed.
+    tasks, children = _process_children()
+    require(len(tasks) == 1 and tasks[0].name == str(os.getpid()) and not children)
+    require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL)
+
+
+@contextlib.contextmanager
+def _preparation_umask():
+    _require_dedicated()
+    previous = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+def _dedicated_entry(function):
+    @functools.wraps(function)
+    def entry(*args, **kwargs):
+        with _preparation_umask():
+            return function(*args, **kwargs)
+    return entry
 
 
 def sha(raw):
@@ -235,6 +272,86 @@ class _PreparationGroup:
 class _PreparationOwner:
     def __init__(self):
         self.groups = []
+        self.adopted = {}
+        self.escaped = False
+        self.teardown_deadline = None
+
+    def deadline(self):
+        if self.teardown_deadline is None:
+            self.teardown_deadline = time.monotonic_ns() + 5_000_000_000
+        return self.teardown_deadline
+
+    def drain(self, *, final=False):
+        """An empty dedicated baseline makes EVERY new direct child ours.
+
+        Still-reserved groups' legitimate adoptees belong to their own future
+        retirement. A different PGID is an escape: quiesce it and fail the WHOLE
+        operation; do not guess which concurrent module owned it.
+        """
+        deadline = self.deadline()
+        while True:
+            _tasks, children = _process_children()
+            leaders = {group.child.pid for group in self.groups if not group.leader_reaped}
+            retained = {group.child.pid for group in self.groups if not group.complete()}
+            pending = []
+            for pid in sorted(children - leaders):
+                before = _child_identity(pid)
+                if not final and before['group'] in retained:
+                    continue
+                if pid not in self.adopted:
+                    # Reserve the exact unreaped direct child BEFORE pidfd setup.
+                    require(len(self.adopted) < MAX_ADOPTED_CHILDREN)
+                    self.adopted[pid] = {'identity': before, 'fd': None, 'closed': False, 'reaped': False}
+                record = self.adopted[pid]
+                require(_same_child(before, record['identity']) and not record['reaped'])
+                self.escaped = True
+                pending.append((pid, record))
+            for pid, record in pending:
+                require(time.monotonic_ns() < deadline)
+                if record['fd'] is None:
+                    require(not record['closed'])
+                    record['fd'] = supervisor.pidfd_open(pid)
+                require(_same_child(_child_identity(pid), record['identity']))
+                supervisor.pidfd_kill(record['fd'])
+            for pid, record in pending:
+                require(select.select([record['fd']], [], [],
+                    max(0, (deadline - time.monotonic_ns()) / 1_000_000_000))[0])
+                # This exact unreaped direct child reserves PID/starttime until wait.
+                require(_same_child(_child_identity(pid), record['identity']))
+                waited, _status = os.waitpid(pid, os.WNOHANG)
+                require(waited == pid)
+                record['reaped'] = True
+                descriptor, record['fd'], record['closed'] = record['fd'], None, True
+                os.close(descriptor)  # ownership relinquished before possibly failing close
+            if not pending:
+                break
+            require(time.monotonic_ns() < deadline)
+        require(all(record['reaped'] and record['closed'] for record in self.adopted.values()))
+
+    def finish(self):
+        # Setup/partial-drain errors retain resource ownership and use ONE
+        # deadline for retries. A successful cleanup never erases the failure.
+        failure = None
+        deadline = self.deadline()
+        while True:
+            try:
+                _stop_preparation_groups(self.groups, deadline)
+            except BaseException as error:
+                failure = failure or error
+            try:
+                self.drain(final=True)
+            except BaseException as error:
+                failure = failure or error
+            settled = (not _process_children()[1]
+                and all(group.leader_reaped and group.descendants_settled and group.descriptor_closed
+                        for group in self.groups)
+                and all(record['reaped'] and record['closed'] for record in self.adopted.values()))
+            if settled or time.monotonic_ns() >= deadline:
+                break
+            time.sleep(min(0.01, max(0, (deadline - time.monotonic_ns()) / 1_000_000_000)))
+        if failure is not None:
+            raise failure
+        require(settled and not self.escaped)
 
     def adopt(self, child):
         require(len(self.groups) < INVENTORY_CONCURRENCY)
@@ -245,14 +362,30 @@ class _PreparationOwner:
 
     def retire(self, group):
         require(group in self.groups)
-        _stop_preparation_groups([group])
+        _stop_preparation_groups([group], self.deadline())
         require(group.complete())
+        self.drain()
+        require(not self.escaped)
         self.groups.remove(group)  # capacity is reusable only after full retirement
+        self.teardown_deadline = None
 
 
-def _stop_preparation_groups(groups):
+def _child_identity(pid):
+    pieces = Path(f'/proc/{pid}/stat').read_text().rpartition(')')[2].split()
+    require(len(pieces) >= 20 and int(pieces[1]) == os.getpid())
+    return {'parent': int(pieces[1]), 'group': int(pieces[2]), 'started_ticks': int(pieces[19])}
+
+
+def _same_child(current, reserved):
+    # A live child may call setsid/setpgid after discovery. Parent/starttime,
+    # not its mutable group, bind the unreaped child and pinned descriptor.
+    return all(current[key] == reserved[key] for key in ('parent', 'started_ticks'))
+
+
+def _stop_preparation_groups(groups, deadline=None):
     """Stop reserved identities, then settle each resource exactly once."""
-    deadline = time.monotonic_ns() + 5_000_000_000
+    if deadline is None:
+        deadline = time.monotonic_ns() + 5_000_000_000
     # Reserve every still-owned leader until its final kill. A partially retired
     # record cannot re-signal a reaped/reused PID on outer failure cleanup.
     for group in groups:
@@ -314,15 +447,23 @@ def _stop_preparation_groups(groups):
 
 @contextlib.contextmanager
 def _owned_preparation_groups():
+    with _preparation_umask():
+        with _owned_group_scope() as value:
+            yield value
+
+
+@contextlib.contextmanager
+def _owned_group_scope():
     """Dedicated synchronous trusted-preparer scope, never a shared job server.
 
-    The process-local subreaper flag is restored on every path. Only this
-    scope's reserved process groups are signalled/reaped; no waitpid(-1).
+    Entry requires one thread and no preexisting live or zombie children.
+    The previous subreaper flag is restored on every path. Reserved groups and
+    exact newly adopted children are the ONLY wait/signal targets; no waitpid(-1).
     Signals record cancellation rather than interrupting teardown/restoration.
     """
     # An auto-reaping SIGCHLD policy could release PID identity before WNOWAIT.
     # This entry is a dedicated synchronous preparation process, not a server.
-    require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL)
+    _require_dedicated()
     owner = _PreparationOwner()
     cancelled = [False]
     previous, setting = {}, None
@@ -339,7 +480,7 @@ def _owned_preparation_groups():
         yield owner, cancelled
     finally:
         try:
-            _stop_preparation_groups(owner.groups)
+            owner.finish()
         finally:
             blocked = signal.pthread_sigmask(signal.SIG_BLOCK, set(previous))
             try:
@@ -821,6 +962,7 @@ def _trusted_path(value, forbidden):
     return ':'.join(canonical)
 
 
+@_dedicated_entry
 def generate_original(repository, commit, toolchain, problem, session, *, toolchain_prefix,
                       dependency_repositories, timeout_seconds=300, inventory_timeout_seconds=1200, driver_path=None):
     # The fixed synchronous preparer owns every trusted subprocess across its
@@ -996,6 +1138,7 @@ def _configuration_lock(repository, commit, toolchain, problem, workspace):
     return value, files
 
 
+@_dedicated_entry
 def overlay_public_git(request, source_repository, workspace, *, benchmark_repository, authority_repository):
     """Exact public Git Source overlay only; no network or Source execution.
 
@@ -1071,6 +1214,7 @@ def overlay_public_git(request, source_repository, workspace, *, benchmark_repos
             'source_sha256': after['source_sha256'], 'overlaid_files': len(observed_files), 'lines_of_code': lines}
 
 
+@_dedicated_entry
 def finalize_public_context(request, generated, *, source_repository, benchmark_repository,
                             authority_repository, lean_repository, toolchain_prefix,
                             bubblewrap, temporary_directory, instrumentation=None,
