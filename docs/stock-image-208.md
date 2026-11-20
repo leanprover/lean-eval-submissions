@@ -1,10 +1,10 @@
 # Inactive stock208 image installation candidate
 
 `Dockerfile.stock-replay-208` is a separate, unpublished installation recipe for
-original benchmark208b6b22/tree47b79175 and stock4.35.0-rc3. No existing workflow,
-image recipe, Worker, controller, audit contract, admission or deploy setting
-uses it. The other three retained stock configurations and all twelve pending
-Results remain in scope and unqualified. This first configuration includes
+original benchmark208b6b22/tree47b79175 and stock4.35.0-rc3. The separate
+`stock-replay-image-208.yml` builds it for installation checks only. No active
+Worker, controller, audit contract, admission or deploy setting uses it. The
+other three retained stock configurations and all twelve pending Results remain in scope and unqualified. This first configuration includes
 private historical rows, but this recipe supplies no private Source support.
 
 The recipe consumes the existing original595611952-byte release archive,
@@ -99,6 +99,15 @@ starts the inherited server nor changes State/publication. The explicit networkn
 does not exercise the fresh preparer: its original cache fetch/restore phases
 require separately authorized outbound public HTTPS. The actual host must also
 support pidfds and readable own `/proc/self/task/*/children` lists.
+
+The hosted workflow accepts only an upstream same-repository PR or an upstream-main
+manual dispatch without inputs. It stages the fixed public archive, explicitly
+enables BuildKit, enforces the20GiB ceiling and invokes the networknone Python
+installation override. Its sole artifact is a bounded source-free JSON receipt
+with image ID, recipe/source hashes, stock pins and the false qualification flags
+above. It uploads no image, release archive, raw installation output or logs.
+It has no registry/provider/State credentials or publication/deployment action.
+A passing build does not qualify a runtime, Source or Task.
 
 After separate Root build authorization, from this exact source worktree:
 

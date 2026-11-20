@@ -126,7 +126,7 @@ class StockImage208Build(unittest.TestCase):
                     build.main()
                 self.assertEqual((root / 'stock208-image-evidence.json').read_bytes(), result)
 
-    def test_workflow_has_closed_events_no_credentials_or_publication_and_default_offline_run(self):
+    def test_workflow_has_closed_events_and_explicit_offline_override_of_base_startup(self):
         workflow = (ROOT / '.github/workflows/stock-replay-image-208.yml').read_text()
         self.assertIn('  pull_request:\n', workflow)
         self.assertIn('  workflow_dispatch:\n\npermissions:', workflow)
@@ -137,7 +137,13 @@ class StockImage208Build(unittest.TestCase):
         self.assertIn('persist-credentials: false', workflow)
         self.assertIn("github.ref == 'refs/heads/main'", workflow)
         self.assertIn('github.event.pull_request.head.repo.full_name == github.repository', workflow)
-        self.assertIn('docker run --rm --network none "$IMAGE" >', workflow)
+        self.assertIn('docker run --rm --network none --entrypoint /usr/bin/python3 "$IMAGE"', workflow)
+        self.assertIn('-I -B /opt/lean-eval/stock_image_208.py check-installed >', workflow)
+        self.assertIn("DOCKER_BUILDKIT: '1'", workflow)
+        self.assertIn("- 'configuration/stock-image-208-public-inputs-v1.json'", workflow)
+        recipe = (ROOT / 'Dockerfile.stock-replay-208').read_text()
+        self.assertNotIn('\nENTRYPOINT ', recipe)
+        self.assertNotIn('\nCMD ', recipe)
         self.assertIn('test "$image_size" -le 21474836480', workflow)
         self.assertIn(build.RELEASE_URL, workflow)
         self.assertIn(stock.RELEASE_SHA256, workflow)

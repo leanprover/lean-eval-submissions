@@ -6,6 +6,7 @@ on:
       - '.github/workflows/stock-replay-image-208.yml'
       - 'Dockerfile.stock-replay-208'
       - 'Dockerfile.stock-replay-208.dockerignore'
+      - 'configuration/stock-image-208-public-inputs-v1.json'
       - 'requirements-jsonschema-workflow.txt'
       - 'scripts/stock_image_208.py'
       - 'scripts/build_stock_image_208_evidence.py'
@@ -45,6 +46,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 180
     env:
+      DOCKER_BUILDKIT: '1'
       IMAGE: lean-eval-stock208:${{ github.event.pull_request.head.sha || github.sha }}
       SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -86,14 +88,15 @@ jobs:
           docker build --progress=plain --file Dockerfile.stock-replay-208
           --tag "$IMAGE" .
 
-      - name: Enforce image ceiling and run only the offline default check
+      - name: Enforce image ceiling and run only the explicit offline check
         run: |
           set -euo pipefail
           image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
           test "$image_size" -gt 0
           test "$image_size" -le 21474836480
           timeout --signal=TERM --kill-after=10s 180s \
-            docker run --rm --network none "$IMAGE" > stock208-installation.private.json
+            docker run --rm --network none --entrypoint /usr/bin/python3 "$IMAGE" \
+              -I -B /opt/lean-eval/stock_image_208.py check-installed > stock208-installation.private.json
           image_id=$(docker image inspect "$IMAGE" --format '{{.Id}}')
           IMAGE_ID="$image_id" IMAGE_SIZE_BYTES="$image_size" \
             python3 -B scripts/build_stock_image_208_evidence.py
