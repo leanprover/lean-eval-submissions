@@ -68,6 +68,15 @@ ReplaySandbox/ReplayTerminalReceipt namespaces. Existing names are collisions,
 never adopted. Any failure stops later cases. Pinned Wrangler and its rollout
 helper run from `server/`, using the installed locked package.
 
+Wrangler's application list contains summaries, not full configuration. Ownership
+resolves the single exact-name summary by its canonical UUID using `containers
+info`, checks matching ID/name/version/creation time/image, account and the
+Worker's verified ReplaySandbox namespace, then passes the unmodified detailed
+record to the strict configuration verifier. List and detail share the existing
+readback deadline. A detail lookup failure is retryable; only a fresh successful
+list without the named application proves absence. Name collisions are checked
+from the list before deployment and are never adopted.
+
 After strict rollout and ownership verification, the existing synthetic
 staging-acceptance route must report actual architecture/kernel/CPU, network
 blocked and exact marker-sandbox destruction. Observed drift stops before the

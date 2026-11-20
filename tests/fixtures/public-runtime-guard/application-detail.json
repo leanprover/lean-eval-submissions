@@ -1,0 +1,57 @@
+{
+  "id": "a03a1414-3cca-4edc-aeee-dd890bef62dd",
+  "created_at": "2026-11-20T03:14:22.944Z",
+  "updated_at": "2026-11-20T03:14:24.190000128Z",
+  "account_id": "a46b90978a1c29cc4795f30677e7e4b8",
+  "name": "le-pg-a-match",
+  "version": 1,
+  "scheduling_policy": "default",
+  "instances": 1,
+  "max_instances": 1,
+  "configuration": {
+    "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-historical-public-v1:11081d345a580a0f3c46699240f28e4f41fbf9fe-6a92b4acee1c50a661cac949e3092eb64e012157@sha256:473a5122ecd2a3f171b34ca83ce03e070c346359440cfb7b84c4338e2a7614e7",
+    "wrangler_ssh": {
+      "enabled": false
+    },
+    "vcpu": 4,
+    "memory": "12GiB",
+    "memory_mib": 12288,
+    "disk": {
+      "size_mb": 20000,
+      "size": "20GB"
+    },
+    "network": {
+      "assign_ipv6": "none",
+      "assign_ipv4": "none",
+      "mode": "private"
+    },
+    "command": [],
+    "entrypoint": [],
+    "runtime": "firecracker"
+  },
+  "constraints": {
+    "tiers": [
+      1,
+      2
+    ]
+  },
+  "durable_objects": {
+    "namespace_id": "9a5691a237a443b5bb3ba233e60f04b5"
+  },
+  "rollout_active_grace_period": 0,
+  "health": {
+    "errors": [],
+    "instances": {
+      "active": 0,
+      "assigned": 0,
+      "healthy": 0,
+      "stopped": 0,
+      "failed": 0,
+      "scheduling": 0,
+      "starting": 1
+    }
+  },
+  "network": {
+    "bandwidth_limit_mbps": 4000
+  }
+}
