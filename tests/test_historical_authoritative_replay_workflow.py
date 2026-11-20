@@ -287,7 +287,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
     def test_public_state_refresh_identity_is_temporary_and_read_only(self) -> None:
         install = WORKFLOW.split(
             "Install one temporary read-only State refresh identity", 1
-        )[1].split("actions/setup-node", 1)[0]
+        )[1].split("actions/setup-python", 1)[0]
         cleanup = WORKFLOW.split(
             "Confirm credentials remained separated and remove scratch", 1
         )[1]

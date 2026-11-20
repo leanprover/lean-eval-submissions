@@ -31,6 +31,12 @@ class SanitizeExecutorFailureTests(unittest.TestCase):
             {"error": "executor_failed", "reason": "input_transfer_failed"},
         )
 
+    def test_retains_only_closed_runtime_guard_failure_details(self) -> None:
+        for detail in ("runtime_profile_mismatch", "runtime_profile_guard_failed"):
+            value = {"error": "executor_failed", "reason": "command_failed", "detail": detail}
+            self.assertEqual(sanitized_failure(value), value)
+            self.assertIsNone(sanitized_failure({**value, "stderr": "source text"}))
+
     def test_rejects_extra_fields_and_unregistered_values(self) -> None:
         self.assertIsNone(
             sanitized_failure(

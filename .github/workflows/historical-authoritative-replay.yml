@@ -42,7 +42,230 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare-executor:
+    if: >-
+      inputs.confirm_authoritative_replay == true &&
+      vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'
+    permissions:
+      contents: read
+    environment: replay-production
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    outputs:
+      implementation_commit: ${{ github.sha }}
+      plan_kind: ${{ steps.plan.outputs.kind }}
+      execution_identity_sha256: ${{ steps.identity.outputs.sha256 }}
+    steps:
+      - name: Require exact protected main and the explicit controller gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORICAL_CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED }}
+          REPLENISH_LANE: ${{ inputs.replenish_lane }}
+          CONSECUTIVE_DEFERRALS: ${{ inputs.consecutive_deferrals }}
+          DEFERRED_TASK_ID: ${{ inputs.deferred_task_id }}
+          REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$HISTORICAL_CONTROLLER_ENABLED" = true
+          [[ "$CONSECUTIVE_DEFERRALS" =~ ^[0-9]+$ ]]
+          test "$CONSECUTIVE_DEFERRALS" -le 2
+          if [ "$CONSECUTIVE_DEFERRALS" -gt 0 ]; then
+            [[ "$DEFERRED_TASK_ID" =~ ^rt1_[0-9a-f]{64}$ ]]
+          else
+            test -z "$DEFERRED_TASK_ID"
+          fi
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          if [ "$REPLENISH_LANE" = true ]; then
+            [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$GITHUB_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
+              comparison=$(timeout 30s gh api \
+                "repos/$GITHUB_REPOSITORY/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$GITHUB_SHA")
+              jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
+                --arg head "$GITHUB_SHA" '
+                  .status == "ahead" and .base_commit.sha == $base and
+                  .merge_base_commit.sha == $base and
+                  (.commits | length) > 0 and .commits[-1].sha == $head and
+                  .ahead_by > 0 and
+                  .ahead_by == .total_commits and
+                  .ahead_by == (.commits | length) and
+                  (.files | length) > 0 and (.files | length) < 300 and
+                  all(.files[];
+                    ((.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                     (.status == "added" or .status == "modified") or
+                     (.filename | test("^verification/r2_[0-9a-f]{64}[.]json$")) and
+                     .status == "added") and
+                    (has("previous_filename") | not))
+                ' <<< "$comparison" >/dev/null
+            fi
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: main
+          path: state
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.18'
+
+      - name: Install exact controller dependencies
+        run: |
+          set -euo pipefail
+          npm --prefix server ci
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Validate State and identify only one stale running attempt
+        id: preflight
+        run: |
+          set -euo pipefail
+          test "$(jq -r .environment state/state.json)" = production
+          test "$(git -C state remote get-url origin)" = \
+            git@github.com:leanprover/lean-eval-state.git
+          test -z "$(git -C state status --short)"
+          python state/scripts/state.py --root state validate
+          python state/scripts/state.py --root state materialize \
+            --output "$RUNNER_TEMP/state-views"
+          python scripts/historical_replay_controller.py recover \
+            --events-root state/events --state-validated \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/recovery.json"
+          echo "kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")" >> "$GITHUB_OUTPUT"
+          echo "state_head=$(git -C state rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Plan the exact next qualified public task
+        id: plan
+        if: steps.preflight.outputs.kind == 'none'
+        env:
+          CONSECUTIVE_DEFERRALS: ${{ inputs.consecutive_deferrals }}
+          DEFERRED_TASK_ID: ${{ inputs.deferred_task_id }}
+        run: |
+          set -euo pipefail
+          queue="$RUNNER_TEMP/state-views/historical-public-replay-queue.json"
+          test "$(jq -r .schema_version "$queue")" = 2
+          test "$(jq -r .environment "$queue")" = production
+          python scripts/historical_replay_controller.py plan \
+            --queue "$queue" --repository-root . \
+            --output "$RUNNER_TEMP/historical-replay-plan.json"
+          kind=$(jq -er .kind "$RUNNER_TEMP/historical-replay-plan.json")
+          if [ "$CONSECUTIVE_DEFERRALS" -gt 0 ]; then
+            test "$kind" = execution
+            test "$(jq -er .task.replay_task_id "$RUNNER_TEMP/historical-replay-plan.json")" = "$DEFERRED_TASK_ID"
+          fi
+          case "$kind" in
+            execution)
+              test "$(jq -r .transport.status "$RUNNER_TEMP/historical-replay-plan.json")" = ready
+              test "$(jq -r .transport.contract "$RUNNER_TEMP/historical-replay-plan.json")" = historical_public_executor_v1
+              ;;
+            empty) echo 'The historical public replay queue is empty.' >> "$GITHUB_STEP_SUMMARY" ;;
+            blocked) test "$(jq -r .blocker.status "$RUNNER_TEMP/historical-replay-plan.json")" = blocked ;;
+            *) exit 1 ;;
+          esac
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+      - name: Render and deploy only the exact qualified historical executor
+        id: deploy
+        if: steps.plan.outputs.kind == 'execution'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          config=server/historical-production-wrangler.json
+          python scripts/historical_replay_controller.py render-executor-config \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" --repository-root . \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID" --source-commit "$GITHUB_SHA" \
+            --output "$config"
+          trap 'rm -f "$config"' EXIT
+          (cd server && npx wrangler deploy \
+            --config historical-production-wrangler.json --env production)
+          (cd server && python ../scripts/wait_replay_container_rollout.py \
+            --config historical-production-wrangler.json \
+            --environment production \
+            --image-family historical-public \
+            --application lean-eval-historical-public-replay-replaysandbox-production)
+          rm -f "$config"
+          trap - EXIT
+          echo 'deployed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Require the exact enabled historical executor before State mutation
+        if: steps.deploy.outputs.deployed == 'true'
+        run: |
+          set -euo pipefail
+          exact_health=false
+          for health_attempt in $(seq 1 10); do
+            if curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 3 \
+              https://lean-eval-historical-public-replay.lean-eval.workers.dev/healthz \
+              --output "$RUNNER_TEMP/historical-health.json" && \
+              python - "$RUNNER_TEMP/historical-health.json" "$RUNNER_TEMP/historical-replay-plan.json" <<'PY'
+          import json, os, pathlib, sys
+          health = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          plan = json.loads(pathlib.Path(sys.argv[2]).read_text())
+          expected = {
+              "status": "ok", "service": "lean-eval-replay-executor",
+              "environment": "production", "deployed_commit": os.environ["GITHUB_SHA"],
+              "replay_enabled": False, "historical_public_replay_enabled": True,
+              "staging_acceptance_enabled": False,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": plan["task"]["execution_profile_digest"],
+              "reviewed_measurement_config_digest": plan["task"]["measurement_config_digest"],
+              "reviewed_vm_image_digest": plan["execution_profile"]["vm_image_digest"],
+          }
+          if health != expected:
+              raise SystemExit("historical executor health differs from the exact plan")
+          PY
+            then
+              exact_health=true
+              break
+            fi
+            echo "Waiting for exact historical executor health (attempt=$health_attempt/10)" >&2
+            sleep 2
+          done
+          test "$exact_health" = true
+
+      - name: Bind only the exact prepared execution identity
+        id: identity
+        if: steps.plan.outputs.kind == 'execution'
+        run: |
+          set -euo pipefail
+          identity=$(python scripts/historical_public_preparation_identity.py \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json")
+          echo "sha256=$identity" >> "$GITHUB_OUTPUT"
+
+      - name: Remove read-only preparation scratch
+        if: always()
+        run: |
+          set -euo pipefail
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          rm -rf state "$RUNNER_TEMP/state-views"
+          rm -f "$RUNNER_TEMP/historical-replay-plan.json" "$RUNNER_TEMP/recovery.json"
+
   replay-one:
+    needs: prepare-executor
     if: >-
       inputs.confirm_authoritative_replay == true &&
       vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'
@@ -54,6 +277,7 @@ jobs:
       plan_kind: ${{ steps.started.outputs.deferred == 'true' && 'deferred' || steps.plan.outputs.kind }}
       next_deferrals: ${{ steps.started.outputs.next_deferrals || '0' }}
       next_deferred_task: ${{ steps.started.outputs.deferred_task_id }}
+      runtime_guard_failed: ${{ steps.execute.outputs.runtime_guard_failed }}
     environment: replay-production
     runs-on: ubuntu-26.04
     timeout-minutes: 360
@@ -82,7 +306,27 @@ jobs:
           fi
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
-          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          head=${branch%$'\t'*}
+          test "$branch" = "$head"$'\ttrue'
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            comparison=$(timeout 30s gh api \
+              "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$head")
+            jq -e --arg base "$GITHUB_SHA" --arg head "$head" '
+                  .status == "ahead" and .base_commit.sha == $base and
+                  .merge_base_commit.sha == $base and
+                  (.commits | length) > 0 and .commits[-1].sha == $head and
+                  .ahead_by > 0 and
+                  .ahead_by == .total_commits and
+                  .ahead_by == (.commits | length) and
+                  (.files | length) > 0 and (.files | length) < 300 and
+                  all(.files[];
+                    ((.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                     (.status == "added" or .status == "modified") or
+                     (.filename | test("^verification/r2_[0-9a-f]{64}[.]json$")) and
+                     .status == "added") and
+                    (has("previous_filename") | not))
+                ' <<< "$comparison" >/dev/null
+          fi
           if [ "$REPLENISH_LANE" = true ]; then
             [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
             if [ "$GITHUB_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
@@ -139,12 +383,6 @@ jobs:
           git -C state config core.sshCommand "$ssh_command"
           unset STATE_READ_KEY
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.22.0
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.18'
@@ -152,7 +390,6 @@ jobs:
       - name: Install exact controller dependencies
         run: |
           set -euo pipefail
-          npm --prefix server ci
           python -m pip install --disable-pip-version-check --only-binary=:all: \
             --require-hashes -r requirements-jsonschema-workflow.txt
 
@@ -268,29 +505,21 @@ jobs:
           esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
-      - name: Render and deploy only the exact qualified historical executor
+      - name: Require the exact prepared executor identity without redeployment
         id: deploy
         if: steps.plan.outputs.kind == 'execution'
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREPARED_COMMIT: ${{ needs.prepare-executor.outputs.implementation_commit }}
+          PREPARED_PLAN_KIND: ${{ needs.prepare-executor.outputs.plan_kind }}
+          PREPARED_IDENTITY: ${{ needs.prepare-executor.outputs.execution_identity_sha256 }}
         run: |
           set -euo pipefail
-          config=server/historical-production-wrangler.json
-          python scripts/historical_replay_controller.py render-executor-config \
-            --plan "$RUNNER_TEMP/historical-replay-plan.json" --repository-root . \
-            --account-id "$CLOUDFLARE_ACCOUNT_ID" --source-commit "$GITHUB_SHA" \
-            --output "$config"
-          trap 'rm -f "$config"' EXIT
-          (cd server && npx wrangler deploy \
-            --config historical-production-wrangler.json --env production)
-          (cd server && python ../scripts/wait_replay_container_rollout.py \
-            --config historical-production-wrangler.json \
-            --environment production \
-            --image-family historical-public \
-            --application lean-eval-historical-public-replay-replaysandbox-production)
-          rm -f "$config"
-          trap - EXIT
+          test "$PREPARED_COMMIT" = "$GITHUB_SHA"
+          test "$PREPARED_PLAN_KIND" = execution
+          [[ "$PREPARED_IDENTITY" =~ ^[0-9a-f]{64}$ ]]
+          actual=$(python scripts/historical_public_preparation_identity.py \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json")
+          test "$actual" = "$PREPARED_IDENTITY"
           echo 'deployed=true' >> "$GITHUB_OUTPUT"
 
       - name: Require the exact enabled historical executor before State mutation
@@ -481,8 +710,8 @@ jobs:
               else
                 budget_status=$?
                 if [ "$budget_status" -ne 3 ]; then exit "$budget_status"; fi
-                # No start was published: a bounded successor may reuse this
-                # warmed image/reservation without consuming a task attempt.
+                # No start was published. A bounded successor prepares the
+                # image again outside execution time, without a task attempt.
                 cat "$RUNNER_TEMP/historical-budget.json"
                 metrics=$(jq -r '"elapsed=\(.setup_elapsed_seconds)s required=\(.required_seconds)s remaining=\(.remaining_seconds)s"' \
                   "$RUNNER_TEMP/historical-budget.json")
@@ -654,6 +883,21 @@ jobs:
                 fi
                 echo "::notice title=Public executor status retry::reason=$executor_rpc_failure_reason retry=$consecutive_executor_rpc_failures/$max_consecutive_executor_rpc_failures"
                 continue
+              fi
+              if [ "$poll_status" = 500 ]; then
+                sanitized=$(python scripts/sanitize_executor_failure.py \
+                  "$RUNNER_TEMP/executor-poll-response.json") || sanitized=''
+                if jq -e '.reason == "command_failed" and
+                  (.detail == "runtime_profile_mismatch" or .detail == "runtime_profile_guard_failed")' \
+                  <<< "$sanitized" >/dev/null 2>&1; then
+                  guard_detail=$(jq -er .detail <<< "$sanitized")
+                  echo "::notice title=Public runtime guard stopped::$guard_detail; stop for runtime diagnosis before another attempt."
+                  echo "Public runtime guard stopped: $guard_detail. No checker verdict; diagnose before retrying." >> "$GITHUB_STEP_SUMMARY"
+                  echo 'runtime_guard_failed=true' >> "$GITHUB_OUTPUT"
+                  # Preserve the existing failure append/destruction path. Do
+                  # not invent permanent unavailability from one observation.
+                  exit 1
+                fi
               fi
               mv "$RUNNER_TEMP/executor-poll-response.json" "$RUNNER_TEMP/executor-response.json"
               test "$poll_status" = 200
@@ -955,7 +1199,8 @@ jobs:
         inputs.replenish_lane == true && inputs.remaining_runs > 1 &&
         needs.replay-one.outputs.preflight_kind != 'busy' &&
         needs.replay-one.outputs.plan_kind != 'empty' &&
-        needs.replay-one.outputs.plan_kind != 'blocked'
+        needs.replay-one.outputs.plan_kind != 'blocked' &&
+        needs.replay-one.outputs.runtime_guard_failed != 'true'
       }}
     permissions:
       actions: write

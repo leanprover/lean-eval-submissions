@@ -198,3 +198,53 @@ Production intake, ordinary private replay, and release publication are
 independent gates and do not become enabled by this controller.
 
 A noncancelled preparation-step timeout is a failed outcome before continue-on-error, distinct from job cancellation; see [the Actions runner step implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/StepsRunner.cs#L295).
+
+## Prepare the immutable executor before the execution job
+
+A public pilot spent413 seconds deploying and waiting for the qualified image,
+and494 seconds from its first shell step to executor invocation. That cold path
+cannot fit the410-second setup allowance while retaining the full330-minute
+runner limit, delivery grace and cleanup tail. Deferral is a safety stop rather
+than a strategy for completing such a campaign.
+
+`prepare-executor` now validates protected production State and plans read-only,
+then deploys and strictly health-checks the exact qualified executor in a
+separate thirty-minute job. It has no State writer, OIDC execution authority,
+source archive, cleanup reservation, executor request or recovery append. A
+busy, stale or empty plan never triggers deployment. An infrastructure failure
+stops the workflow without starting or failing a task.
+
+The following fresh six-hour `replay-one` job validates State again, handles the
+existing busy/stale-recovery paths, and rederives the task and qualified inputs.
+Before reservation it compares a source-free prepared execution hash and the
+job SHA for consistency, then repeats exact health to bind the actual deployed
+Worker commit. The SHA job output alone is not deployment evidence. The prepared
+hash binds the entire validated plan except whole-State event count/digest,
+which may change through unrelated private-lane appends. A changed task,
+attempt, authority, image, profile, measurement or code fails closed. There is
+no candidate/source artifact handoff and no repeated wrangler deployment in the
+execution job. Both jobs remain under the same noncancelling workflow-level
+public concurrency group.
+
+The existing410-second setup guard remains in the actual execution job, with
+full19800000ms evaluation,20100000ms process window and twelve-minute tail.
+This split moves only pre-attempt image preparation outside that budget; it
+adds no observer, idle-running State, asynchronous recovery policy or new
+executor protocol. Root's next bounded staging/production packet must still
+verify actual warm execution-job timings rather than assume all setup costs
+have vanished.
+
+A typed PUBLIC runtime mismatch or internal guard failure emits only a fixed
+source-free notice and summary, fails execution, and explicitly prevents a
+successor. Existing cleanup/destruction and truthful orchestration-failure
+accounting remain unchanged. A retryable State reason is not permission to
+silently retry a deterministic profile mismatch; diagnose the observed runtime
+before a deliberate new attempt. No permanent-unavailability event is inferred
+from a single guard failure.
+
+As verified by the operator on 2026-11-20, replay-production currently enforces
+branch policy with no required reviewers or wait timer. Both jobs retain that
+protected environment; future protection changes must be respected. Execution
+accepts current main only at the dispatch SHA or a completely proven Results-only
+descendant using the existing closed comparison filter. Code changes, divergent
+history, truncation, renamed or deleted files still stop before State mutation.
