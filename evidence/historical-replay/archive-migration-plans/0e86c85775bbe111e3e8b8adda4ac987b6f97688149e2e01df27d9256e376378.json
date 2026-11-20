@@ -1,0 +1,51 @@
+{
+  "entries": [
+    {
+      "plaintext_sha256": "949ae5cb4c962e7d3b80e1f85191183c8fadba370871c7745047c513ba38efde",
+      "plaintext_size_bytes": 8942,
+      "source_ciphertext_sha256": "4cfb001a6513a3895244b389693f42f864cdc703956d93bb59dc66a9254a2a68",
+      "source_path": "audit/2026/08/mlgraham-1128-2d317a57.tar.age",
+      "source_schema_version": 1,
+      "source_sidecar_sha256": "a57a6575b52e6c4e1f14479156759c076da4932bd97d29ef61b31eefc953a594",
+      "submission_id": "01a01c7e-d408-704d-a72f-9c874a913259",
+      "target_path": "archives/01/01a01c7e-d408-704d-a72f-9c874a913259.tar.age"
+    },
+    {
+      "plaintext_sha256": "23388ac87c4692bf549b9703dda9f20b147fe94f9d42e5ef0898e92daa29f244",
+      "plaintext_size_bytes": 21793,
+      "source_ciphertext_sha256": "f2b2f972f9cde9d0c4a3b63835263e6b6677ae3f43a685168ac86487d884056e",
+      "source_path": "audit/2026/08/mlgraham-1139-c81843f5.tar.age",
+      "source_schema_version": 1,
+      "source_sidecar_sha256": "69cdf884f9a9e11971972be467a3d6c5d8a8b66c87f5b7af4b7503bdc0f62a2f",
+      "submission_id": "01a01cf7-b170-7f32-91c2-4284a7f0bf47",
+      "target_path": "archives/01/01a01cf7-b170-7f32-91c2-4284a7f0bf47.tar.age"
+    },
+    {
+      "plaintext_sha256": "114d26c29bef1c5dd64f422baa88bddfe8c0b3cc30e8c43f1ab935bd6a616bf0",
+      "plaintext_size_bytes": 42977,
+      "source_ciphertext_sha256": "07e0f97852da3f9f03bacbabbf160017e022847585a55fae2309ee67014d1112",
+      "source_path": "audit/2026/08/mlgraham-1156-d561d416.tar.age",
+      "source_schema_version": 1,
+      "source_sidecar_sha256": "f0feff09ae2d83f8d98a98ed8f93b8af01f690cb054a433633e7c75c44ac8317",
+      "submission_id": "01a01dbe-2620-7c59-8573-d8f932962912",
+      "target_path": "archives/01/01a01dbe-2620-7c59-8573-d8f932962912.tar.age"
+    },
+    {
+      "plaintext_sha256": "19f3226e9b52515be67ca47dcc1954382ceec69d23d1090dee3661fcffb54ca0",
+      "plaintext_size_bytes": 411519,
+      "source_ciphertext_sha256": "d75997a213f19cbb61c70b8daf9cd94b87a0bded3c162ac0e13d4952341181f0",
+      "source_path": "audit/2026/08/savarin-1080-ab459a1e.tar.age",
+      "source_schema_version": 1,
+      "source_sidecar_sha256": "70d4d29ad5531ae167652da6c3fff4f37ffd05396ecfbabb889a63f62b899a5e",
+      "submission_id": "01a00e33-d100-71ae-8741-6f26172f3655",
+      "target_path": "archives/01/01a00e33-d100-71ae-8741-6f26172f3655.tar.age"
+    }
+  ],
+  "inventory_digest": "260dd44bab488046530ef5bb8ae647c2d38e6ec98db1402ceb70a96d848a18ff",
+  "migration_count": 4,
+  "retained": [],
+  "retained_count": 0,
+  "schema_version": 1,
+  "source_commit": "f3df4480d48cf5024602c15d656e4469fa774cc9",
+  "source_repository": "leanprover/lean-eval-audit"
+}
