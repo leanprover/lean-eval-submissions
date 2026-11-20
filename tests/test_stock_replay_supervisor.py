@@ -24,7 +24,7 @@ import stock_replay_supervisor as supervisor
 from test_stock_replay_measurement import Context, BWRAP, PYTHON as HOST_PYTHON
 
 
-def owned_python_launcher(directory, host_python):
+def owned_python_launcher(directory, host_python, *, library_directory=None):
     """Keep the test host's runtime layout behind an owned, pinned executable.
 
     Hosted setup-python installs need not meet the production image's strict
@@ -33,9 +33,17 @@ def owned_python_launcher(directory, host_python):
     paths. This synthetic test adapter establishes no runtime qualification.
     """
     # replay-measure uses /usr/bin/env python3 under this fixture's PATH.
+    if library_directory is None:
+        base = subprocess.check_output([host_python, '-I', '-c',
+            'import sys;print(sys.base_prefix)'], text=True).strip()
+        library_directory = Path(base) / 'lib'
     launcher = Path(directory) / 'python3'
     with launcher.open('x', encoding='utf-8') as output:
-        output.write('#!/bin/sh\nexec ' + shlex.quote(str(Path(host_python).absolute())) + ' "$@"\n')
+        # clearenv removes setup-python's loader configuration. Restore only
+        # this trusted fixture runtime's lib directory, never inherited paths.
+        output.write('#!/bin/sh\nLD_LIBRARY_PATH=' + shlex.quote(str(library_directory))
+                     + '\nexport LD_LIBRARY_PATH\nexec '
+                     + shlex.quote(str(Path(host_python).absolute())) + ' "$@"\n')
     launcher.chmod(0o700)
     return str(launcher)
 
@@ -69,6 +77,11 @@ class Fixture(Context):
         # Every original inner comparator sandbox binds the stock prefix but
         # masks /tmp. Keep its synthetic tool shebangs inside that prefix.
         self.python = owned_python_launcher(self.prefix / 'bin', HOST_PYTHON)
+        for tool in self.policy['tools'].values():
+            path = Path(tool['path'])
+            lines = path.read_text().splitlines(keepends=True)
+            path.write_text(f'#!{self.python}\n' + ''.join(lines[1:]))
+            tool['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
         (self.project / 'WorkspaceTest.lean').write_bytes(ORIGINAL.read_bytes())
         (self.project / 'Challenge.lean').write_text('-- synthetic owner fixture\n')
         (self.project / 'README.md').write_text('# Synthetic supervisor fault fixture\n')
@@ -202,7 +215,8 @@ class StockSupervisorTests(unittest.TestCase):
             'import sys;print(sys.base_prefix)'], text=True).strip()).resolve()
         executable = Path(sys.executable).resolve().relative_to(base)
         destination = Path('/opt/lean-eval-hosted-python-fixture')
-        launcher = owned_python_launcher(self.root, destination / executable)
+        launcher = owned_python_launcher(self.root, destination / executable,
+                                         library_directory=destination / 'lib')
         code = 'import json,ssl,sys;print(json.dumps([sys.version,ssl.OPENSSL_VERSION,sys.flags.isolated]))'
         command = [BWRAP, '--unshare-all', '--die-with-parent', '--new-session',
             '--ro-bind', '/', '/', '--tmpfs', '/opt', '--tmpfs', '/home',
@@ -358,8 +372,7 @@ class StockSupervisorTests(unittest.TestCase):
         owner = supervisor.NamespaceOwner(command, (writer,))
         os.close(writer)
         try:
-            self.assertTrue(select.select([reader], [], [], 5)[0])
-            information = json.loads(os.read(reader, 4096))
+            information = supervisor.read_information(reader, time.monotonic() + 5)
             return owner, information
         finally:
             os.close(reader)
@@ -378,8 +391,7 @@ class StockSupervisorTests(unittest.TestCase):
         os.close(writer)
         descendants = []
         try:
-            self.assertTrue(select.select([info_r], [], [], 5)[0])
-            information = json.loads(os.read(info_r, 4096))
+            information = supervisor.read_information(info_r, time.monotonic() + 5)
             self.assertTrue(select.select([reader], [], [], 5)[0])
             reported = json.loads(os.read(reader, 4096))
             self.assertTrue(reported['separate_session'])
@@ -686,6 +698,12 @@ class SupervisorSourceTests(unittest.TestCase):
             self.assertEqual(supervisor.file_hash(Path(launcher))['mode'], 0o700)
             self.assertEqual(Path(launcher).stat().st_nlink, 1)
             self.assertEqual((host.stat().st_mode, host.stat().st_nlink, host.read_bytes()), before)
+            base = subprocess.check_output([sys.executable, '-I', '-c',
+                'import sys;print(sys.base_prefix)'], text=True).strip()
+            inherited = {**os.environ, 'LD_LIBRARY_PATH': str(root / 'untrusted-library')}
+            observed = subprocess.check_output([launcher, '-I', '-c',
+                'import os;print(os.environ["LD_LIBRARY_PATH"])'], env=inherited, text=True).strip()
+            self.assertEqual(observed, str(Path(base) / 'lib'))
 
     def test_unsafe_interpreter_launchers_refuse_before_process_creation(self):
         for case in ('group_writable', 'world_writable', 'setuid', 'setgid', 'hardlinked', 'symlink'):
