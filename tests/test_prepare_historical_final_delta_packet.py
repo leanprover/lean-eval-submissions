@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import textwrap
 import pathlib
 import sys
 import tempfile
@@ -200,6 +203,34 @@ class Fixture:
         }
         self.crosswalk_path.write_bytes(canonical(crosswalk))
 
+    def add_modern_server_results(self) -> set[str]:
+        records = [
+            record("modern", "f", public=True, benchmark="5" * 40),
+            record("modern", "0", public=False, benchmark="6" * 40),
+        ]
+        for number, item in enumerate(records):
+            item["intake"] = {"kind": "server", "submission_id": f"018f1f5e-7b2a-7abc-8def-0123456789a{number}"}
+        (self.results / "modern.json").write_bytes(canonical_file_bytes(document("modern", records)))
+        baseline = json.loads(self.baseline_path.read_bytes())
+        current = inventory(self.results, self.source_commit)
+        current_raw = canonical_inventory_bytes(current)
+        delta = reconcile(baseline, self.baseline_path.read_bytes(), current, current_raw, INVENTORY_SCHEMA)
+        delta_raw = canonical_delta_bytes(delta)
+        self.current_path.write_bytes(current_raw)
+        self.delta_path.write_bytes(delta_raw)
+        decisions = json.loads(self.decisions_path.read_bytes())
+        decisions["results_store_sha256"] = current["results_store_sha256"]
+        decisions["delta_sha256"] = __import__("hashlib").sha256(delta_raw).hexdigest()
+        self.decisions_path.write_bytes(canonical(decisions))
+        crosswalk = json.loads(self.crosswalk_path.read_bytes())
+        crosswalk["results_store_sha256"] = current["results_store_sha256"]
+        crosswalk["private_result_count"] += 1
+        crosswalk["classification_counts"]["archive_identity_ambiguous"] += 1
+        crosswalk["entries"].append({"result_id": records[1]["result_id"], "classification": "archive_identity_ambiguous", "candidate_count": 2})
+        crosswalk["entries"].sort(key=lambda item: item["result_id"])
+        self.crosswalk_path.write_bytes(canonical(crosswalk))
+        return {item["result_id"] for item in records}
+
     def build(self) -> dict:
         return build_packet(
             baseline_path=self.baseline_path,
@@ -262,6 +293,142 @@ class HistoricalFinalDeltaPacketTests(unittest.TestCase):
         )
         errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
         self.assertEqual(errors, [])
+
+    def test_modern_server_results_are_explicitly_excluded_and_counts_conserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            servers = fixture.add_modern_server_results()
+            packet = fixture.build()
+        scope = packet["intake_scope"]
+        self.assertEqual(scope["legacy_issue_result_count"], 4)
+        self.assertEqual(scope["excluded_server_result_count"], 2)
+        self.assertEqual(scope["excluded_server_counts"], {"public": 1, "private": 1})
+        self.assertEqual({item["result_id"] for item in scope["excluded_server_results"]}, servers)
+        self.assertTrue(servers.isdisjoint(item["result_id"] for item in packet["entries"]))
+        self.assertEqual(packet["cutoff"]["delta_counts"]["result_count"], 6)
+        for visibility, key in (("public", "public_source_probe_pending"), ("private", "private_archive_migration_pending")):
+            self.assertEqual(packet["classification_counts"][visibility]["total"] + scope["excluded_server_counts"][visibility], packet["cutoff"]["delta_counts"][key])
+        self.assertEqual(packet["archive_migration"]["legacy_unique_archive_count"], 1)
+        self.assertEqual(packet["archive_migration"]["migrated_unique_archive_count"], 1)
+        self.assertEqual(packet["image_requirement_count"], 2)
+        self.assertTrue(all(row["benchmark_commit"] not in {"5" * 40, "6" * 40} for row in packet["image_requirements"]))
+        self.assertEqual(list(Draft202012Validator(PACKET_SCHEMA).iter_errors(packet)), [])
+        self.assertEqual(packet["activation_status"], "blocked_pending_exact_profiles_and_state_append")
+
+    def test_intake_kind_change_cannot_bypass_exact_results_digest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            fixture.add_modern_server_results()
+            path = fixture.results / "modern.json"
+            value = json.loads(path.read_bytes())
+            value["results"][0]["intake"] = {"kind": "issue", "issue_number": 123}
+            path.write_bytes(canonical_file_bytes(value))
+            with self.assertRaisesRegex(FinalDeltaError, "digest differs"):
+                fixture.build()
+
+    def test_all_server_delta_has_no_historical_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            (fixture.results / "public.json").unlink()
+            (fixture.results / "private.json").unlink()
+            decisions = json.loads(fixture.decisions_path.read_bytes())
+            decisions["entries"] = []
+            fixture.decisions_path.write_bytes(canonical(decisions))
+            crosswalk = json.loads(fixture.crosswalk_path.read_bytes())
+            crosswalk["entries"] = []
+            crosswalk["private_result_count"] = 0
+            crosswalk["classification_counts"]["bound"] = 0
+            fixture.crosswalk_path.write_bytes(canonical(crosswalk))
+            fixture.add_modern_server_results()
+            packet = fixture.build()
+        self.assertEqual(packet["cutoff"]["delta_counts"]["result_count"], 2)
+        self.assertEqual(packet["intake_scope"]["legacy_issue_result_count"], 0)
+        self.assertEqual(packet["intake_scope"]["excluded_server_result_count"], 2)
+        self.assertEqual(packet["entries"], [])
+        self.assertEqual(packet["image_requirements"], [])
+        self.assertEqual(packet["archive_migration"]["legacy_unique_archive_count"], 0)
+        self.assertEqual(list(Draft202012Validator(PACKET_SCHEMA).iter_errors(packet)), [])
+
+    def test_actual_workflow_verifier_rejects_partition_loss_overlap_and_bad_counts(self):
+        workflow = (ROOT / ".github/workflows/historical-final-delta-packet.yml").read_text()
+        start = workflow.index('          packet_path = pathlib.Path(os.environ["PACKET"])')
+        end = workflow.index("\n          PY", start)
+        script = "import json, os, pathlib\nfrom jsonschema import Draft202012Validator, FormatChecker\n" + textwrap.dedent(workflow[start:end])
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            fixture.add_modern_server_results()
+            packet = fixture.build()
+            path = fixture.root / "packet.json"
+            environment = {**os.environ, "PACKET": str(path), "PACKET_SCHEMA": str(ROOT / "schemas/historical-final-delta-preparation-v1.schema.json"), "EXPECTED_COUNT": "6", "EXPECTED_PUBLIC": "3", "EXPECTED_PRIVATE": "3", "EXPECTED_LEGACY": "4", "EXPECTED_EXCLUDED": "2"}
+            path.write_bytes(canonical(packet))
+            good = subprocess.run([sys.executable, "-c", script], env=environment, capture_output=True)
+            self.assertEqual(good.returncode, 0, good.stderr)
+            for mutation in ("omit_server", "overlap", "count", "visibility", "expected_legacy", "expected_excluded"):
+                with self.subTest(mutation=mutation):
+                    changed = json.loads(json.dumps(packet))
+                    scope = changed["intake_scope"]
+                    if mutation == "omit_server":
+                        scope["excluded_server_results"].pop()
+                    elif mutation == "overlap":
+                        scope["excluded_server_results"][0]["result_id"] = changed["entries"][0]["result_id"]
+                    elif mutation == "count":
+                        scope["excluded_server_result_count"] += 1
+                    elif mutation == "visibility":
+                        scope["excluded_server_counts"]["public"] += 1
+                    changed_environment = dict(environment)
+                    if mutation == "expected_legacy":
+                        changed_environment["EXPECTED_LEGACY"] = "6"
+                    if mutation == "expected_excluded":
+                        changed_environment["EXPECTED_EXCLUDED"] = "0"
+                    path.write_bytes(canonical(changed))
+                    bad = subprocess.run([sys.executable, "-c", script], env=changed_environment, capture_output=True)
+                    self.assertNotEqual(bad.returncode, 0)
+
+    def test_inventory_cannot_forge_an_excluded_servers_visibility(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            servers = fixture.add_modern_server_results()
+            current = json.loads(fixture.current_path.read_bytes())
+            target = next(item for item in current["entries"] if item["result_id"] in servers and item["source"]["visibility"] == "public")
+            target["source"] = {"kind": "github_repo", "visibility": "private", "readiness": "private_archive_migration_pending"}
+            current["classification_counts"]["public_source_probe_pending"] -= 1
+            current["classification_counts"]["private_archive_migration_pending"] += 1
+            raw = canonical_inventory_bytes(current)
+            baseline = json.loads(fixture.baseline_path.read_bytes())
+            delta = reconcile(baseline, fixture.baseline_path.read_bytes(), current, raw, INVENTORY_SCHEMA)
+            fixture.current_path.write_bytes(raw)
+            fixture.delta_path.write_bytes(canonical_delta_bytes(delta))
+            with self.assertRaisesRegex(FinalDeltaError, "differs from exact canonical Results"):
+                fixture.build()
+
+    def test_server_public_source_decisions_including_unavailability_are_rejected(self):
+        for classification in ("available", "source_ref_permanently_unavailable"):
+            with self.subTest(classification=classification), tempfile.TemporaryDirectory() as temporary:
+                fixture = Fixture(pathlib.Path(temporary))
+                fixture.add_modern_server_results()
+                current = json.loads(fixture.current_path.read_bytes())
+                source = next(item for item in current["entries"] if item["owner"] == "modern" and item["source"]["visibility"] == "public")
+                decision = {"result_id": source["result_id"], "source_repository": source["source"]["repository"], "source_commit": source["source"]["commit"], "classification": classification}
+                if classification == "available":
+                    decision["source_tree"] = "7" * 40
+                else:
+                    decision.update(review_status="reviewed", evidence_sha256="8" * 64)
+                value = json.loads(fixture.decisions_path.read_bytes())
+                value["entries"].append(decision)
+                value["entries"].sort(key=lambda item: item["result_id"])
+                fixture.decisions_path.write_bytes(canonical(value))
+                with self.assertRaisesRegex(FinalDeltaError, "does not bind the delta"):
+                    fixture.build()
+
+    def test_missing_legacy_public_decision_still_fails_when_servers_are_excluded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(pathlib.Path(temporary))
+            fixture.add_modern_server_results()
+            value = json.loads(fixture.decisions_path.read_bytes())
+            value["entries"].pop()
+            fixture.decisions_path.write_bytes(canonical(value))
+            with self.assertRaisesRegex(FinalDeltaError, "exactly cover"):
+                fixture.build()
 
     def test_changed_delta_fails_exact_reconciliation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
