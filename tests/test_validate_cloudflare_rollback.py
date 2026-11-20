@@ -707,6 +707,16 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("plain-text bindings differ", completed.stderr)
 
+    def test_real_all_false_plan_cannot_add_an_absent_tracked_gate(self) -> None:
+        config = json.loads((ROOT / "server/wrangler.jsonc").read_text())
+        del config["env"]["production"]["vars"]["RELEASE_OPT_OUT_API_ENABLED"]
+        self._write(self.paths["intake_config"], config)
+        completed = self._all_false_plan_command()
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("lacks tracked launch gates", completed.stderr)
+        self.assertIn("RELEASE_OPT_OUT_API_ENABLED", completed.stderr)
+        self.assertFalse((self.directory / "all-false-plan.json").exists())
+
     def test_real_all_false_plan_rejects_enabled_missing_extra_and_changed_bindings(self) -> None:
         self.paths["intake_config"].write_bytes((ROOT / "server/wrangler.jsonc").read_bytes())
         original = copy.deepcopy(self.versions["intake"])

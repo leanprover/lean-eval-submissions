@@ -991,11 +991,17 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         f"lean-eval-dispatch/{args.expected_commit}"
     )
     if disable_launch_gates:
-        intake_expected.update(
+        disabled = dict(
             INTAKE_ENABLED="false",
             INTAKE_ENABLEMENT_MODE="disabled",
             **DISABLED_LAUNCH_GATE_BINDINGS,
         )
+        missing = sorted(set(disabled) - set(intake_expected))
+        if missing:
+            raise RollbackValidationError(
+                f"all-false rollback target lacks tracked launch gates: {missing}"
+            )
+        intake_expected.update(disabled)
     broker_expected = _expected_vars(
         broker_selected, args.expected_commit, "broker config"
     )
