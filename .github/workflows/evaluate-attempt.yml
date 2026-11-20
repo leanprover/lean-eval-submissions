@@ -389,7 +389,7 @@ jobs:
         id: terminal_receipt
         if: always() && github.event_name == 'workflow_dispatch'
         env:
-          EVALUATE_RESULT: ${{ job.status }}
+          EVALUATE_RESULT: ${{ job.status == 'success' && 'success' || 'failure' }}
           STARTED_AT: ${{ steps.deadline.outputs.started_at }}
           SUBMISSION_ID: ${{ inputs.submission_id }}
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
@@ -406,7 +406,7 @@ jobs:
           if [ -f /tmp/evaluate-out/results.json ]; then
             results_flag+=(--results /tmp/evaluate-out/results.json)
           fi
-          python scripts/build_evaluation_receipt.py \
+          python3 scripts/build_evaluation_receipt.py \
             --submission-id "$SUBMISSION_ID" --workflow-commit "$GITHUB_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
             --source-repository "$SOURCE_REPOSITORY" --source-commit "$SOURCE_COMMIT" \

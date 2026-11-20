@@ -87,9 +87,18 @@ collection or artifact upload. Its start is the trusted attempt-job start,
 including setup; its terminal timestamp is sampled once after evaluation returns.
 The receipt binds submission, immutable workflow/run/original attempt, selected
 runner tier, source and metadata digest, benchmark/toolchain, problem/revision,
-job outcome and exact result bytes. It is source-free and receives no callback,
-State, recorder or AWS credential. A missing terminal receipt (for example a job
-that cannot finish its cleanup step) leaves completion unproved.
+job outcome and exact result bytes. Only a successful attempt status produces a
+success receipt; other statuses produce a failure receipt if the receipt step
+can finish. The aggregate still excludes cancellation of the whole workflow,
+selects the standard/large attempt, and requires that attempt to succeed for
+aggregate success; a failure receipt cannot create acceptance. Non-success aggregate results must
+still be exactly failure for a failure callback, never cancelled or skipped.
+The receipt is source-free and receives no callback, State, recorder or AWS
+credential. A failure before checkout, a missing start/identity, runner loss,
+or cancellation/timeout that prevents receipt or artifact cleanup leaves
+completion unproved. The local failure-path tests do not establish that GitHub
+will finish cleanup or invoke the aggregate after an actual cancellation or
+job timeout. No missing receipt acquires a fallback completion clock.
 
 The source-free callback validates the selected receipt against its original
 run and inputs. A callback-only retry may have a later run-attempt number but

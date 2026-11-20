@@ -14,6 +14,68 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class EvaluationReceiptCliTests(unittest.TestCase):
+    def test_failure_receipt_shell_reaches_failed_completion_without_results(self):
+        # Execute the authored cleanup shell with only its absolute output path
+        # relocated. This proves local receipt -> completion behavior, not that
+        # GitHub guarantees cleanup after cancellation or runner termination.
+        attempt = (ROOT / '.github/workflows/evaluate-attempt.yml').read_text()
+        step = attempt.split('      - name: Freeze trusted evaluation terminal receipt\n', 1)[1].split(
+            '      - name: Collect source-free acceptance measurements', 1)[0]
+        self.assertIn("EVALUATE_RESULT: ${{ job.status == 'success' && 'success' || 'failure' }}", step)
+        shell = step.split('        run: |\n', 1)[1]
+        shell = '\n'.join(line[10:] if line.startswith('          ') else line
+                          for line in shell.splitlines())
+        vector = json.loads((ROOT / 'tests/fixtures/evaluation-terminal-v2-vector.json').read_text())
+        context = vector['context']
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / 'evaluate-out'
+            receipt = output / 'evaluation-terminal.json'
+            archive = root / 'archive.json'
+            completion = root / 'completion.json'
+            archive.write_text(json.dumps(vector['archive']))
+            env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1',
+                       EVALUATE_RESULT='failure', STARTED_AT=vector['receipt']['started_at'],
+                       GITHUB_SHA=context['workflow_commit'], GITHUB_RUN_ID=context['workflow_run_id'],
+                       GITHUB_RUN_ATTEMPT='1')
+            for key in ['submission_id', 'source_repository', 'source_commit', 'source_metadata_sha256',
+                        'benchmark_commit', 'toolchain', 'problem_id', 'statement_revision', 'runner_tier']:
+                env[key.upper()] = str(context[key])
+            result = subprocess.run(['bash', '-c', shell.replace('/tmp/evaluate-out', str(output))],
+                                    cwd=ROOT, env=env, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            frozen = json.loads(receipt.read_text())
+            self.assertEqual(frozen['evaluate_result'], 'failure')
+            self.assertIsNone(frozen['results_sha256'])
+            context_args = [part for key, value in context.items()
+                            if key != 'workflow_commit'
+                            for part in ['--' + key.replace('_', '-'), str(value)]]
+            callback = [sys.executable, '-B', 'scripts/build_evaluation_completion.py',
+                        *context_args, '--evaluator-version', context['workflow_commit'],
+                        '--archive-completion', str(archive), '--terminal-receipt', str(receipt),
+                        '--current-run-attempt', '2', '--output', str(completion)]
+            for allowlist_required in ['false', 'true']:
+                command = [*callback, '--evaluate-result', 'failure',
+                           '--allowlist-required', allowlist_required]
+                result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                body = json.loads(completion.read_text())
+                self.assertEqual(body['outcome'], {
+                    'status': 'failed', 'reason_code': 'large_runner_allowlist_required'
+                    if allowlist_required == 'true' else 'evaluation_pipeline_failed',
+                    'retryable': allowlist_required != 'true'})
+                self.assertEqual(body['completed_at'], frozen['completed_at'])
+                self.assertEqual(body['occurred_at'], frozen['started_at'])
+            # A locally recoverable attempt failure is not permission to
+            # synthesize success or treat a cancelled/skipped aggregate as
+            # a terminal callback. The real completion CLI must refuse.
+            for aggregate_result in ['success', 'cancelled', 'skipped']:
+                completion.unlink(missing_ok=True)
+                result = subprocess.run([*callback, '--evaluate-result', aggregate_result],
+                                        cwd=ROOT, env=env, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(completion.exists())
+
     def test_original_runner_freezes_once_and_callback_retry_reuses_that_time(self):
         vector = json.loads((ROOT / 'tests/fixtures/evaluation-terminal-v2-vector.json').read_text())
         with tempfile.TemporaryDirectory() as directory:

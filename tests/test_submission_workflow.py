@@ -84,7 +84,9 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertLess(freeze, upload)
         self.assertIn("started_at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)", self.attempt)
         receipt_step = self.attempt[freeze:metrics]
-        for fragment in ('EVALUATE_RESULT: ${{ job.status }}',
+        for fragment in ("EVALUATE_RESULT: ${{ job.status == 'success' && 'success' || 'failure' }}",
+                         'python3 scripts/build_evaluation_receipt.py',
+                         "if: always() && github.event_name == 'workflow_dispatch'",
                          '--workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"',
                          '--source-metadata-sha256 "$SOURCE_METADATA_SHA256"',
                          '--output /tmp/evaluate-out/evaluation-terminal.json'):
@@ -94,6 +96,17 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn('--current-run-attempt "$GITHUB_RUN_ATTEMPT"', callback)
         self.assertIn('RUNNER_TIER: ${{ needs.evaluate.outputs.runner_tier }}', callback)
         self.assertNotIn('build_evaluation_receipt.py', callback)
+
+    def test_terminal_failure_normalization_preserves_aggregate_cancellation_gates(self) -> None:
+        aggregate = self.text.split("\n  evaluate:\n", 1)[1].split("\n  archive_issue:", 1)[0]
+        self.assertIn("!cancelled() && needs.archive.result == 'success'", aggregate)
+        self.assertIn("needs.evaluate_standard.result != 'skipped'", aggregate)
+        self.assertIn('if [ "$ALLOWLIST_REQUIRED" = true ]; then\n            exit 1', aggregate)
+        self.assertIn('test "$LARGE_SUCCEEDED" = true', aggregate)
+        self.assertIn('test "$STANDARD_SUCCEEDED" = true', aggregate)
+        callback = self.text.split("\n  evaluation_state:", 1)[1].split("\n  record:", 1)[0]
+        self.assertIn('EVALUATE_RESULT: ${{ needs.evaluate.result }}', callback)
+        self.assertNotIn("job.status", callback)
 
     def test_workflow_file_exists(self) -> None:
         self.assertTrue(WORKFLOW.is_file(), f"missing {WORKFLOW}")

@@ -105,6 +105,14 @@ class EvaluationCompletionTests(unittest.TestCase):
                 with self.assertRaises(ValueError): self.complete()
         self.receipt.write_text(json.dumps(original))
 
+    def test_receipt_statement_revision_rejects_boolean_and_float_aliases(self):
+        original = json.loads(self.receipt.read_text())
+        for revision in [True, 1.0]:
+            with self.subTest(revision=revision):
+                self.receipt.write_text(json.dumps({**original, 'statement_revision': revision}))
+                with self.assertRaisesRegex(ValueError, 'statement_revision'):
+                    self.complete()
+
     def test_newer_receipt_cannot_be_used_by_older_attempt(self):
         self.freeze(workflow_run_attempt=3)
         with self.assertRaisesRegex(ValueError, 'run attempt'):

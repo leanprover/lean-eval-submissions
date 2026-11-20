@@ -77,6 +77,8 @@ def validate(value: object, *, context: dict[str, object], current_run_attempt: 
     validate_context(context)
     if not isinstance(value, dict) or set(value) != FIELDS or type(value.get("schema_version")) is not int or value.get("schema_version") != 1:
         raise ValueError("evaluation terminal receipt fields or version are invalid")
+    if type(value["statement_revision"]) is not int:
+        raise ValueError("evaluation terminal receipt statement_revision is invalid")
     if any(value[key] != expected for key, expected in context.items()):
         raise ValueError("evaluation terminal receipt identity does not match the selected attempt")
     original_attempt = value["workflow_run_attempt"]
