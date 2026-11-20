@@ -1,0 +1,67 @@
+{
+  "context": {
+    "submission_id": "019debcf-cb48-7000-8000-000000000001",
+    "workflow_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "workflow_run_id": "123",
+    "source_repository": "alice/source",
+    "source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "source_metadata_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "benchmark_commit": "cccccccccccccccccccccccccccccccccccccccc",
+    "toolchain": "leanprover/lean4:v4.32.0",
+    "problem_id": "two_plus_two",
+    "statement_revision": 1,
+    "runner_tier": "large"
+  },
+  "archive": {
+    "schema_version": 1,
+    "occurred_at": "2026-01-30T01:00:00.000Z",
+    "locator": {
+      "schema_version": 1,
+      "submission_id": "019debcf-cb48-7000-8000-000000000001",
+      "archive_repository": "leanprover/lean-eval-audit",
+      "archive_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "archive_path": "archives/01/019debcf-cb48-7000-8000-000000000001.tar.age",
+      "archive_ciphertext_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "encrypted": true
+    }
+  },
+  "results": {
+    "passed": [
+      "two_plus_two"
+    ]
+  },
+  "receipt": {
+    "submission_id": "019debcf-cb48-7000-8000-000000000001",
+    "workflow_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "workflow_run_id": "123",
+    "source_repository": "alice/source",
+    "source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "source_metadata_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "benchmark_commit": "cccccccccccccccccccccccccccccccccccccccc",
+    "toolchain": "leanprover/lean4:v4.32.0",
+    "problem_id": "two_plus_two",
+    "statement_revision": 1,
+    "runner_tier": "large",
+    "schema_version": 1,
+    "workflow_run_attempt": 1,
+    "started_at": "2026-01-30T01:01:00.000Z",
+    "completed_at": "2026-01-31T12:34:56.789Z",
+    "evaluate_result": "success",
+    "results_sha256": "8ceed0a3423894f131f5d7c1e6e383330fa15d1a95529daa7a25c261bd3077ea"
+  },
+  "completion": {
+    "schema_version": 2,
+    "submission_id": "019debcf-cb48-7000-8000-000000000001",
+    "attempt": 1,
+    "occurred_at": "2026-01-30T01:01:00.000Z",
+    "completed_at": "2026-01-31T12:34:56.789Z",
+    "benchmark_repository": "leanprover/lean-eval",
+    "benchmark_commit": "cccccccccccccccccccccccccccccccccccccccc",
+    "toolchain": "leanprover/lean4:v4.32.0",
+    "outcome": {
+      "status": "accepted",
+      "evaluator_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "release_at": "2026-03-31T12:34:56.789Z"
+}

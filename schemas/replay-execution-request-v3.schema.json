@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-execution-request-v3.schema.json",
+  "title": "Inactive stock replay execution request v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "replay_task_id",
+    "attempt",
+    "source",
+    "benchmark",
+    "result",
+    "checker",
+    "execution_profile_digest",
+    "measurement_config_digest",
+    "execution_profile",
+    "measurement_config",
+    "network",
+    "untrusted_environment"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "replay_task_id": {
+      "type": "string",
+      "pattern": "^rt1_[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "visibility",
+            "fetch_method",
+            "archive_capacity_class",
+            "repository",
+            "commit"
+          ],
+          "properties": {
+            "visibility": {
+              "const": "public"
+            },
+            "fetch_method": {
+              "const": "git"
+            },
+            "archive_capacity_class": {
+              "type": "null"
+            },
+            "repository": {
+              "$ref": "#/$defs/repository"
+            },
+            "commit": {
+              "$ref": "#/$defs/commit"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "visibility",
+            "archive",
+            "fetch_method",
+            "archive_capacity_class"
+          ],
+          "properties": {
+            "visibility": {
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "archive": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "schema_version",
+                "submission_id",
+                "archive_repository",
+                "archive_commit",
+                "archive_path",
+                "archive_ciphertext_sha256",
+                "encrypted"
+              ],
+              "properties": {
+                "schema_version": {
+                  "const": 1
+                },
+                "submission_id": {
+                  "$ref": "#/$defs/uuid7"
+                },
+                "archive_repository": {
+                  "$ref": "#/$defs/repository"
+                },
+                "archive_commit": {
+                  "$ref": "#/$defs/commit"
+                },
+                "archive_path": {
+                  "type": "string",
+                  "pattern": "^archives/[0-9a-f]{2}/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.tar\\.age$(?![\\s\\S])"
+                },
+                "archive_ciphertext_sha256": {
+                  "$ref": "#/$defs/digest"
+                },
+                "encrypted": {
+                  "const": true
+                }
+              }
+            },
+            "fetch_method": {
+              "const": "archive"
+            },
+            "archive_capacity_class": {
+              "const": "legacy_10mib"
+            }
+          }
+        }
+      ]
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "toolchain",
+        "configuration_lock",
+        "configuration_authority"
+      ],
+      "properties": {
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "toolchain": {
+          "type": "string",
+          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$(?![\\s\\S])"
+        },
+        "configuration_lock": {
+          "$ref": "benchmark-configuration-lock-v1.schema.json"
+        },
+        "configuration_authority": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "repository",
+                "commit",
+                "path",
+                "sha256",
+                "run_id",
+                "run_attempt"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "verification_receipt_v1"
+                },
+                "repository": {
+                  "const": "leanprover/lean-eval-submissions"
+                },
+                "commit": {
+                  "$ref": "#/$defs/commit"
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^verification/r2_[0-9a-f]{64}\\.json$(?![\\s\\S])"
+                },
+                "sha256": {
+                  "$ref": "#/$defs/digest"
+                },
+                "run_id": {
+                  "$ref": "#/$defs/positive"
+                },
+                "run_attempt": {
+                  "$ref": "#/$defs/positive"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "repository",
+                "commit",
+                "path",
+                "sha256",
+                "entry_sha256",
+                "root_toolchain"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "original_root_git_v1"
+                },
+                "repository": {
+                  "const": "leanprover/lean-eval-submissions"
+                },
+                "commit": {
+                  "$ref": "#/$defs/commit"
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^results/[A-Za-z0-9_-]+\\.json$(?![\\s\\S])"
+                },
+                "sha256": {
+                  "$ref": "#/$defs/digest"
+                },
+                "entry_sha256": {
+                  "$ref": "#/$defs/digest"
+                },
+                "root_toolchain": {
+                  "$ref": "#/$defs/blob"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_id",
+        "submission_id",
+        "problem_id",
+        "statement_revision",
+        "commit",
+        "tree_digest"
+      ],
+      "properties": {
+        "result_id": {
+          "type": "string",
+          "pattern": "^r2_[0-9a-f]{64}$(?![\\s\\S])"
+        },
+        "submission_id": {
+          "$ref": "#/$defs/uuid7"
+        },
+        "problem_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$(?![\\s\\S])"
+        },
+        "statement_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "tree_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "checker": {
+      "const": "nanoda"
+    },
+    "execution_profile_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "measurement_config_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "execution_profile": {
+      "$ref": "replay-execution-profile-v3.schema.json"
+    },
+    "measurement_config": {
+      "$ref": "replay-measurement-config-v2.schema.json"
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fetch_phase",
+        "untrusted_execution_phase"
+      ],
+      "properties": {
+        "fetch_phase": {
+          "enum": [
+            "public_https_only",
+            "controller_pinned_archive_only"
+          ]
+        },
+        "untrusted_execution_phase": {
+          "const": "disabled"
+        }
+      }
+    },
+    "untrusted_environment": {
+      "type": "object",
+      "maxProperties": 0
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$(?![\\s\\S])"
+    },
+    "positive": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "blob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "git_blob",
+        "sha256"
+      ],
+      "properties": {
+        "git_blob": {
+          "$ref": "#/$defs/commit"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\\s\\S])"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import terminalVector from "../../tests/fixtures/evaluation-terminal-v2-vector.json";
 
 import {
   ApiDecodeError,
@@ -7,6 +8,7 @@ import {
   decodeBrowserSubmission,
   decodeChallengeSubmission,
   decodeEmptyObject,
+  decodeEvaluationCompletion,
   decodeIntakeSubmissionInput,
   decodeProblemRepairDecision,
   decodeResultRetractionDecision,
@@ -908,6 +910,18 @@ describe("strict API contract", () => {
     })).toThrow(/path/);
   });
 
+  it("requires an explicit ordered terminal time only for v2 evaluation callbacks", () => {
+    const value = terminalVector.completion;
+    expect(decodeEvaluationCompletion(value)).toEqual(value);
+    for (const completed_at of [value.occurred_at, "bad", "2026-01-29T00:00:00.000Z"]) {
+      expect(() => decodeEvaluationCompletion({ ...value, completed_at })).toThrow(/terminal/);
+    }
+    const legacy = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "completed_at"));
+    expect(() => decodeEvaluationCompletion({ ...legacy, schema_version: 2 })).toThrow(/missing/);
+    expect(() => decodeEvaluationCompletion({ ...value, schema_version: 1 })).toThrow(/unknown/);
+    expect(decodeEvaluationCompletion({ ...legacy, schema_version: 1 }).schema_version).toBe(1);
+  });
+
   it("strictly decodes a result receipt", () => {
     const completion = {
       schema_version: 1,
@@ -1021,6 +1035,8 @@ describe("strict API contract", () => {
     expect(state.events.slice(-2).map((item) => item.event_type)).toEqual([
       "evaluation.started", "evaluation.rejected",
     ]);
+    // Frozen pre-v2 lifecycle identity, independently derived from the legacy contract.
+    expect(state.events.at(-1)?.event_id).toBe("019de6a4-ac8a-7449-9795-4d5cfe8c7a9e");
     expect(state.views.get(submissionId)).toMatchObject({
       schema_version: 2,
       evaluation: {
@@ -1075,6 +1091,70 @@ describe("strict API contract", () => {
     expect(await response.json()).toEqual({ error: "state_unavailable" });
   });
 
+  it("rejects every changed terminal completion, including a changed v2 start", async () => {
+    const state = new MemoryState();
+    const submissionId = terminalVector.completion.submission_id;
+    state.views.set(submissionId, { ...acceptedView(submissionId), evaluation: { status: "pending" } });
+    const send = (body: unknown) => {
+      const request = jsonRequest("/internal/v1/evaluation-completed", body);
+      request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+      return handleRequest(request, ENV, LIFECYCLE, { state });
+    };
+    expect((await send(terminalVector.completion)).status).toBe(201);
+    const originalEvents = JSON.stringify(state.events);
+    for (const changed of [
+      { occurred_at: "2026-01-30T02:00:00.000Z" },
+      { completed_at: "2026-01-31T13:00:00.000Z" },
+      { attempt: 2 },
+      { benchmark_repository: "other/benchmark" },
+      { benchmark_commit: "e".repeat(40) },
+      { toolchain: "leanprover/lean4:v4.35.0" },
+      { outcome: { status: "accepted", evaluator_version: "f".repeat(40) } },
+      { outcome: { status: "rejected", reason_code: "proof_rejected" } },
+      { outcome: { status: "failed", reason_code: "evaluation_pipeline_failed", retryable: true } },
+    ]) {
+      expect((await send({ ...terminalVector.completion, ...changed })).status).toBe(409);
+      expect(JSON.stringify(state.events)).toBe(originalEvents);
+    }
+    // Canonical Git serialization reorders object keys; semantic retries remain valid.
+    const view = state.views.get(submissionId);
+    if (!view || view.evaluation.status === "pending") throw new Error("missing terminal view");
+    state.views.set(submissionId, decodeSubmissionView({
+      ...view,
+      evaluation: JSON.parse(JSON.stringify(view.evaluation, Object.keys(view.evaluation).sort())) as unknown,
+    }));
+    const reordered = Object.fromEntries(Object.entries(terminalVector.completion).reverse());
+    expect((await send(reordered)).status).toBe(200);
+    expect(JSON.stringify(state.events)).toBe(originalEvents);
+    // Switching to the old protocol cannot bypass the recorded terminal boundary.
+    const legacy = Object.fromEntries(Object.entries(terminalVector.completion).filter(([key]) => key !== "completed_at"));
+    expect((await send({ ...legacy, schema_version: 1 })).status).toBe(409);
+    expect(JSON.stringify(state.events)).toBe(originalEvents);
+  });
+
+  it.each([true, false])("preserves consecutive failed-evaluation retry policy (retryable=%s)", async (retryable) => {
+    const state = new MemoryState();
+    const submissionId = terminalVector.completion.submission_id;
+    state.views.set(submissionId, { ...acceptedView(submissionId), evaluation: { status: "pending" } });
+    const send = (body: unknown) => {
+      const request = jsonRequest("/internal/v1/evaluation-completed", body);
+      request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+      return handleRequest(request, ENV, LIFECYCLE, { state });
+    };
+    const failure = { ...terminalVector.completion,
+      outcome: { status: "failed", reason_code: "evaluation_pipeline_failed", retryable } };
+    expect((await send(failure)).status).toBe(201);
+    expect((await send(failure)).status).toBe(200);
+    const changedReason = { ...failure, outcome: { ...failure.outcome, reason_code: "source_fetch_failed" } };
+    expect((await send(changedReason)).status).toBe(409);
+    expect((await send({ ...terminalVector.completion, attempt: 2 })).status).toBe(409);
+    const nextAttempt = { ...terminalVector.completion, attempt: 2,
+      occurred_at: "2026-02-01T00:00:00.000Z", completed_at: "2026-02-01T04:00:00.000Z" };
+    expect((await send(nextAttempt)).status).toBe(retryable ? 201 : 409);
+    expect(state.events).toHaveLength(retryable ? 4 : 2);
+    if (retryable) expect((await send(nextAttempt)).status).toBe(200);
+  });
+
   it("records an authenticated archive failure without leaving status pending", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
@@ -1115,8 +1195,27 @@ describe("strict API contract", () => {
   it("verifies an exact staging Results blob and atomically records result and release", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
-    const accepted = acceptedView(submissionId);
-    state.views.set(submissionId, accepted);
+    // This vector specifies the staged v2 producer contract; the separate producer
+    // change checks it with the real Python CLI. The evaluation crosses a month boundary.
+    state.views.set(submissionId, { ...acceptedView(submissionId), evaluation: { status: "pending" } });
+    const evaluationRequest = () => {
+      const request = jsonRequest("/internal/v1/evaluation-completed", terminalVector.completion);
+      request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+      return request;
+    };
+    expect((await handleRequest(evaluationRequest(), ENV, LIFECYCLE, { state })).status).toBe(201);
+    expect(state.events.slice(-2)).toMatchObject([
+      { event_type: "evaluation.started", occurred_at: terminalVector.completion.occurred_at },
+      { event_type: "evaluation.accepted", occurred_at: terminalVector.completion.completed_at },
+    ]);
+    const accepted = state.views.get(submissionId);
+    if (!accepted) throw new Error("evaluation did not produce its submission view");
+    expect(accepted.evaluation).toMatchObject({ occurred_at: terminalVector.completion.completed_at });
+    const evaluationEventCount = state.events.length;
+    // Delaying/retrying the callback does not create new identities or a new clock.
+    expect((await handleRequest(evaluationRequest(), ENV, LIFECYCLE,
+      { state, now: () => Date.parse("2026-02-02T12:00:00.000Z") })).status).toBe(200);
+    expect(state.events).toHaveLength(evaluationEventCount);
     const resultId = `r2_${await digest(`lean-eval-result-v2\0${JSON.stringify([
       "alice", SUBMISSION.declared_model, SUBMISSION.problem_id, SUBMISSION.statement_revision,
     ])}`)}`;

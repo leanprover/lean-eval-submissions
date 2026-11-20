@@ -97,6 +97,10 @@ def _binding_inventory(
                 )
             descriptors.append((binding_type, name, class_name))
             namespaces[name] = namespace
+        elif binding_type == "version_metadata":
+            if set(item) != {"type", "name"} or name != "CF_VERSION_METADATA":
+                raise OwnershipError(f"{label} version metadata binding differs")
+            descriptors.append((binding_type, name, ""))
         else:
             raise OwnershipError(
                 f"{label} has unsupported binding type {binding_type!r}"
@@ -114,6 +118,10 @@ def _expected_inventory(config: dict[str, Any]) -> list[tuple[str, str, str]]:
         if not isinstance(name, str) or not isinstance(value, str):
             raise OwnershipError("rendered Worker variables are not exact strings")
         descriptors.append(("plain_text", name, value))
+    if "version_metadata" in config:
+        if config["version_metadata"] != {"binding": "CF_VERSION_METADATA"}:
+            raise OwnershipError("rendered version metadata binding differs")
+        descriptors.append(("version_metadata", "CF_VERSION_METADATA", ""))
     for item_value in array_value(durable.get("bindings"), "rendered DO bindings"):
         item = object_value(item_value, "rendered DO binding")
         if set(item) != {"name", "class_name"}:

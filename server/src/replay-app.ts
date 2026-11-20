@@ -46,8 +46,14 @@ import {
   validateSandboxEvidence,
 } from "./replay-contract";
 import type { ReplayTerminalReceipt } from "./replay-terminal-receipt";
+import {
+  MARKER_PHASE_ROUTES, MARKER_ROUTE, MarkerPhaseError, MarkerRecorder, markerBinding,
+  markerJournalName, markerRequestBinding, readMarkerPhaseRequest, readMarkerScope,
+  type MarkerPhaseEnvironment, type MarkerPhaseStore,
+} from "./marker-phase-evidence";
+import { verifyMarkerGithubOidc } from "./replay-auth";
 
-export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
+export type ReplayRuntimeEnv = ReplayAuthEnvironment & Pick<MarkerPhaseEnvironment, "MARKER_PHASE_SCOPE" | "CF_VERSION_METADATA"> & {
   REPLAY_SANDBOX: DurableObjectNamespace<Sandbox>;
   REPLAY_TERMINAL_RECEIPT: DurableObjectNamespace<ReplayTerminalReceipt>;
   REPLAY_ENABLED: string;
@@ -132,6 +138,8 @@ class ProcessStartConflictError extends ReplayExecutorError {
 
 type Dependencies = {
   authenticate(request: Request, env: ReplayAuthEnvironment): Promise<void>;
+  authenticateMarker?: (request: Request, env: ReplayRuntimeEnv) => Promise<void>;
+  markerStore?: (env: ReplayRuntimeEnv, name: string) => MarkerPhaseStore;
   sandbox(
     env: ReplayRuntimeEnv,
     runnerNonce: string,
@@ -1458,7 +1466,17 @@ async function writeSandboxFile(
   sandbox: SandboxClient,
   path: string,
   contents: string | ReadableStream<Uint8Array>,
+  marker?: { recorder: MarkerRecorder; operation: "write_ciphertext" | "write_identity" | "write_expectation" },
 ): Promise<void> {
+  if (marker !== undefined) {
+    try {
+      await marker.recorder.operation(marker.operation, async () => {
+        const result = await sandbox.writeFile(path, contents);
+        if (!result.success || result.path !== path) throw new ReplayExecutorError("input_transfer_failed");
+      });
+      return;
+    } catch { throw new ReplayExecutorError("input_transfer_failed"); }
+  }
   let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
   try {
     result = await sandbox.writeFile(path, contents);
@@ -1717,7 +1735,21 @@ async function executeSandboxCommand(
   command: string,
   timeout: number,
   maximumStdout: number,
+  marker?: MarkerRecorder,
 ): Promise<string> {
+  if (marker !== undefined) {
+    try {
+      return await marker.operation("exec_acceptance", async () => {
+        const result = await sandbox.exec(command, { timeout });
+        if (!result.success) throw new ReplayExecutorError("command_failed");
+        if (result.stdout.length > maximumStdout) throw new ReplayExecutorError("command_output_invalid");
+        return result.stdout;
+      });
+    } catch (error) {
+      if (error instanceof ReplayExecutorError) throw error;
+      throw new ReplayExecutorError("command_rpc_failed");
+    }
+  }
   let result: Awaited<ReturnType<SandboxClient["exec"]>>;
   try {
     result = await sandbox.exec(command, { timeout });
@@ -1797,6 +1829,71 @@ function health(env: ReplayRuntimeEnv): Response {
   });
 }
 
+async function handleFiniteMarker(
+  request: Request, env: ReplayRuntimeEnv, dependencies: Dependencies,
+): Promise<Response> {
+  try {
+    const scope = readMarkerScope(env);
+    if (scope.execution_profile_digest !== env.REVIEWED_EXECUTION_PROFILE_DIGEST
+      || scope.measurement_config_digest !== env.REVIEWED_MEASUREMENT_CONFIG_DIGEST
+      || scope.image_digest !== env.REVIEWED_VM_IMAGE_DIGEST) throw new MarkerPhaseError();
+    await (dependencies.authenticateMarker ?? verifyMarkerGithubOidc)(request, env);
+    if (dependencies.markerStore === undefined) throw new MarkerPhaseError();
+    const store = dependencies.markerStore(env, await markerJournalName(env));
+    const path = new URL(request.url).pathname;
+    if (MARKER_PHASE_ROUTES.has(path)) {
+      const binding = await markerBinding(env, await readMarkerPhaseRequest(request));
+      const journal = path.endsWith("/phase-proof") ? await store.prepareMarkerPhase(binding)
+        : path.endsWith("/phase-fence") ? await store.fenceMarkerPhase(binding)
+          : await store.readMarkerPhase(binding);
+      return json({ schema_version: 1, journal, provider_boundary: "unknown", configuration_awaited: false });
+    }
+    const input = await readAcceptanceRequest(request);
+    const binding = await markerRequestBinding(env, input);
+    const recorder = new MarkerRecorder(store, binding);
+    await recorder.call(() => store.claimMarkerPhase(binding));
+    let sandbox: SandboxClient | undefined;
+    let evidence: ReturnType<typeof validateSandboxEvidence> | undefined;
+    let operationError: Error | undefined;
+    let destructionFailed = false;
+    try {
+      await recorder.operation("sandbox_handle", async () => {
+        sandbox = await dependencies.sandbox(env, input.runner_nonce);
+      });
+      if (sandbox === undefined) throw new MarkerPhaseError();
+      await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64,
+        { recorder, operation: "write_ciphertext" });
+      await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64,
+        { recorder, operation: "write_identity" });
+      await writeSandboxFile(sandbox, "/workspace/expectation.json", JSON.stringify({
+        schema_version: 1, archive_ciphertext_sha256: input.archive_ciphertext_sha256, marker_sha256: input.marker_sha256,
+      }), { recorder, operation: "write_expectation" });
+      const stdout = await executeSandboxCommand(sandbox, "/opt/lean-eval/replay-staging-acceptance", 120_000, 4096, recorder);
+      evidence = await recorder.operation("validate_evidence", () => Promise.resolve(
+        validateSandboxEvidence(JSON.parse(stdout) as unknown, input),
+      ));
+    } catch (error) { operationError = error instanceof ReplayExecutorError ? error : new MarkerPhaseError(); }
+    finally {
+      // Capture failure may not suppress destruction after the handle exists.
+      if (sandbox !== undefined) {
+        const owned = sandbox;
+        try { await recorder.operation("destroy", () => owned.destroy(), true); }
+        catch { destructionFailed = true; }
+      }
+    }
+    await recorder.call(() => store.finishMarkerPhase(binding));
+    if (operationError !== undefined) throw operationError;
+    if (destructionFailed) throw new ReplayExecutorError("sandbox_destroy_failed");
+    if (evidence === undefined) throw new MarkerPhaseError();
+    return json({ schema_version: 1, marker_instance_id: binding.marker_instance_id,
+      architecture: evidence.architecture, kernel_release: evidence.kernel_release, cpu_model: evidence.cpu_model,
+      network_policy: "disabled", network_probe: "blocked", destruction: "confirmed" });
+  } catch (error) {
+    if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+    return json({ error: "marker_failed", reason: error instanceof ReplayExecutorError ? error.reason : "evidence_incomplete" }, 500);
+  }
+}
+
 export async function handleReplayRequest(
   request: Request,
   env: ReplayRuntimeEnv,
@@ -1804,6 +1901,14 @@ export async function handleReplayRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/healthz") return health(env);
+  if (env.MARKER_PHASE_SCOPE !== undefined) {
+    if (request.method === "POST" && (url.pathname === MARKER_ROUTE || MARKER_PHASE_ROUTES.has(url.pathname))) {
+      return handleFiniteMarker(request, env, dependencies);
+    }
+    // This temporary deployment exposes only the finite marker surface. In
+    // particular staging archive-upload routes must not create other Sandboxes.
+    return json({ error: "not_found" }, 404);
+  }
   const syntheticAcceptance = url.pathname === "/api/v1/staging-acceptance";
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";

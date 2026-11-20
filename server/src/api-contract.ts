@@ -96,7 +96,6 @@ export type EvaluationOutcome =
   | Readonly<{ status: "rejected"; reason_code: string }>
   | Readonly<{ status: "failed"; reason_code: string; retryable: boolean }>;
 export type EvaluationCompletion = Readonly<{
-  schema_version: 1;
   submission_id: string;
   attempt: number;
   occurred_at: string;
@@ -104,7 +103,7 @@ export type EvaluationCompletion = Readonly<{
   benchmark_commit: string;
   toolchain: string;
   outcome: EvaluationOutcome;
-}>;
+}> & (Readonly<{ schema_version: 1 }> | Readonly<{ schema_version: 2; completed_at: string }>);
 export type ResultCompletion = Readonly<{
   schema_version: 1;
   submission_id: string;
@@ -622,9 +621,10 @@ export function decodeEvaluationCompletion(value: unknown): EvaluationCompletion
   exactFields(data, [
     "attempt", "benchmark_commit", "benchmark_repository", "occurred_at", "outcome",
     "schema_version", "submission_id", "toolchain",
+    ...(data.schema_version === 2 ? ["completed_at"] : []),
   ], [], "evaluation completion");
   if (
-    data.schema_version !== 1 ||
+    (data.schema_version !== 1 && data.schema_version !== 2) ||
     typeof data.submission_id !== "string" || !UUID_V7.test(data.submission_id) ||
     typeof data.attempt !== "number" || !Number.isSafeInteger(data.attempt) || data.attempt < 1 ||
     typeof data.benchmark_repository !== "string" || !REPOSITORY.test(data.benchmark_repository) ||
@@ -637,6 +637,15 @@ export function decodeEvaluationCompletion(value: unknown): EvaluationCompletion
   const occurredAt = new Date(data.occurred_at);
   if (data.occurred_at.startsWith("0000-") || Number.isNaN(occurredAt.valueOf()) || occurredAt.toISOString() !== data.occurred_at) {
     throw new ApiDecodeError("evaluation completion timestamp is not canonical UTC milliseconds");
+  }
+  if (data.schema_version === 2) {
+    if (typeof data.completed_at !== "string" || data.completed_at.startsWith("0000-")) {
+      throw new ApiDecodeError("evaluation terminal timestamp is invalid");
+    }
+    const completedAt = new Date(data.completed_at);
+    if (Number.isNaN(completedAt.valueOf()) || completedAt.toISOString() !== data.completed_at || completedAt.valueOf() <= occurredAt.valueOf()) {
+      throw new ApiDecodeError("evaluation terminal time must canonically follow its start");
+    }
   }
   const outcome = object(data.outcome, "evaluation outcome");
   if (outcome.status === "accepted") {
