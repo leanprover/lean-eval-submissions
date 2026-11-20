@@ -3,6 +3,9 @@ name: Evaluate submission attempt
 on:
   workflow_call:
     inputs:
+      submission_id:
+        type: string
+        required: false
       runner_tier:
         type: string
         required: true
@@ -64,7 +67,9 @@ jobs:
         # The large attempt must finish before Namespace's 24-hour instance limit.
         env:
           EVALUATION_MINUTES: ${{ inputs.runner_tier == 'large' && 1410 || 358 }}
-        run: echo "epoch=$(($(date +%s) + EVALUATION_MINUTES * 60))" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" >> "$GITHUB_OUTPUT"
+          echo "epoch=$(($(date +%s) + EVALUATION_MINUTES * 60))" >> "$GITHUB_OUTPUT"
 
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'
@@ -380,6 +385,38 @@ jobs:
             --report /tmp/evaluate-out/resource-report.json -- \
             python scripts/evaluate_submission.py "${EVALUATION_ARGS[@]}"
 
+      - name: Freeze trusted evaluation terminal receipt
+        id: terminal_receipt
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          EVALUATE_RESULT: ${{ job.status }}
+          STARTED_AT: ${{ steps.deadline.outputs.started_at }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_METADATA_SHA256: ${{ inputs.source_metadata_sha256 }}
+          BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
+          PROBLEM_ID: ${{ inputs.problem_id }}
+          STATEMENT_REVISION: ${{ inputs.statement_revision }}
+          RUNNER_TIER: ${{ inputs.runner_tier }}
+        run: |
+          set -euo pipefail
+          results_flag=()
+          if [ -f /tmp/evaluate-out/results.json ]; then
+            results_flag+=(--results /tmp/evaluate-out/results.json)
+          fi
+          python scripts/build_evaluation_receipt.py \
+            --submission-id "$SUBMISSION_ID" --workflow-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-repository "$SOURCE_REPOSITORY" --source-commit "$SOURCE_COMMIT" \
+            --source-metadata-sha256 "$SOURCE_METADATA_SHA256" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --toolchain "$TOOLCHAIN" \
+            --problem-id "$PROBLEM_ID" --statement-revision "$STATEMENT_REVISION" \
+            --runner-tier "$RUNNER_TIER" --started-at "$STARTED_AT" \
+            --evaluate-result "$EVALUATE_RESULT" "${results_flag[@]}" \
+            --output /tmp/evaluate-out/evaluation-terminal.json
+
       - name: Collect source-free acceptance measurements
         if: success() && steps.configuration.outputs.rejected != 'true'
         continue-on-error: true
@@ -398,7 +435,7 @@ jobs:
         run: cp /tmp/fetch-out/metadata.json /tmp/evaluate-out/metadata.json || true
 
       - name: Upload evaluate results artifact
-        if: always() && steps.fetch.outcome == 'success'
+        if: always() && (steps.fetch.outcome == 'success' || steps.terminal_receipt.outcome == 'success')
         # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

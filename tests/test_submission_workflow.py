@@ -74,6 +74,27 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         cls.attempt = (REPO_ROOT / ".github/workflows/evaluate-attempt.yml").read_text()
         cls.all_text = cls.text + "\n" + cls.attempt
 
+    def test_evaluation_terminal_receipt_is_frozen_on_original_selected_runner(self) -> None:
+        run = self.attempt.index("- name: Run evaluate_submission.py")
+        freeze = self.attempt.index("- name: Freeze trusted evaluation terminal receipt")
+        metrics = self.attempt.index("- name: Collect source-free acceptance measurements")
+        upload = self.attempt.index("- name: Upload evaluate results artifact")
+        self.assertLess(run, freeze)
+        self.assertLess(freeze, metrics)
+        self.assertLess(freeze, upload)
+        self.assertIn("started_at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)", self.attempt)
+        receipt_step = self.attempt[freeze:metrics]
+        for fragment in ('EVALUATE_RESULT: ${{ job.status }}',
+                         '--workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"',
+                         '--source-metadata-sha256 "$SOURCE_METADATA_SHA256"',
+                         '--output /tmp/evaluate-out/evaluation-terminal.json'):
+            self.assertIn(fragment, receipt_step)
+        callback = self.text.split("  evaluation_state:", 1)[1].split("  record:", 1)[0]
+        self.assertIn('--terminal-receipt /tmp/evaluation-results/evaluation-terminal.json', callback)
+        self.assertIn('--current-run-attempt "$GITHUB_RUN_ATTEMPT"', callback)
+        self.assertIn('RUNNER_TIER: ${{ needs.evaluate.outputs.runner_tier }}', callback)
+        self.assertNotIn('build_evaluation_receipt.py', callback)
+
     def test_workflow_file_exists(self) -> None:
         self.assertTrue(WORKFLOW.is_file(), f"missing {WORKFLOW}")
 
