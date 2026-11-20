@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import select
+import shlex
 import shutil
 import signal
 import subprocess
@@ -20,7 +21,41 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import stock_replay_supervisor as supervisor
-from test_stock_replay_measurement import Context, BWRAP, PYTHON
+from test_stock_replay_measurement import Context, BWRAP, PYTHON as HOST_PYTHON
+
+
+def owned_python_launcher(directory, host_python):
+    """Keep the test host's runtime layout behind an owned, pinned executable.
+
+    Hosted setup-python installs need not meet the production image's strict
+    mode/link policy. Do not chmod that shared install or relocate its ELF:
+    libpython and the standard library must still resolve at their original
+    paths. This synthetic test adapter establishes no runtime qualification.
+    """
+    # replay-measure uses /usr/bin/env python3 under this fixture's PATH.
+    launcher = Path(directory) / 'python3'
+    with launcher.open('x', encoding='utf-8') as output:
+        output.write('#!/bin/sh\nexec ' + shlex.quote(str(Path(host_python).absolute())) + ' "$@"\n')
+    launcher.chmod(0o700)
+    return str(launcher)
+
+
+_PYTHON_DIRECTORY = tempfile.TemporaryDirectory(prefix='lean-eval-stock-supervisor-python-')
+PYTHON = owned_python_launcher(_PYTHON_DIRECTORY.name, HOST_PYTHON)
+
+
+def with_host_python_runtime(command):
+    """Restore only the test host installation masked by the outer image."""
+    runtime = Path(subprocess.check_output([HOST_PYTHON, '-I', '-c',
+        'import sys;print(sys.base_prefix)'], text=True).strip())
+    def host_runtime(*args, **kwargs):
+        result = command(*args, **kwargs)
+        if runtime.is_relative_to('/opt'):
+            index = result.index('--clearenv')
+            result[index:index] = ['--ro-bind', str(runtime), str(runtime)]
+        return result
+    return host_runtime
+
 
 ORIGINAL = ROOT / 'tests/fixtures/stock-original-workspace-test.lean'
 SOURCE_SHA = '082806a7a6db89461febef4cf50c1d8c620945f96cd1a214a0b481a4cb6ee971'
@@ -31,6 +66,9 @@ class Fixture(Context):
     """Synthetic programs for owner faults, never a qualified mathematical run."""
     def __init__(self, root, *, codes=None, driver_exit=None, sleep=0, real=True):
         super().__init__(root, real=real, codes=codes)
+        # Every original inner comparator sandbox binds the stock prefix but
+        # masks /tmp. Keep its synthetic tool shebangs inside that prefix.
+        self.python = owned_python_launcher(self.prefix / 'bin', HOST_PYTHON)
         (self.project / 'WorkspaceTest.lean').write_bytes(ORIGINAL.read_bytes())
         (self.project / 'Challenge.lean').write_text('-- synthetic owner fixture\n')
         (self.project / 'README.md').write_text('# Synthetic supervisor fault fixture\n')
@@ -46,7 +84,7 @@ class Fixture(Context):
             'theorem_names': ['target'], 'permitted_axioms': []}))
         driver = self.project / '.lake/build/bin/workspace_test'
         driver.parent.mkdir(parents=True)
-        driver.write_text(f'#!{PYTHON}\n' + f'''
+        driver.write_text(f'#!{self.python}\n' + f'''
 import os,pathlib,subprocess,sys,time
 sys.path.insert(0,'/opt/lean-eval')
 import stock_replay_measurement as s
@@ -73,16 +111,16 @@ raise SystemExit(1 if failed else 0)
 '''))
         driver.chmod(0o700)
         lake = self.prefix / 'bin/lake'
-        lake.write_text(f'#!{PYTHON}\nimport os,sys\n'
+        lake.write_text(f'#!{self.python}\nimport os,sys\n'
                         + f'\nif sys.argv[1:]==["test"]:os.execv({str(driver)!r},[{str(driver)!r}])\n')
         lake.chmod(0o700)
         self.policy['tools']['lake']['sha256'] = hashlib.sha256(lake.read_bytes()).hexdigest()
-        self.policy['inherited_path'] = self.policy['resolved_path'] = str(Path(PYTHON).parent)
+        self.policy['inherited_path'] = self.policy['resolved_path'] = str(Path(self.python).parent)
         # Nix has no /usr/bin/python3. This test-only interpreter spelling is
         # outside all original comparator/bwrap argv and stock binary bytes.
         wrapper = root / 'measurement-entry'
         original_entry = (ROOT / 'server/replay-image/replay-measure-stock').read_text().splitlines()
-        wrapper.write_text(f'#!{PYTHON} -I\n' + '\n'.join(original_entry[1:]) + '\n')
+        wrapper.write_text(f'#!{self.python} -I\n' + '\n'.join(original_entry[1:]) + '\n')
         wrapper.chmod(0o700)
         self.files = supervisor.runtime_files()
         self.files.pop(ROOT / 'server/replay-image/replay-measure-stock')
@@ -119,6 +157,14 @@ class StockSupervisorTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        # The production outer image masks /opt. Hosted setup-python's test
+        # runtime lives there, unlike the production image's /usr/bin/python3.
+        # Restore only that existing trusted host installation read-only;
+        # original inner comparator options and production code stay exact.
+        patch = mock.patch.object(supervisor, 'outer_command',
+            side_effect=with_host_python_runtime(supervisor.outer_command))
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -147,6 +193,23 @@ class StockSupervisorTests(unittest.TestCase):
                 (package / 'Library.lean').write_text('-- changed pinned dependency\n')
                 with self.assertRaises(supervisor.Invalid):
                     supervisor.validate_context(f.context, f.policy, control=f.control)
+
+    def test_real_hosted_style_python_runtime_survives_masked_opt_with_owned_launcher(self):
+        # Use this session's ordinary installation, including libpython and
+        # extension-module dependencies, at a hosted-style /opt location. No
+        # host filesystem installation or original comparator argv is changed.
+        base = Path(subprocess.check_output([sys.executable, '-I', '-c',
+            'import sys;print(sys.base_prefix)'], text=True).strip()).resolve()
+        executable = Path(sys.executable).resolve().relative_to(base)
+        destination = Path('/opt/lean-eval-hosted-python-fixture')
+        launcher = owned_python_launcher(self.root, destination / executable)
+        code = 'import json,ssl,sys;print(json.dumps([sys.version,ssl.OPENSSL_VERSION,sys.flags.isolated]))'
+        command = [BWRAP, '--unshare-all', '--die-with-parent', '--new-session',
+            '--ro-bind', '/', '/', '--tmpfs', '/opt', '--tmpfs', '/home',
+            '--ro-bind', str(base), str(destination), '--dev', '/dev', '--proc', '/proc',
+            '--clearenv', '--', launcher, '-I', '-c', code]
+        expected = subprocess.check_output([sys.executable, '-I', '-c', code])
+        self.assertEqual(subprocess.check_output(command), expected)
 
     def test_dependency_aliases_refuse_source_project_control_temporary_and_cycles(self):
         for destination in ('source', 'project', 'control', 'temporary', 'cycle', 'top_file'):
@@ -180,7 +243,7 @@ class StockSupervisorTests(unittest.TestCase):
                 f = Fixture(Path(directory))
                 if over_budget:
                     kernel = f.prefix / 'bin/leanchecker'
-                    kernel.write_text(f'#!{PYTHON}\nimport time;time.sleep(0.7)\n')
+                    kernel.write_text(f'#!{f.python}\nimport time;time.sleep(0.7)\n')
                     f.policy['tools']['leanchecker']['sha256'] = supervisor.file_hash(kernel)['sha256']
                 locked_wall = 500 if over_budget else 1500
                 f.context = context(f.policy, files=f.files, wall=locked_wall)
@@ -414,10 +477,15 @@ if sys.argv[1:]==['env']:
             'files': {str(source): str(target) for source, target in f.files.items()}})
         code = ('import sys,json,pathlib;sys.path.insert(0,' + repr(str(ROOT / 'scripts')) + ');'
             'import stock_replay_supervisor as s;s.stock.parent_death_guard();'
+            'sys.path.insert(0,' + repr(str(ROOT / 'tests')) + ');'
+            'from test_stock_replay_supervisor import with_host_python_runtime;'
+            's.outer_command=with_host_python_runtime(s.outer_command);'
             'v=json.loads(pathlib.Path(' + repr(str(input_file)) + ').read_bytes());'
             's.supervise(v["policy"],v["context"],control=pathlib.Path(' + repr(str(f.control)) + '),'
             'python=' + repr(PYTHON) + ',files={pathlib.Path(a):pathlib.Path(b) for a,b in v["files"].items()})')
-        process = subprocess.Popen([PYTHON, '-I', '-c', code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        process = subprocess.Popen([PYTHON, '-I', '-c', code],
+            env={**os.environ, 'TMPDIR': str(self.root)},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         descriptor = None
         try:
             deadline = time.monotonic() + 5
@@ -602,6 +670,46 @@ if sys.argv[1:]==['env']:
 
 
 class SupervisorSourceTests(unittest.TestCase):
+    def test_owned_interpreter_launcher_preserves_isolation_argv_and_runtime_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Exercise shell quoting with a host executable spelling that
+            # contains whitespace, a quote, and literal substitution syntax.
+            host = root / "host python ' $(literal)"
+            host.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' "$@"\n')
+            host.chmod(0o700)
+            launcher = owned_python_launcher(root, host)
+            before = (host.stat().st_mode, host.stat().st_nlink, host.read_bytes())
+            command = ['-I', '-c', 'import json,ssl,sys;print(json.dumps([sys.executable,sys.prefix,sys.flags.isolated,ssl.OPENSSL_VERSION,sys.argv[1:]]))', '', 'argument with spaces']
+            expected = subprocess.check_output([sys.executable, *command])
+            self.assertEqual(subprocess.check_output([launcher, *command]), expected)
+            self.assertEqual(supervisor.file_hash(Path(launcher))['mode'], 0o700)
+            self.assertEqual(Path(launcher).stat().st_nlink, 1)
+            self.assertEqual((host.stat().st_mode, host.stat().st_nlink, host.read_bytes()), before)
+
+    def test_unsafe_interpreter_launchers_refuse_before_process_creation(self):
+        for case in ('group_writable', 'world_writable', 'setuid', 'setgid', 'hardlinked', 'symlink'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                f = Fixture(root, real=False)
+                launcher = root / 'unsafe-python'
+                launcher.write_bytes(Path(PYTHON).read_bytes())
+                launcher.chmod({'group_writable': 0o720, 'world_writable': 0o702,
+                                'setuid': 0o4700, 'setgid': 0o2700}.get(case, 0o700))
+                if case == 'hardlinked':
+                    os.link(launcher, root / 'another-link')
+                elif case == 'symlink':
+                    target = root / 'launcher-target'
+                    launcher.rename(target)
+                    launcher.symlink_to(target)
+                f.context['interpreter'] = {'path': str(launcher),
+                    'sha256': hashlib.sha256(Path(PYTHON).read_bytes()).hexdigest()}
+                with mock.patch.object(supervisor.subprocess, 'Popen') as launch:
+                    with self.assertRaises(supervisor.Invalid):
+                        supervisor.supervise(f.policy, f.context, control=f.control,
+                                             python=str(launcher), files=f.files)
+                    launch.assert_not_called()
+
     def test_actual_original_generated_filesets_are_retained_and_bound(self):
         fixture = json.loads((ROOT / 'tests/fixtures/stock-original-workspace-filesets-v1.json').read_bytes())
         self.assertEqual(fixture['commit'], '8955681b9914d7ebc7d286414843021b7d6c9de1')
