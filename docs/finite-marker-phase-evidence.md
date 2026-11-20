@@ -26,8 +26,10 @@ tag, source/workflow SHA, run ID, attempt1, fixed service/case, image/profile,
 nonce commitment and absolute expiry. Authentication verifies the GitHub OIDC
 signature and existing repository/issuer/audience/environment protections, then
 requires those exact workflow/run/attempt/source claims. Another workflow, later
-source, main ref, rerun or expired scope is refused. This feature adds no tag
-minting, environment-policy adjustment or main/tag bypass.
+source, main ref, rerun or expired scope is refused. Its workflow and helper are
+registered in the existing protected workflow-only ref promotion lane. The
+finite marker workflow itself has no tag writer, environment-policy adjustment
+or main/tag bypass. Ref promotion never dispatches the marker.
 
 The actual Sandbox key remains `r-` plus the first61 nonce characters. Separate
 domain-separated commitments cover that actual key and the complete64-character

@@ -276,6 +276,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "historical-replay-inventory.yml",
                 "public-replay-github-evidence.yml",
                 "public-runtime-guard-staging.yml",
+                "public-marker-phase-staging.yml",
                 "server-archive.yml",
                 "set-staging-intake.yml",
                 "submission.yml",
@@ -320,6 +321,13 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
             "permissions:", 1
         )[0]
+        # The finite marker builds its own source-bound disposable Worker. Its
+        # workflow and helper use the existing workflow-only ref promotion lane.
+        self.assertIn("'runtime-guard-staging/marker.py'", promotion_push)
+        self.assertIn(
+            "python runtime-guard-staging/marker.py",
+            (workflow_directory / "public-marker-phase-staging.yml").read_text(encoding="utf-8"),
+        )
         promotion_paths = set(
             re.findall(r"'\.github/workflows/([^']+)'", promotion_push)
         )
