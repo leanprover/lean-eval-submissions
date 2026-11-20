@@ -62,7 +62,7 @@ class HistoricalPublicPreparationAccountingTests(unittest.TestCase):
         self.assertFalse(condition(replenish, {
             "needs.replay-one.result": "failure", "inputs.replenish_lane": True,
             "inputs.remaining_runs": 100, "needs.replay-one.outputs.preflight_kind": "none",
-            "needs.replay-one.outputs.plan_kind": "execution",
+            "needs.replay-one.outputs.plan_kind": "execution", "needs.replay-one.outputs.runtime_guard_failed": "",
         }))
         # ready=true cannot authorize execution after a late failure/timeout.
         self.assertFalse(condition(execute, {**values, "steps.prepare.outputs.ready": "true"}))
@@ -76,12 +76,13 @@ class HistoricalPublicPreparationAccountingTests(unittest.TestCase):
     def test_deferred_outcome_is_eligible_only_for_a_bounded_nonbusy_successor(self) -> None:
         values = {"needs.replay-one.result": "success", "inputs.replenish_lane": True,
                   "inputs.remaining_runs": 2, "needs.replay-one.outputs.preflight_kind": "none",
-                  "needs.replay-one.outputs.plan_kind": "deferred"}
+                  "needs.replay-one.outputs.plan_kind": "deferred", "needs.replay-one.outputs.runtime_guard_failed": ""}
         replenish = WORKFLOW.split("  replenish-public-lane:\n", 1)[1]
         self.assertTrue(condition(replenish, values))
         for name, value in (("inputs.remaining_runs", 1),
                             ("needs.replay-one.outputs.preflight_kind", "busy"),
-                            ("needs.replay-one.result", "failure")):
+                            ("needs.replay-one.result", "failure"),
+                            ("needs.replay-one.outputs.runtime_guard_failed", "true")):
             self.assertFalse(condition(replenish, {**values, name: value}))
         self.assertFalse(condition(replenish, values, cancelled=True))
         self.assertIn('next_runs=$(( REMAINING_RUNS - 1 ))', replenish)

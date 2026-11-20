@@ -47,6 +47,7 @@ ALLOWED_DETAILS = {
     "plaintext_digest_mismatch",
     "plaintext_size_mismatch",
     "runtime_profile_mismatch",
+    "runtime_profile_guard_failed",
     "unclassified_archive_failure",
     "unclassified_authoritative_failure",
     "verdict_invalid",
