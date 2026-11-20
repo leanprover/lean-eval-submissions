@@ -1,0 +1,14 @@
+#!/usr/bin/python3 -I
+"""Inactive original-driver supervisor; no current image/reader invokes it."""
+import runpy
+import sys
+
+try:
+    if len(sys.argv) != 1:
+        raise ValueError()
+    module = runpy.run_path('/opt/lean-eval/stock_replay_supervisor.py')
+    status = module['main']()
+except BaseException:
+    print('stock supervisor evidence unavailable', file=sys.stderr)
+    raise SystemExit(125) from None
+raise SystemExit(status)
