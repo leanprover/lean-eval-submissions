@@ -80,7 +80,8 @@ def open_counter() -> tuple[int | None, str | None]:
     return descriptor, None
 
 
-def run_measured(command: list[str], *, best_effort: bool = False, preserve_fds: bool = False) -> tuple[int, int, dict[str, Any]]:
+def run_measured(command: list[str], *, best_effort: bool = False, preserve_fds: bool = False,
+                 started_observer=None) -> tuple[int, int, dict[str, Any]]:
     descriptor, reason = None, "counter_not_reported"
     try:
         descriptor, reason = open_counter()
@@ -107,6 +108,14 @@ def run_measured(command: list[str], *, best_effort: bool = False, preserve_fds:
             descriptor = None
             reason = unavailable_reason(error.errno) if isinstance(error, OSError) else "counter_not_reported"
     started = time.monotonic_ns()
+    if started_observer is not None:
+        # Optional stock-only observer of this exact measurement boundary.
+        # Its own bounded receipt must establish success; observation failure
+        # must never suppress or repeat the one sandbox invocation.
+        try:
+            started_observer(started)
+        except Exception:
+            pass
     try:
         result = subprocess.run(command, check=False, close_fds=False) if preserve_fds else subprocess.run(command, check=False)
     except OSError as error:
