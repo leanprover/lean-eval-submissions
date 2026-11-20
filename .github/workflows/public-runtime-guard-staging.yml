@@ -14,8 +14,8 @@ concurrency:
 jobs:
   compatibility:
     runs-on: ubuntu-26.04
-    timeout-minutes: 70
-    environment: replay-staging
+    timeout-minutes: 140
+    environment: cloudflare-staging
     permissions:
       contents: read
       id-token: write
@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
-          python scripts/public_runtime_guard_staging.py prepare \
+          python runtime-guard-staging/check.py prepare \
             --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
 
       - name: Deploy only absent case resources and verify exact ownership
@@ -90,23 +90,23 @@ jobs:
         run: |
           set -euo pipefail
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
-          python scripts/public_runtime_guard_staging.py deploy \
+          python runtime-guard-staging/check.py deploy \
             --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
 
       - name: Observe the host and execute the fixed guarded case
-        timeout-minutes: 20
+        timeout-minutes: 80
         env:
           CASE: ${{ matrix.case }}
         run: |
           set -euo pipefail
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           test -z "${STATE_WRITE_KEY:-}"
-          python scripts/public_runtime_guard_staging.py run \
+          python runtime-guard-staging/check.py run \
             --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
 
       - name: Retire only owned namespaces and prove resource absence
         if: always()
-        timeout-minutes: 6
+        timeout-minutes: 10
         env:
           CASE: ${{ matrix.case }}
           CLOUDFLARE_ACCOUNT_ID: a46b90978a1c29cc4795f30677e7e4b8
@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "$RUNNER_TEMP/public-guard-$CASE/receipt.json" ]; then
-            python scripts/public_runtime_guard_staging.py cleanup \
+            python runtime-guard-staging/check.py cleanup \
               --case "$CASE" --directory "$RUNNER_TEMP/public-guard-$CASE"
           fi
 

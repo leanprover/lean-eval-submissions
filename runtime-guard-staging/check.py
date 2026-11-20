@@ -17,14 +17,14 @@ import sys
 import tarfile
 import time
 
-SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parent
+SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 from historical_public_runner import canonical_document_bytes
 from historical_replay_controller import validate_executor_verdict
 from replay_orchestrator import config_digest, replay_task_id
-from reserve_historical_public_cleanup import request_http
+from reserve_historical_public_cleanup import TransportError, request_http
 from verify_historical_private_executor_ownership import (
     _active_version, _binding_inventory, _expected_inventory,
     _verify_application, _verify_worker,
@@ -50,8 +50,29 @@ def save(path, value):
     pathlib.Path(path).write_bytes(canonical_document_bytes(value))
 
 
-def command(*argv, cwd=ROOT):
-    return subprocess.check_output(argv, cwd=cwd, timeout=180, stderr=subprocess.PIPE)
+class CommandFailure(ValueError):
+    pass
+
+
+class RetirementPending(ValueError):
+    pass
+
+
+def command(*argv, cwd=ROOT, timeout=180):
+    try:
+        return subprocess.check_output(argv, cwd=cwd, timeout=timeout, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        detail = ""
+        if "wrangler" in argv:
+            detail = error.stderr.decode("utf-8", errors="replace")
+            for key in ("CLOUDFLARE_API_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN"):
+                value = os.environ.get(key)
+                if value:
+                    detail = detail.replace(value, "[redacted]")
+            detail = re.sub(r"(?:AGE-SECRET-KEY-|eyJ)[A-Za-z0-9_.+-]+", "[redacted]", detail)
+            detail = re.sub(r"[A-Za-z0-9_+/=-]{128,}", "[redacted]", detail)
+            detail = re.sub(r"[^\x20-\x7e\n\t]", "", detail)[:4096]
+        raise CommandFailure(f"{pathlib.Path(argv[0]).name} failed with exit {error.returncode}; {detail}") from None
 
 
 def cf(path, method="GET", allow_missing=False):
@@ -63,6 +84,8 @@ def cf(path, method="GET", allow_missing=False):
         return None
     if r.status != 200:
         raise ValueError(f"Cloudflare {method} returned HTTP {r.status}")
+    if method == "DELETE" and not r.body:
+        return {"success": True}
     data = json.loads(r.body)
     if data.get("success") is not True:
         raise ValueError("Cloudflare response did not confirm success")
@@ -70,16 +93,24 @@ def cf(path, method="GET", allow_missing=False):
 
 
 def namespaces():
-    rows = []
+    rows, total = [], None
     for page in range(1, 21):
         data = cf(f"workers/durable_objects/namespaces?per_page=100&page={page}")
-        info = data["result_info"]
-        if info["total_pages"] > 20 or info["page"] != page:
-            raise ValueError("namespace inventory is truncated")
-        rows.extend(data["result"])
-        if page >= info["total_pages"]:
+        info, batch = data["result_info"], data["result"]
+        count = info["total_count"]
+        if (type(count) is not int or not 0 <= count <= 2000 or info["page"] != page
+                or info["per_page"] != 100 or info["count"] != len(batch)
+                or (total is not None and total != count)):
+            raise ValueError("namespace inventory is truncated or changing")
+        total = count
+        rows.extend(batch)
+        if len({row["id"] for row in rows}) != len(rows) or len(rows) > total:
+            raise ValueError("namespace inventory is duplicated")
+        if len(rows) == total:
             return rows
-    raise ValueError("namespace inventory is incomplete")
+        if len(batch) != 100:
+            raise ValueError("namespace inventory is incomplete")
+    raise ValueError("namespace inventory exceeds its closed limit")
 
 
 def applications():
@@ -97,8 +128,20 @@ def http(url, body=None, oidc=False):
     raw = None if body is None else json.dumps(body, separators=(",", ":")).encode()
     if raw is not None:
         headers["Content-Type"] = "application/json"
-    r = request_http("GET" if body is None else "POST", url, headers, raw, 120)
-    return r.status, json.loads(r.body)
+    timeout = 30 if body is None else 300 if url.endswith(("/staging-acceptance", "/historical-public-replay")) else 60
+    r = request_http("GET" if body is None else "POST", url, headers, raw, timeout)
+    try:
+        return r.status, json.loads(r.body)
+    except (ValueError, UnicodeError):
+        if r.status in (502, 503, 504):
+            return r.status, {"error": "transport_response_invalid"}
+        raise ValueError("executor response is not JSON") from None
+
+
+def endpoint_health(url, receipt):
+    status, health = http(url + "/healthz")
+    if status != 200 or health != receipt["health"]:
+        raise ValueError("temporary endpoint health identity changed")
 
 
 def render(case, profile, commit, task):
@@ -109,6 +152,7 @@ def render(case, profile, commit, task):
         reviewed["kernel_release"] = "intentional-staging-guard-mismatch"
     variables = dict(load(ROOT / "server/wrangler.replay.jsonc")["env"]["staging"]["vars"])
     variables.update(DEPLOYED_COMMIT=commit, HISTORICAL_PUBLIC_REPLAY_ENABLED="true",
+                     GITHUB_OIDC_ENVIRONMENT="cloudflare-staging",
                      REVIEWED_EXECUTION_PROFILE_DIGEST=config_digest("lean-eval-replay-execution-profile-v1", reviewed),
                      REVIEWED_MEASUREMENT_CONFIG_DIGEST=profile["measurement_config_digest"],
                      REVIEWED_VM_IMAGE_DIGEST=profile["registry_manifest_digest"],
@@ -175,7 +219,7 @@ def ownership(config):
     app = _verify_application(config, applications())
     if app is None:
         raise ValueError("owned staging container is missing")
-    return {"worker_version": actual_version, "namespaces": ids, **app}
+    return {"worker_version": actual_version, "namespaces": ids, "health": health, **app}
 
 
 def deploy(case, directory):
@@ -185,7 +229,7 @@ def deploy(case, directory):
     receipt["created"] = True
     save(directory / "receipt.json", receipt)
     command("npx", "wrangler", "deploy", "--config", f".public-guard-{case}.json", "--env", "staging", cwd=ROOT / "server")
-    subprocess.run([sys.executable, "scripts/wait_replay_container_rollout.py", "--config", f"server/.public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"]], cwd=ROOT, check=True, timeout=1500)
+    subprocess.run([sys.executable, "../scripts/wait_replay_container_rollout.py", "--config", f".public-guard-{case}.json", "--environment", "staging", "--image-family", "historical-public", "--application", receipt["application"]], cwd=ROOT / "server", check=True, timeout=1500)
     receipt.update(ownership(config))
     save(directory / "receipt.json", receipt)
 
@@ -200,8 +244,8 @@ def run_case(case, directory):
     # The existing synthetic route reports actual host identity and destroys
     # its source-free marker sandbox. No private archive or AWS is involved.
     identity = directory / "marker-identity.age"
-    command("age-keygen", "-o", str(identity))
-    recipient = command("age-keygen", "-y", str(identity)).decode().strip()
+    command("age-keygen", "-o", str(identity), timeout=30)
+    recipient = command("age-keygen", "-y", str(identity), timeout=30).decode().strip()
     marker = secrets.token_hex(32).encode()
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w:gz") as tar:
@@ -211,54 +255,91 @@ def run_case(case, directory):
     encrypted = subprocess.run(["age", "-r", recipient], input=archive.getvalue(), capture_output=True, check=True, timeout=30).stdout
     observation = {"schema_version": 1, "request_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f", "runner_nonce": secrets.token_hex(32), "archive_ciphertext_sha256": hashlib.sha256(encrypted).hexdigest(), "ciphertext_base64": base64.b64encode(encrypted).decode(), "plaintext_identity_base64": base64.b64encode(identity.read_bytes()).decode(), "marker_sha256": hashlib.sha256(marker).hexdigest()}
     identity.unlink()
+    endpoint_health(url, receipt)
     receipt["safe_to_delete"] = False
     receipt["phase"] = "runtime-observation"
     save(directory / "receipt.json", receipt)
     status, evidence = http(url + "/api/v1/staging-acceptance", observation, True)
+    refusal = {401: {"error": "unauthorized"}, 400: {"error": "invalid_request"},
+               503: {"error": "staging_acceptance_disabled"}}
+    if status in refusal and evidence == refusal[status]:
+        receipt.update(safe_to_delete=True, phase="observation-refused", refusal_status=status)
+        save(directory / "receipt.json", receipt)
+        raise ValueError("staging observation refused before sandbox creation")
     expected = {"schema_version": 1, "service": "lean-eval-replay-executor", "environment": "staging", "request_id": observation["request_id"], "runner_nonce": observation["runner_nonce"], "archive_ciphertext_sha256": observation["archive_ciphertext_sha256"], "marker_sha256": observation["marker_sha256"], "network_policy": "disabled", "network_probe": "blocked", "destruction": "confirmed", "staging_memory_limit_bytes": 12 * 1024**3, "production_memory_gate_bytes": 12 * 1024**3}
     if status != 200 or set(evidence) != set(expected) | {"architecture", "kernel_release", "cpu_model"} or any(evidence[k] != v for k, v in expected.items()):
         raise ValueError("runtime observation or destruction is unconfirmed")
     receipt["safe_to_delete"] = True
+    receipt["observation_http_destruction"] = "confirmed"
     receipt["observed_runtime"] = {k: evidence[k] for k in ("architecture", "kernel_release", "cpu_model")}
     save(directory / "receipt.json", receipt)
     if any(evidence[k] != load(directory / "profile.json")[k] for k in receipt["observed_runtime"]):
         raise ValueError("observed runtime differs from the frozen profile; stop")
     binding = {k: request[k] for k in ("schema_version", "replay_task_id", "attempt")}
+    endpoint_health(url, receipt)
     status, response = http(url + "/api/v1/historical-public-replay/cleanup-reservation", binding, True)
     if status != 200 or response != {**binding, "status": "reserved"}:
         raise ValueError("cleanup reservation unconfirmed")
     status_request = {k: request[k] for k in ("schema_version", "runner_nonce", "replay_task_id", "attempt", "handoff_sha256", "source_archive_sha256", "execution_profile_digest", "measurement_config_digest", "vm_image_digest")}
+    endpoint_health(url, receipt)
     receipt["phase"], receipt["safe_to_delete"] = "guarded-replay", False
     save(directory / "receipt.json", receipt)
     try:
         status, response = http(url + "/api/v1/historical-public-replay", request, True)
         if status != 202 or response != {**binding, "status": "running"}:
             raise ValueError("guarded executor start did not confirm running")
-        deadline = time.monotonic() + 900
-        while time.monotonic() < deadline:
-            time.sleep(15)
-            status, response = http(url + "/api/v1/historical-public-replay/status", status_request, True)
-            if status != 202:
-                break
-            if response != {**binding, "status": "running"}:
-                raise ValueError("guarded status identity differs")
+        deadline = time.monotonic() + (300 if case.endswith("mismatch") else 3600)
+        rpc_failures = 0
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                receipt["outcome"] = "incomplete"
+                save(directory / "receipt.json", receipt)
+                raise ValueError("staging controller deadline reached; incomplete")
+            time.sleep(min(15, remaining))
+            try:
+                endpoint_health(url, receipt)
+                status, response = http(url + "/api/v1/historical-public-replay/status", status_request, True)
+            except TransportError:
+                rpc_failures += 1
+                if rpc_failures > 2:
+                    raise ValueError("staging status transport did not recover") from None
+                continue
+            transient = (status in (502, 503, 504) and response == {"error": "transport_response_invalid"}
+                         or status == 500 and response.get("error") == "executor_failed"
+                         and response.get("reason") == "command_rpc_failed")
+            if transient:
+                rpc_failures += 1
+                if rpc_failures > 2:
+                    raise ValueError("staging status RPC did not recover")
+                continue
+            rpc_failures = 0
+            if status == 202:
+                if response != {**binding, "status": "running"}:
+                    raise ValueError("guarded status identity differs")
+                continue
+            break
         if case.endswith("mismatch"):
             if status != 500 or response != {"error": "executor_failed", "reason": "command_failed", "detail": "runtime_profile_mismatch"}:
                 raise ValueError("negative guard did not produce the exact failure")
-            receipt["outcome"] = "expected-runtime-mismatch"
+            outcome = "expected-runtime-mismatch"
         else:
             if status != 200 or validate_executor_verdict(request, response)["checker_outcome"] != "accepted":
                 raise ValueError("matching tiny fixture was not accepted")
-            receipt["outcome"] = "accepted-nanoda"
+            outcome = "accepted-nanoda"
     finally:
+        endpoint_health(url, receipt)
         status, response = http(url + "/api/v1/historical-public-replay/cleanup", binding, True)
         if status != 200 or response != {**binding, "destruction": "confirmed"}:
             raise ValueError("exact sandbox destruction is unconfirmed")
         receipt["safe_to_delete"] = True
+        receipt["public_http_destruction"] = "confirmed"
         save(directory / "receipt.json", receipt)
+    receipt["outcome"] = outcome
+    save(directory / "receipt.json", receipt)
 
 
-def retired_identity(config, receipt):
+def retired_identity(config, receipt, original=None):
     """Read back the fixed stub, active version and emptied namespace scope."""
     worker = config["name"]
     service, deployments = cf(f"workers/services/{worker}"), cf(f"workers/scripts/{worker}/deployments")
@@ -268,6 +349,16 @@ def retired_identity(config, receipt):
     inventory, bound_ids = _binding_inventory(settings["bindings"], "retired settings")
     resources = active["resources"]
     version_inventory, version_ids = _binding_inventory(resources["bindings"], "retired version")
+    if original is not None:
+        old_inventory = _expected_inventory(original)
+        old_settings = inventory == old_inventory and bound_ids == receipt["namespaces"]
+        old_version = version_inventory == old_inventory and version_ids == receipt["namespaces"]
+        if old_settings or old_version:
+            if version != receipt["worker_version"] and not (
+                    version_inventory == _expected_inventory(config) and not version_ids
+                    and resources["script_runtime"]["migration_tag"] == "v3-retired"):
+                raise ValueError("unexpected Worker version during retirement")
+            raise RetirementPending("known previous Worker view still visible")
     if (inventory != _expected_inventory(config) or bound_ids or version_ids
             or version_inventory != inventory or active["id"] != version
             or settings["compatibility_date"] != config["compatibility_date"]
@@ -277,11 +368,35 @@ def retired_identity(config, receipt):
             or resources["script_runtime"]["migration_tag"] != "v3-retired"):
         raise ValueError("retired Worker settings or active code identity differ")
     status, body = http(f"https://{worker}.lean-eval.workers.dev/healthz")
+    if (original is not None and status == 200 and body == receipt["health"]):
+        raise RetirementPending("known previous health view still visible")
+    if status in (404, 502, 504) or response_is_transient(status, body):
+        raise RetirementPending("retired edge response still unavailable")
     if status != 503 or body != {"status": "retired", "commit": receipt["commit"], "ownership": config["vars"]["EXECUTOR_OWNERSHIP_TAG"]}:
         raise ValueError("retired Worker code/commit/tag is unconfirmed")
-    if any(n["id"] in receipt["namespaces"].values() or n["script"] == worker for n in namespaces()):
-        raise ValueError("owned namespaces have not disappeared; stop cleanup")
+    remaining = [n for n in namespaces() if n["id"] in receipt["namespaces"].values() or n["script"] == worker]
+    for row in remaining:
+        expected = {receipt["namespaces"]["REPLAY_SANDBOX"]: "ReplaySandbox",
+                    receipt["namespaces"]["REPLAY_TERMINAL_RECEIPT"]: "ReplayTerminalReceipt"}
+        if row["id"] not in expected or row["script"] != worker or row["class"] != expected[row["id"]]:
+            raise ValueError("unexpected namespace identity during retirement")
+    if remaining:
+        raise RetirementPending("recorded owned namespace deletion still propagating")
     return version
+
+
+def response_is_transient(status, body):
+    return status in (502, 503, 504) and body == {"error": "transport_response_invalid"}
+
+
+def wait_retired(config, original, receipt):
+    for retry in range(10):
+        try:
+            return retired_identity(config, receipt, original)
+        except (RetirementPending, TransportError):
+            if retry == 9:
+                raise ValueError("retirement readback did not converge") from None
+            time.sleep(3)
 
 
 def cleanup(case, directory):
@@ -293,12 +408,21 @@ def cleanup(case, directory):
         # The existing idempotent cleanup route is the only destruction authority.
         request = load(directory / "request.json")
         binding = {k: request[k] for k in ("schema_version", "replay_task_id", "attempt")}
-        status, response = http("https://" + config["name"] + ".lean-eval.workers.dev/api/v1/historical-public-replay/cleanup", binding, True)
-        if status == 200 and response == {**binding, "destruction": "confirmed"}:
-            receipt["safe_to_delete"] = True
-            save(directory / "receipt.json", receipt)
+        try:
+            url = "https://" + config["name"] + ".lean-eval.workers.dev"
+            endpoint_health(url, receipt)
+            status, response = http(url + "/api/v1/historical-public-replay/cleanup", binding, True)
+            if status == 200 and response == {**binding, "destruction": "confirmed"}:
+                receipt["safe_to_delete"] = True
+                receipt["public_http_destruction"] = "confirmed"
+        except (TransportError, ValueError):
+            pass
+    # Only these newly created synthetic/public case resources may be fenced
+    # without an HTTP receipt. This does not authorize production/State cleanup.
+    receipt["cleanup_mode"] = "http-confirmed-or-not-started" if receipt["safe_to_delete"] else "owned-control-plane-fence"
     if not receipt["safe_to_delete"]:
-        raise ValueError("retain exact target receipt: sandbox destruction is unconfirmed")
+        receipt["outcome"] = "incomplete"
+    save(directory / "receipt.json", receipt)
     current = ownership(config)
     if any(current[k] != receipt[k] for k in current):
         raise ValueError("resource ownership changed; refuse deletion")
@@ -310,7 +434,7 @@ def cleanup(case, directory):
     save(path, {**stub, "env": {"staging": stub}})
     # Retire only the previously captured, freshly reverified namespace pair.
     command("npx", "wrangler", "deploy", "--config", path.name, "--env", "staging", cwd=ROOT / "server")
-    stub_version = retired_identity(stub, receipt)
+    stub_version = wait_retired(stub, config, receipt)
     app = _verify_application(config, applications())
     if app is not None:
         if app != {k: receipt[k] for k in app}:
@@ -336,7 +460,7 @@ def cleanup(case, directory):
         time.sleep(5)
     if any(n["id"] in receipt["namespaces"].values() or n["script"] == worker for n in namespaces()):
         raise ValueError("temporary namespace remains")
-    receipt.update(cleanup="confirmed", stub_version=stub_version)
+    receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed", stub_version=stub_version)
     save(directory / "receipt.json", receipt)
 
 
@@ -351,7 +475,8 @@ def main():
     try:
         {"prepare": prepare, "deploy": deploy, "run": run_case, "cleanup": cleanup}[args.operation](args.case, args.directory)
     except Exception as error:
-        print("public runtime staging stopped: " + type(error).__name__ + "; retain exact target receipt for diagnosis", file=sys.stderr)
+        detail = str(error) if type(error) in (ValueError, CommandFailure) else "retain exact target receipt for diagnosis"
+        print("public runtime staging stopped: " + type(error).__name__ + "; " + detail, file=sys.stderr)
         return 1
     return 0
 

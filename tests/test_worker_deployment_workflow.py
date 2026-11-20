@@ -363,7 +363,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             promoted_runtime_scripts,
-            (offline_evidence_scripts | {"public_runtime_guard_staging.py"})
+            offline_evidence_scripts
             - {
                 "classify_historical_private_archives.py",
                 "historical_replay_controller.py",
