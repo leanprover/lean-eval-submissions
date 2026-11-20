@@ -41,15 +41,22 @@ validate-generated-catalog against the exact original Git snapshot. The full
 semantic guard runs the genuine original eval_inventory; no structural-only or
 selected-inventory substitute is accepted. Before it, the preparer derives ALL
 original modules in original manifest filename/first-occurrence order and builds
-them in fixed batches of at most four original `lake build <module>` commands.
+them with a rolling window of at most four original `lake build <module>` commands.
+A free slot launches the next original module only after the completed group has
+been killed, its leader AND same-group descendants reaped, and its owned pidfd
+closed. Slow peers continue; there is no wait-for-all-four batch barrier.
+Groups in teardown count toward the four-slot limit. Launch order and final
+receipt order retain the exact complete original module order. Real terminal
+observations are stored by original index; every final module artifact is hashed
+only after ALL build writers have drained.
 Only successful real child exits plus original module artifacts allow the
 original supported `validate-manifest --assume-modules-built` invocation. That
 flag skips rebuilding only; every original module is still imported and the
 full semantic inventory is compared. No synthetic inventory is supplied.
 
 One monotonic deadline of at most1200 seconds covers plan loading, the original
-structural precheck, ALL batches and the final full validator. It is never reset
-per batch. The selected generator still has its independent at-most300-second
+structural precheck, ALL refills and the final full validator. It is never reset
+per slot or refill. The selected generator still has its independent at-most300-second
 bound, and runtime M/T are unchanged. Any partial failure, deadline or cleanup
 failure leaves generation/context unproved. A four-worker limit and
 LEAN_NUM_THREADS=1 hint apply to these trusted public builds. Each build child
@@ -65,7 +72,12 @@ kill, including leaders that already exited. Success, nonzero exit, deadline and
 termination signals all stop and reap owned groups BEFORE returning or accepting
 the original real leader exit status. A temporary process-local child-subreaper
 setting makes orphan descendants in those groups reapable; the previous setting
-is restored on every path. Every group is reserved before any reaping. Only
+is restored on every path. Every retiring group remains reserved through its last kill before reaping.
+Explicit per-resource retirement state tracks signalled/reaped/descendant-settled
+and pidfd ownership. A partial retirement error refuses refill and outer cleanup
+never re-signals an already-reaped PID or retries a closed/reused numeric fd.
+Successful retired resources leave the owner registry before capacity is reused,
+so no O(number-of-modules) live groups or pidfds accumulate. Only
 reserved groups are waited/signalled; unrelated live or exited children are not
 consumed. There is no waitpid(-1) or broad process scan/kill.
 

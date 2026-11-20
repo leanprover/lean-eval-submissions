@@ -326,7 +326,7 @@ else:
                 with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
                      mock.patch.object(prepare.supervisor, 'pidfd_open', side_effect=pidfd):
                     with self.assertRaises(prepare.Invalid):
-                        prepare._build_inventory_batch(('One', 'Two', 'Three', 'Four'), source, env, lake,
+                        prepare._build_inventory_pool(('One', 'Two', 'Three', 'Four'), source, env, lake,
                                                        time.monotonic_ns() + 3_000_000_000)
                 self.assertEqual(len(children), 3 if failing_setup == 'launch' else 4)
                 for child in children:
@@ -334,7 +334,208 @@ else:
                     with self.assertRaises(ChildProcessError):
                         os.waitpid(child.pid, os.WNOHANG)
 
-    def test_one_shared_deadline_cannot_reset_between_batches(self):
+    def test_rolling_slot_refills_before_slow_peer_only_after_descendant_reap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, source, lake = self.fixture(root, ('Slow', 'Quick', 'Third', 'Fourth', 'Fifth', 'Sixth'))
+            lake.write_text('#!' + str(Path(sys.executable).resolve()) + '\n' + r'''from pathlib import Path
+import json,os,subprocess,sys,time
+r=Path.cwd();module=sys.argv[2]
+if module=='Quick':
+ child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
+ (r/'quick-descendant').write_text(json.dumps({'pid':child.pid,'ticks':Path(f'/proc/{child.pid}/stat').read_text().rsplit(')',1)[1].split()[19]}))
+if module=='Slow':(r/'slow-pid').write_text(str(os.getpid()))
+ready=r/'ready';ready.mkdir(exist_ok=True);(ready/module).write_text(str(os.getpid()))
+if module in('Slow','Quick','Third','Fourth'):
+ while not all((ready/name).exists()for name in('Slow','Quick','Third','Fourth')):time.sleep(.002)
+if module=='Fifth':
+ deadline=time.monotonic()+1
+ while not(r/'quick-descendant').exists():assert time.monotonic()<deadline;time.sleep(.002)
+ identity=json.loads((r/'quick-descendant').read_text());path=Path(f"/proc/{identity['pid']}/stat")
+ gone=not path.exists()or path.read_text().rsplit(')',1)[1].split()[19]!=identity['ticks']
+ slow_alive=Path('/proc/'+(r/'slow-pid').read_text()).exists()
+ (r/'refill-proof').write_text(json.dumps({'descendant_gone_before_refill':gone,'slow_still_live':slow_alive,'started_ns':time.monotonic_ns()}))
+ assert gone and slow_alive
+# Quick alone is the first reusable slot, ensuring its descendant tests the
+# slot being retired rather than another unrelated completed group.
+time.sleep({'Slow':.8,'Quick':.03,'Third':.3,'Fourth':.3}.get(module,.02))
+target=r/'.lake/build/lib/lean'/(module+'.olean');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(module.encode())
+if module=='Slow':
+ (target.parent/'Quick.olean').write_bytes(b'late trusted build writer final bytes')
+ (r/'slow-finished').write_text(str(time.monotonic_ns()))
+''')
+            lake.chmod(0o700)
+            modules = ('Slow', 'Quick', 'Third', 'Fourth', 'Fifth', 'Sixth')
+            real_popen, launches, maximum_owned = subprocess.Popen, [], [0]
+            real_adopt = prepare._PreparationOwner.adopt
+            def launch(*args, **kwargs):
+                launches.append(args[0][-1])
+                return real_popen(*args, **kwargs)
+            def adopt(owner, child):
+                result = real_adopt(owner, child)
+                maximum_owned[0] = max(maximum_owned[0], len(owner.groups))
+                return result
+            with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                 mock.patch.object(prepare._PreparationOwner, 'adopt', adopt):
+                rows = prepare._build_inventory_pool(modules, source, prepare.environment(root), lake,
+                                                     time.monotonic_ns() + 3_000_000_000)
+            proof = json.loads((source / 'refill-proof').read_text())
+            self.assertTrue(proof['descendant_gone_before_refill'] and proof['slow_still_live'])
+            self.assertLess(proof['started_ns'], int((source / 'slow-finished').read_text()))
+            self.assertEqual(launches, list(modules))
+            self.assertEqual([row['module'] for row in rows], list(modules))
+            self.assertEqual(rows[1]['olean_sha256'], prepare.sha(b'late trusted build writer final bytes'))
+            self.assertEqual(maximum_owned[0], 4)
+            self.assertLess(rows[1]['observed_finished_ns'], rows[0]['observed_finished_ns'])
+
+    def test_refill_launch_and_pidfd_failures_reap_active_groups(self):
+        modules = ('First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth')
+        for setup, fail_at in ((setup, fail_at) for setup in ('launch', 'pidfd') for fail_at in (5, 7)):
+            with self.subTest(setup=setup, fail_at=fail_at), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                _, source, lake = self.fixture(root, modules)
+                env = dict(prepare.environment(root), FIXTURE_SLEEP='.05')
+                real_popen, real_pidfd = subprocess.Popen, prepare.supervisor.pidfd_open
+                children, counts = [], {'launch': 0, 'pidfd': 0}
+                def launch(*args, **kwargs):
+                    counts['launch'] += 1
+                    if setup == 'launch' and counts['launch'] == fail_at:
+                        raise OSError('controlled fifth launch failure')
+                    child = real_popen(*args, **kwargs)
+                    children.append(child)
+                    return child
+                def pidfd(pid):
+                    counts['pidfd'] += 1
+                    if setup == 'pidfd' and counts['pidfd'] == fail_at:
+                        raise OSError('controlled fifth pidfd failure')
+                    return real_pidfd(pid)
+                with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                     mock.patch.object(prepare.supervisor, 'pidfd_open', side_effect=pidfd):
+                    with self.assertRaises(prepare.Invalid):
+                        prepare._build_inventory_pool(modules, source, env, lake, time.monotonic_ns() + 3_000_000_000)
+                self.assertEqual(len(children), fail_at - 1 if setup == 'launch' else fail_at)
+                for child in children:
+                    self.assertIsNotNone(child.returncode)
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(child.pid, os.WNOHANG)
+
+    def test_retirement_signal_failure_keeps_leader_reserved_until_outer_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            modules = ('One', 'Two', 'Three', 'Four', 'MustNotLaunch')
+            _, source, lake = self.fixture(root, modules)
+            real_popen, real_killpg = subprocess.Popen, prepare.os.killpg
+            children, faulted, retried = [], [], []
+            def launch(*args, **kwargs):
+                child = real_popen(*args, **kwargs)
+                children.append(child)
+                return child
+            def killpg(pid, sig):
+                child = next(child for child in children if child.pid == pid)
+                self.assertIsNone(child.returncode, 'kill failure released leader reservation')
+                if not faulted:
+                    faulted.append(pid)
+                    raise OSError('controlled first retirement signal failure')
+                if pid == faulted[0]:
+                    retried.append(pid)
+                return real_killpg(pid, sig)
+            with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                 mock.patch.object(prepare.os, 'killpg', side_effect=killpg):
+                with self.assertRaises(prepare.Invalid):
+                    prepare._build_inventory_pool(modules, source, dict(prepare.environment(root), FIXTURE_SLEEP='.05'),
+                                                  lake, time.monotonic_ns() + 3_000_000_000)
+            self.assertEqual(len(children), 4)
+            self.assertEqual(retried, faulted)
+            for child in children:
+                self.assertIsNotNone(child.returncode)
+                with self.assertRaises(ChildProcessError):
+                    os.waitpid(child.pid, os.WNOHANG)
+
+    def test_post_wait_retirement_failure_never_signals_reaped_leader_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            modules = ('One', 'Two', 'Three', 'Four', 'MustNotLaunch')
+            _, source, lake = self.fixture(root, modules)
+            real_popen, real_killpg = subprocess.Popen, prepare.os.killpg
+            children, faults, signals = [], [], []
+            def launch(*args, **kwargs):
+                child = real_popen(*args, **kwargs)
+                children.append(child)
+                original_wait = child.wait
+                def wait(*args, **kwargs):
+                    value = original_wait(*args, **kwargs)
+                    if not faults:
+                        faults.append(child.pid)
+                        raise OSError('controlled failure AFTER real leader wait/reap')
+                    return value
+                child.wait = wait
+                return child
+            def killpg(pid, sig):
+                child = next(child for child in children if child.pid == pid)
+                self.assertIsNone(child.returncode, 'retirement retried signal after releasing leader PID')
+                signals.append(pid)
+                return real_killpg(pid, sig)
+            with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                 mock.patch.object(prepare.os, 'killpg', side_effect=killpg):
+                with self.assertRaises(prepare.Invalid):
+                    prepare._build_inventory_pool(modules, source, dict(prepare.environment(root), FIXTURE_SLEEP='.05'),
+                                                  lake, time.monotonic_ns() + 3_000_000_000)
+            self.assertEqual(len(children), 4)
+            self.assertEqual(len(signals), len(set(signals)))
+            self.assertTrue(faults)
+            for child in children:
+                self.assertIsNotNone(child.returncode)
+                with self.assertRaises(ChildProcessError):
+                    os.waitpid(child.pid, os.WNOHANG)
+
+    def test_partial_retirement_close_fault_never_recloses_reused_descriptor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            modules = ('One', 'Two', 'Three', 'Four', 'MustNotLaunch')
+            _, source, lake = self.fixture(root, modules)
+            env = dict(prepare.environment(root), FIXTURE_SLEEP='.05')
+            real_close, real_pidfd, real_popen = prepare.os.close, prepare.supervisor.pidfd_open, subprocess.Popen
+            children, live_pidfds, replacement, faults = [], set(), [], []
+            def launch(*args, **kwargs):
+                child = real_popen(*args, **kwargs)
+                children.append(child)
+                return child
+            def pidfd(pid):
+                descriptor = real_pidfd(pid)
+                live_pidfds.add(descriptor)
+                return descriptor
+            def close(descriptor):
+                if descriptor in live_pidfds and not faults:
+                    # Linux close already released the fd; another resource has
+                    # reused that number BEFORE the caller sees a close error.
+                    real_close(descriptor)
+                    live_pidfds.remove(descriptor)
+                    new = os.open('/dev/null', os.O_RDONLY)
+                    self.assertEqual(new, descriptor)
+                    replacement.append(new)
+                    faults.append(True)
+                    raise OSError('controlled post-close failure')
+                self.assertNotIn(descriptor, replacement, 'outer cleanup double-closed an unrelated reused fd')
+                live_pidfds.discard(descriptor)
+                return real_close(descriptor)
+            try:
+                with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch), \
+                     mock.patch.object(prepare.supervisor, 'pidfd_open', side_effect=pidfd), \
+                     mock.patch.object(prepare.os, 'close', side_effect=close):
+                    with self.assertRaises(prepare.Invalid):
+                        prepare._build_inventory_pool(modules, source, env, lake, time.monotonic_ns() + 3_000_000_000)
+                self.assertEqual(len(children), 4)
+                self.assertTrue(faults)
+                os.fstat(replacement[0])
+                for child in children:
+                    self.assertIsNotNone(child.returncode)
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(child.pid, os.WNOHANG)
+            finally:
+                for descriptor in replacement:
+                    real_close(descriptor)
+
+    def test_one_shared_deadline_cannot_reset_between_refills(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             git, source, lake = self.fixture(root, ('One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'))

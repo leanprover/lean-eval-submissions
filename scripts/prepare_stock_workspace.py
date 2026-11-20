@@ -208,49 +208,100 @@ def verify_checkout(git, source, configuration, *, selected_problem=None):
                 and target.read_bytes() == configuration.get(path, git.blob(path)))
 
 
-def _stop_preparation_groups(children, descriptors):
-    """Signal only unreaped owned groups, then reap only those groups."""
-    failed, reserved = False, []
+class _PreparationGroup:
+    """Explicit ownership survives partial retirement; never retry a released fd."""
+    def __init__(self, child):
+        self.child = child
+        self.descriptor = None
+        self.signalled = False
+        self.leader_reaped = False
+        self.descendants_settled = False
+        self.descriptor_closed = False
+        self.failed = False
+
+    def complete(self):
+        return (self.signalled and self.leader_reaped and self.descendants_settled
+                and self.descriptor_closed and not self.failed)
+
+
+class _PreparationOwner:
+    def __init__(self):
+        self.groups = []
+
+    def adopt(self, child):
+        require(len(self.groups) < INVENTORY_CONCURRENCY)
+        group = _PreparationGroup(child)
+        self.groups.append(group)  # own the leader BEFORE pidfd setup can fail
+        group.descriptor = supervisor.pidfd_open(child.pid)
+        return group
+
+    def retire(self, group):
+        require(group in self.groups)
+        _stop_preparation_groups([group])
+        require(group.complete())
+        self.groups.remove(group)  # capacity is reusable only after full retirement
+
+
+def _stop_preparation_groups(groups):
+    """Stop reserved identities, then settle each resource exactly once."""
     deadline = time.monotonic_ns() + 5_000_000_000
-    # Reserve EVERY group until its last required kill: no leader is reaped
-    # before all group signals have been issued.
-    for child in children:
-        if child.returncode is not None:
-            failed = True  # identity was unexpectedly released; never signal it
+    # Reserve every still-owned leader until its final kill. A partially retired
+    # record cannot re-signal a reaped/reused PID on outer failure cleanup.
+    for group in groups:
+        if group.signalled or group.leader_reaped:
             continue
-        reserved.append(child)
+        if group.child.returncode is not None:
+            group.failed = True  # unexpected external reap; never signal it
+            group.leader_reaped = True
+            continue
         try:
-            os.killpg(child.pid, signal.SIGKILL)
+            os.killpg(group.child.pid, signal.SIGKILL)
+            group.signalled = True
         except ProcessLookupError:
-            pass
+            group.signalled = True
         except OSError:
-            failed = True
-    for child in reserved:
-        try:
-            child.wait(timeout=max(0, (deadline - time.monotonic_ns()) / 1_000_000_000))
-        except (OSError, subprocess.SubprocessError):
-            failed = True
-    for child in reserved:
-        while True:
+            group.failed = True
+    for group in groups:
+        # A failed kill must NOT release the leader reservation. Outer cleanup
+        # may retry the still-owned group; it cannot safely do so after wait.
+        if not group.signalled:
+            continue
+        if not group.leader_reaped:
             try:
-                pid, _status = os.waitpid(-child.pid, os.WNOHANG)
-            except ChildProcessError:
-                break
-            except OSError:
-                failed = True
-                break
-            if pid:
-                continue
-            if time.monotonic_ns() >= deadline:
-                failed = True
-                break
-            time.sleep(0.01)
-    for descriptor in descriptors:
-        try:
-            os.close(descriptor)
-        except OSError:
-            failed = True
-    require(not failed)
+                group.child.wait(timeout=max(0, (deadline - time.monotonic_ns()) / 1_000_000_000))
+            except (OSError, subprocess.SubprocessError):
+                group.failed = True
+            finally:
+                group.leader_reaped = group.child.returncode is not None
+        if group.signalled and group.leader_reaped and not group.descendants_settled:
+            while True:
+                try:
+                    pid, _status = os.waitpid(-group.child.pid, os.WNOHANG)
+                except ChildProcessError:
+                    group.descendants_settled = True
+                    break
+                except OSError:
+                    group.failed = True
+                    break
+                if pid:
+                    continue
+                if time.monotonic_ns() >= deadline:
+                    group.failed = True
+                    break
+                time.sleep(0.01)
+        if not group.descriptor_closed:
+            descriptor = group.descriptor
+            # Linux close releases its numeric slot even on most errors. Give
+            # up ownership BEFORE the syscall so failure cleanup can never close
+            # an unrelated fd subsequently allocated with the same number.
+            group.descriptor = None
+            group.descriptor_closed = True
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    group.failed = True
+    require(all(group.complete() for group in groups))
 
 
 @contextlib.contextmanager
@@ -264,7 +315,7 @@ def _owned_preparation_groups():
     # An auto-reaping SIGCHLD policy could release PID identity before WNOWAIT.
     # This entry is a dedicated synchronous preparation process, not a server.
     require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL)
-    children, descriptors = [], []
+    owner = _PreparationOwner()
     cancelled = [False]
     previous, setting = {}, None
     libc = ctypes.CDLL(None, use_errno=True)
@@ -277,10 +328,10 @@ def _owned_preparation_groups():
         require(libc.prctl(37, ctypes.byref(value), 0, 0, 0) == 0)
         setting = value.value  # restore even if SET or later setup is interrupted
         require(libc.prctl(36, 1, 0, 0, 0) == 0)
-        yield children, descriptors, cancelled
+        yield owner, cancelled
     finally:
         try:
-            _stop_preparation_groups(children, descriptors)
+            _stop_preparation_groups(owner.groups)
         finally:
             blocked = signal.pthread_sigmask(signal.SIG_BLOCK, set(previous))
             try:
@@ -312,13 +363,12 @@ def _preparation_command(command, source, env, timeout, *, capture=False):
             require(len(output) + len(chunk) <= MAX_BLOB)
             output.extend(chunk)
     try:
-        with _owned_preparation_groups() as (children, descriptors, cancelled):
+        with _owned_preparation_groups() as (owner, cancelled):
             process = subprocess.Popen(command, cwd=source, env=env, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, start_new_session=True)
-            children.append(process)
-            descriptor = supervisor.pidfd_open(process.pid)
-            descriptors.append(descriptor)
+            group = owner.adopt(process)
+            descriptor = group.descriptor
             if capture:
                 os.set_blocking(process.stdout.fileno(), False)
             while code is None:
@@ -382,16 +432,15 @@ def _inventory_remaining(deadline):
     return remaining
 
 
-def _build_inventory_batch(modules, source, env, lake, deadline):
-    """Four trusted original single-module builds; no submitted Source runs.
+def _build_inventory_pool(modules, source, env, lake, deadline):
+    """Four owned slots, refilled only AFTER completed group retirement.
 
-    WNOWAIT keeps each owned group leader unreaped until group termination,
-    preventing a completed leader's PID/group identity from being reused.
-    Every exit path terminates groups and waits all direct children. This is
-    trusted-build process-group ownership, not Source namespace qualification.
+    Launch order and final receipts follow the complete original module plan.
+    One scoped owner holds at most four groups, including teardown; completed
+    children and pidfds never accumulate in outer cleanup lists.
     """
-    require(0 < len(modules) <= INVENTORY_CONCURRENCY and hasattr(os, 'WNOWAIT'))
-    observed = {}
+    require(modules and len(set(modules)) == len(modules) and hasattr(os, 'WNOWAIT'))
+    observed, active, next_index = {}, {}, 0
     values = dict(env, LEAN_NUM_THREADS='1')
     def limits():
         def restrict(kind, maximum):
@@ -400,37 +449,53 @@ def _build_inventory_batch(modules, source, env, lake, deadline):
             resource.setrlimit(kind, (limit, limit))
         restrict(resource.RLIMIT_AS, INVENTORY_ADDRESS_SPACE)
         restrict(resource.RLIMIT_CPU, math.ceil(_inventory_remaining(deadline)))
-    with _owned_preparation_groups() as (children, descriptors, cancelled):
+    with _owned_preparation_groups() as (owner, cancelled):
         try:
-            for module in modules:
-                _inventory_remaining(deadline)
-                child = subprocess.Popen([str(lake), 'build', module], cwd=source, env=values,
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    start_new_session=True, preexec_fn=limits)
-                children.append(child)
-                descriptors.append(supervisor.pidfd_open(child.pid))
-            pending = set(range(len(children)))
-            while pending:
+            while next_index < len(modules) or active:
                 if cancelled[0]:
                     raise supervisor.Interrupted()
-                ready, _, _ = select.select([descriptors[index] for index in pending], [], [],
+                _inventory_remaining(deadline)
+                while next_index < len(modules) and len(active) < INVENTORY_CONCURRENCY:
+                    if cancelled[0]:
+                        raise supervisor.Interrupted()
+                    _inventory_remaining(deadline)
+                    module = modules[next_index]
+                    child = subprocess.Popen([str(lake), 'build', module], cwd=source, env=values,
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        start_new_session=True, preexec_fn=limits)
+                    group = owner.adopt(child)
+                    active[next_index] = group
+                    next_index += 1
+                ready, _, _ = select.select([group.descriptor for group in active.values()], [], [],
                                              min(0.05, _inventory_remaining(deadline)))
                 _inventory_remaining(deadline)
-                for index in tuple(pending):
-                    if descriptors[index] not in ready:
+                # Observe ALL ready exits before refilling, so a ready failed
+                # child cannot be bypassed by an earlier-index successful one.
+                finished = []
+                for index, group in active.items():
+                    if group.descriptor not in ready:
                         continue
-                    status = os.waitid(os.P_PID, children[index].pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                    status = os.waitid(os.P_PID, group.child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
                     require(status is not None and status.si_code == os.CLD_EXITED and status.si_status == 0)
-                    observed[index] = time.monotonic_ns()
-                    pending.remove(index)
+                    finished.append((index, group, time.monotonic_ns()))
+                for index, group, observed_ns in finished:
+                    owner.retire(group)
+                    require(group.child.returncode == 0)
+                    observed[index] = {'exit_code': group.child.returncode, 'observed_finished_ns': observed_ns}
+                    del active[index]
+                    _inventory_remaining(deadline)
         except (OSError, subprocess.SubprocessError):
             raise Invalid('original inventory prebuild did not complete') from None
-    require(len(observed) == len(modules) and all(child.returncode == 0 for child in children))
-    return [{'module': module, 'exit_code': children[index].returncode,
-             'observed_finished_ns': observed[index],
-             'olean_sha256': supervisor.file_hash(Path(source) / '.lake/build/lib/lean' /
-                 (module.replace('.', '/') + '.olean'))['sha256']}
-            for index, module in enumerate(modules)]
+    require(len(observed) == len(modules) and not active)
+    # No build writer remains before hashing ANY final module artifact.
+    result = []
+    for index, module in enumerate(modules):
+        _inventory_remaining(deadline)
+        result.append({'module': module, **observed[index],
+            'olean_sha256': supervisor.file_hash(Path(source) / '.lake/build/lib/lean' /
+                (module.replace('.', '/') + '.olean'))['sha256']})
+    _inventory_remaining(deadline)
+    return result
 
 
 def _prepare_inventory(git, source, env, lake, timeout_seconds):
@@ -441,10 +506,7 @@ def _prepare_inventory(git, source, env, lake, timeout_seconds):
     modules = _original_inventory_modules(git)
     invoke([str(lake), 'exe', 'lean-eval', 'validate-manifest', '--structure-only'],
            source, env, _inventory_remaining(deadline))
-    builds = []
-    for offset in range(0, len(modules), INVENTORY_CONCURRENCY):
-        builds.extend(_build_inventory_batch(modules[offset:offset + INVENTORY_CONCURRENCY],
-                                             source, env, lake, deadline))
+    builds = _build_inventory_pool(modules, source, env, lake, deadline)
     require(tuple(build['module'] for build in builds) == modules
             and all(build['exit_code'] == 0 for build in builds))
     argv = ['lake', 'exe', 'lean-eval', 'validate-manifest', '--assume-modules-built']
