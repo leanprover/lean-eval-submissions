@@ -110,7 +110,7 @@ export default {
           return response({ ...identity, status: "reserved" });
         }
         const marker = exactMarker(
-          await Promise.resolve(store.destroyBoundSandbox(identity)),
+          await Promise.resolve(store.destroyPrivateBoundSandbox(identity)),
           identity,
         );
         if (marker.destruction_state !== "confirmed") {
@@ -136,16 +136,32 @@ export default {
         // the bounded production canary. Keep this exact reserved sandbox
         // awake with enough margin for the source-free readiness refresh;
         // every terminal and failure path still destroys it explicitly.
-        const sandbox = replaySandbox(runtime, runnerNonce, 600_000, "15m");
+        // Start POSTs preserve the durable idle setting. getSandbox applies
+        // options asynchronously, so even a default 15m here could race the
+        // awaited post-start lifetime hook or shorten an exact duplicate.
+        const starting = key === "POST /api/v1/replay";
+        const sandbox = replaySandbox(runtime, runnerNonce, 600_000, starting ? null : "15m");
         await sandbox.configure({
           keepAlive: false,
-          sleepAfter: "15m",
+          ...(starting ? {} : { sleepAfter: "15m" }),
           containerTimeouts: {
             instanceGetTimeoutMS: 120_000,
             portReadyTimeoutMS: 600_000,
           },
         });
         return sandbox;
+      },
+      async afterAuthoritativeStart(sandbox, cleanupDeadline) {
+        // Only our own successful new process reaches this hook. Never extend
+        // the original binding's seven-hour destruction deadline, including
+        // concurrent identical starts. Observer polls restore the 15m policy.
+        const remaining = Math.min(6 * 60 * 60, Math.floor(
+          (cleanupDeadline - 60 * 60 * 1000 - Date.now()) / 1000,
+        ));
+        if (remaining <= 0 || sandbox.setSleepAfter === undefined) {
+          throw new Error("private handoff lifetime is unavailable");
+        }
+        await sandbox.setSleepAfter(remaining);
       },
       receiptStore(runtime) {
         const replayTaskId = runtime.EXPECTED_REPLAY_TASK_ID;
@@ -159,9 +175,15 @@ export default {
         return {
           claimBinding: (binding: unknown) => store.claimReservedBinding(binding),
           readBinding: () => store.readBinding(),
+          assertPrivateStatusAvailable: () => store.assertPrivateStatusAvailable(),
           readReceipt: () => store.readReceipt(),
           prepareReceipt: (receipt: unknown) => store.prepareReceipt(receipt),
           confirmReceipt: () => store.confirmReceipt(),
+          destroyPrivateSandbox: () => store.destroyPrivateBoundSandbox({
+            schema_version: 1,
+            replay_task_id: replayTaskId,
+            attempt,
+          }),
           readArchiveUpload: () => store.readArchiveUpload(),
           claimArchiveUpload: (identity: unknown) => store.claimArchiveUpload(identity),
           commitArchiveUploadPart: (identity: unknown, part: unknown) => (

@@ -497,6 +497,7 @@ describe("Cloudflare replay executor", () => {
     const commands: string[] = [];
     const timeouts: number[] = [];
     let destroyed = false;
+    const afterStart = vi.fn(() => Promise.resolve());
     let processStarted = false;
     let processStatus: "running" | "completed" = "running";
     const receipts = terminalReceiptStore(undefined, uploadForBody(body));
@@ -532,6 +533,7 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(start.status).toBe(202);
     expect(await start.json()).toMatchObject({ status: "running" });
@@ -555,8 +557,10 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(duplicateStart.status).toBe(202);
+    expect(afterStart).toHaveBeenCalledTimes(1);
     expect(commands).toHaveLength(1);
     expect(writes.size).toBe(3);
 
@@ -567,6 +571,7 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(running.status).toBe(202);
     expect(await running.json()).toMatchObject({ status: "running" });
@@ -580,6 +585,7 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(status.status).toBe(200);
     const terminalBody = await status.json();
@@ -593,6 +599,7 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(repeatedStatus.status).toBe(200);
     expect(await repeatedStatus.json()).toEqual(terminalBody);
@@ -604,6 +611,7 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
       receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
     });
     expect(startAfterLostTerminalResponse.status).toBe(202);
     expect(commands).toHaveLength(1);
@@ -917,6 +925,23 @@ describe("Cloudflare replay executor", () => {
     } finally {
       logged.mockRestore();
     }
+  });
+
+  it("refuses a closed private status before any Sandbox factory or process RPC", async () => {
+    const body = await authoritativeInput();
+    const sandbox = vi.fn(() => { throw new Error("sandbox must remain unreachable"); });
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(), sandbox,
+      receiptStore: () => ({
+        ...terminalReceiptStore(authoritativeStatusInput(body)),
+        assertPrivateStatusAvailable: () => Promise.reject(new Error("cleanup has begun")),
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(sandbox).not.toHaveBeenCalled();
   });
 
   it("leaves a running process intact when a status RPC is transiently unavailable", async () => {
@@ -2113,6 +2138,66 @@ describe("chunked archive upload routes", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it.each(["request-write", "key-write", "before-hook", "after-hook"])("refuses finalized private cleanup %s and destroys the late process", async (phase) => {
+    const body = await authoritativeInput();
+    const original = terminalReceiptStore(undefined, uploadForBody(body));
+    let finalized = false;
+    const hook = vi.fn(() => {
+      if (phase === "after-hook") finalized = true;
+      return Promise.resolve();
+    });
+    const destroy = vi.fn(() => Promise.resolve());
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST", body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path: string) => {
+          if ((phase === "request-write" && path.endsWith("replay-request.json"))
+            || (phase === "key-write" && /(?:identity.age|key-material).b64$/.test(path))) finalized = true;
+          return Promise.resolve({ success: true, path, timestamp: "fixture" });
+        },
+        exec: () => { throw new Error("blocking exec unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => {
+          if (phase === "before-hook") finalized = true;
+          return Promise.resolve({} as never);
+        }, destroy,
+      }),
+      receiptStore: () => ({
+        ...original,
+        claimBinding: (binding: unknown) => {
+          if (finalized) return Promise.reject(new Error("exact private reservation finalized"));
+          return original.claimBinding(binding);
+        },
+      }),
+      afterAuthoritativeStart: hook,
+    });
+    expect(response.status).toBe(500);
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(hook).toHaveBeenCalledTimes(phase === "after-hook" ? 1 : 0);
+  });
+
+  it("destroys a newly started authoritative process if its awaited lifetime hook fails", async () => {
+    const body = await authoritativeInput();
+    const destroy = vi.fn(() => Promise.resolve());
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST", body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => Promise.resolve({} as never), destroy,
+      }),
+      receiptStore: () => terminalReceiptStore(undefined, uploadForBody(body)),
+      afterAuthoritativeStart: () => Promise.reject(new Error("lifetime unavailable")),
+    });
+    expect(response.status).toBe(500);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
   it("treats a concurrent exact process-start duplicate as the same running handoff", async () => {
     const body = await historicalPublicInput();
     let claimedBinding: unknown = null;
@@ -2190,6 +2275,77 @@ describe("chunked archive upload routes", () => {
         status: "running",
       },
     ]);
+    expect(startCalls).toBe(2);
+    expect(initialReads).toBe(2);
+    expect(destroyCalls).toBe(0);
+  });
+
+  it("runs the private lifetime hook only for the concurrent process-ID winner", async () => {
+    const body = await authoritativeInput();
+    const afterStart = vi.fn(() => Promise.resolve());
+    let claimedBinding: unknown = null;
+    let initialReads = 0;
+    let startCalls = 0;
+    let destroyCalls = 0;
+    let releaseInitialReads: (() => void) | undefined;
+    const initialReadsComplete = new Promise<void>((resolve) => {
+      releaseInitialReads = resolve;
+    });
+    const process = { getStatus: () => Promise.resolve("running") };
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: async () => {
+        if (initialReads < 2) {
+          initialReads += 1;
+          if (initialReads === 2) releaseInitialReads?.();
+          await initialReadsComplete;
+          return null;
+        }
+        return process as never;
+      },
+      startProcess: () => {
+        startCalls += 1;
+        if (startCalls === 1) return Promise.resolve(process as never);
+        return Promise.reject(Object.assign(
+          new Error("duplicate process"),
+          { code: "PROCESS_ALREADY_EXISTS" },
+        ));
+      },
+      destroy: () => {
+        destroyCalls += 1;
+        return Promise.resolve();
+      },
+    };
+    const receipts = {
+      ...terminalReceiptStore(undefined, uploadForBody(body)),
+      readBinding: () => Promise.resolve(claimedBinding),
+      claimBinding: (value: unknown) => {
+        if (claimedBinding === null) claimedBinding = value;
+        return Promise.resolve(claimedBinding);
+      },
+      readReceipt: () => Promise.resolve(null),
+      prepareReceipt: (receipt: unknown) => Promise.resolve(receipt),
+      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+    };
+    const enabled = { ...REVIEWED_ENV, REPLAY_ENABLED: "true" };
+    const request = () => new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+      afterAuthoritativeStart: afterStart,
+    };
+
+    const responses = await Promise.all([
+      handleReplayRequest(request(), enabled, dependencies),
+      handleReplayRequest(request(), enabled, dependencies),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([202, 202]);
+    expect(afterStart).toHaveBeenCalledOnce();
     expect(startCalls).toBe(2);
     expect(initialReads).toBe(2);
     expect(destroyCalls).toBe(0);
