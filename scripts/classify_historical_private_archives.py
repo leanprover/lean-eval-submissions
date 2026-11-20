@@ -534,10 +534,12 @@ def _archive_key(archive: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
-def _classify_result(
+def classify_archive_for_visibility(
     user: str,
     record: dict[str, Any],
     candidates: list[dict[str, Any]],
+    *,
+    source_public: bool,
 ) -> dict[str, Any]:
     result_id = record["result_id"]
     if not candidates:
@@ -550,8 +552,8 @@ def _classify_result(
         }
     archive = candidates[0]
     reason: str | None = None
-    if archive["submission_public"] is not False:
-        reason = "archive_visibility_not_private"
+    if archive["submission_public"] is not source_public:
+        reason = "archive_visibility_not_public" if source_public else "archive_visibility_not_private"
     elif archive["model"] != record["declared_model"]:
         reason = "declared_model_mismatch"
     elif (
@@ -587,6 +589,10 @@ def _classify_result(
             else "archive_recorded_different"
         ),
     }
+
+
+def _classify_result(user: str, record: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    return classify_archive_for_visibility(user, record, candidates, source_public=False)
 
 
 def build_crosswalk(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import archivedFixture from "../../tests/fixtures/historical-archive-executor-request-v2.json";
 
 import {
   readAuthoritativeReplayRequest,
@@ -69,6 +70,38 @@ function verdict(input: Awaited<ReturnType<typeof readAuthoritativeReplayRequest
 }
 
 describe("authoritative replay boundary contract", () => {
+  it("preserves original public visibility in the explicitly reviewed small archive variant", async () => {
+    const body = structuredClone(archivedFixture);
+    const execution = body.request;
+    const parsed = await readAuthoritativeReplayRequest(new Request("https://example.test", {
+      method: "POST", body: JSON.stringify(body),
+    }), execution.execution_profile_digest, execution.measurement_config_digest,
+    execution.execution_profile.vm_image_digest, "legacy_10mib");
+    expect((parsed.request.source as Record<string, unknown>).visibility).toBe("public");
+    expect(parsed.archive_expectation.schema_version).toBe(3);
+    expect(parsed.archive_expectation.archive_capacity_class).toBe("legacy_10mib");
+    expect(parsed.key_material_type).toBe("age-file-key-v1");
+    await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
+      method: "POST", body: JSON.stringify(body),
+    }), execution.execution_profile_digest, execution.measurement_config_digest,
+    execution.execution_profile.vm_image_digest)).rejects.toThrow("capacity is not reviewed");
+  });
+
+  it("rejects archive visibility, capacity and legacy expectation substitutions", async () => {
+    for (const change of ["visibility", "capacity", "expectation", "fallback"]) {
+      const body = structuredClone(archivedFixture);
+      const execution = body.request;
+      if (change === "visibility") body.archive_expectation.source_visibility = "private";
+      if (change === "capacity") body.archive_expectation.archive_capacity_class = "archive_single_blob_30m";
+      if (change === "expectation") body.archive_expectation.schema_version = 2;
+      if (change === "fallback") execution.source.fetch_method = "git";
+      await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
+        method: "POST", body: JSON.stringify(body),
+      }), execution.execution_profile_digest, execution.measurement_config_digest,
+      execution.execution_profile.vm_image_digest, "legacy_10mib")).rejects.toThrow();
+    }
+  });
+
   it("binds the reviewed profile, encrypted archive, and one execution", async () => {
     const input = await readAuthoritativeReplayRequest(new Request("https://example.test", {
       method: "POST",

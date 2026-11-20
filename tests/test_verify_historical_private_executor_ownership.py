@@ -191,6 +191,19 @@ class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):
         self.assertEqual(proof["application_version"], 3)
         self.assertEqual(proof["application_id"], self.application["id"])
 
+    def test_recovered_archive_capacity_is_owned_only_with_matching_health(self) -> None:
+        self.config["vars"]["REVIEWED_ARCHIVE_CAPACITY_CLASS"] = "legacy_10mib"
+        binding = {"type": "plain_text", "name": "REVIEWED_ARCHIVE_CAPACITY_CLASS", "text": "legacy_10mib"}
+        self.settings["result"]["bindings"].append(copy.deepcopy(binding))
+        self.version["result"]["resources"]["bindings"].append(copy.deepcopy(binding))
+        with self.assertRaises(ownership.OwnershipError):
+            self.verify()
+        self.health["reviewed_archive_capacity_class"] = "legacy_10mib"
+        self.assertTrue(self.verify()["worker_owned"])
+        self.health["reviewed_archive_capacity_class"] = "archive_single_blob_30m"
+        with self.assertRaises(ownership.OwnershipError):
+            self.verify()
+
     def test_exact_worker_without_application_is_owned(self) -> None:
         proof = self.verify([])
         self.assertTrue(proof["worker_owned"])

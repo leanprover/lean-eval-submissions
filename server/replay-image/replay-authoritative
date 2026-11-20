@@ -86,7 +86,7 @@ def sha256(path: pathlib.Path) -> str:
 def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
     expectation = object_value(value, "archive expectation")
     schema_version = expectation.get("schema_version")
-    if schema_version not in {1, 2} or isinstance(schema_version, bool):
+    if type(schema_version) is not int or schema_version not in {1, 2, 3}:
         raise AuthoritativeReplayError("archive expectation schema is invalid")
     exact_fields(
         expectation,
@@ -96,11 +96,21 @@ def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
             "archive_ciphertext_sha256",
             "plaintext_tar_sha256",
             "plaintext_tar_size",
-        } | ({"key_material_type"} if schema_version == 2 else set()),
+        } | ({"key_material_type"} if schema_version in {2, 3} else set())
+        | ({"source_visibility", "archive_capacity_class"} if schema_version == 3 else set()),
         "archive expectation",
     )
     source = request["source"]
-    if source.get("visibility") != "private":
+    if schema_version == 3:
+        if (
+            request["schema_version"] != 2
+            or source.get("fetch_method") != "archive"
+            or expectation["source_visibility"] != source["visibility"]
+            or expectation["archive_capacity_class"] != "legacy_10mib"
+            or expectation["archive_capacity_class"] != request["execution_profile"]["archive_capacity_class"]
+        ):
+            raise AuthoritativeReplayError("archive expectation source or capacity differs")
+    elif request["schema_version"] != 1 or source.get("visibility") != "private":
         raise AuthoritativeReplayError("authoritative archive replay requires private source")
     archive = source["archive"]
     expected = {
@@ -111,7 +121,7 @@ def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
     for field, wanted in expected.items():
         if expectation.get(field) != wanted:
             raise AuthoritativeReplayError(f"archive expectation {field} mismatch")
-    if schema_version == 2 and expectation["key_material_type"] != "age-file-key-v1":
+    if schema_version in {2, 3} and expectation["key_material_type"] != "age-file-key-v1":
         raise AuthoritativeReplayError("archive expectation key material type is invalid")
     size = expectation["plaintext_tar_size"]
     digest = expectation["plaintext_tar_sha256"]
