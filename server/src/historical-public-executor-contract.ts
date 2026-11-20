@@ -1,3 +1,5 @@
+import { canonicalReviewedPublicProfile } from "./historical-public-runtime-profile";
+
 const DIGEST = /^[0-9a-f]{64}$/;
 const OCI_DIGEST = /^sha256:[0-9a-f]{64}$/;
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
@@ -29,13 +31,15 @@ export type HistoricalPublicExecutorInput = {
   execution_profile_digest: string;
   measurement_config_digest: string;
   vm_image_digest: string;
+  execution_profile: Record<string, unknown>;
+  execution_profile_canonical: string;
   handoff: Record<string, unknown>;
   source_archive_base64: string;
 };
 
 export type HistoricalPublicExecutorStatusRequest = Omit<
   HistoricalPublicExecutorInput,
-  "handoff" | "source_archive_base64"
+  "handoff" | "source_archive_base64" | "execution_profile" | "execution_profile_canonical"
 >;
 
 export type HistoricalPublicExecutorVerdict = HistoricalPublicExecutorStatusRequest & {
@@ -232,6 +236,7 @@ export async function readHistoricalPublicExecutorRequest(
     "execution_profile_digest",
     "measurement_config_digest",
     "vm_image_digest",
+    "execution_profile",
     "handoff",
     "source_archive_base64",
   ], "historical executor request");
@@ -240,6 +245,9 @@ export async function readHistoricalPublicExecutorRequest(
     reviewedExecutionProfileDigest,
     reviewedMeasurementConfigDigest,
     reviewedVmImageDigest,
+  );
+  const profileCanonical = await canonicalReviewedPublicProfile(
+    value.execution_profile, reviewedExecutionProfileDigest, reviewedVmImageDigest,
   );
   const handoff = object(value.handoff, "historical runner handoff");
   if (
@@ -266,6 +274,8 @@ export async function readHistoricalPublicExecutorRequest(
   }
   return {
     ...identity,
+    execution_profile: value.execution_profile as Record<string, unknown>,
+    execution_profile_canonical: profileCanonical,
     handoff,
     source_archive_base64: value.source_archive_base64 as string,
   };

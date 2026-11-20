@@ -1415,6 +1415,7 @@ def build_executor_request(
         "execution_profile_digest": plan["task"]["execution_profile_digest"],
         "measurement_config_digest": plan["task"]["measurement_config_digest"],
         "vm_image_digest": plan["execution_profile"]["vm_image_digest"],
+        "execution_profile": plan["execution_profile"],
         "handoff": handoff_value,
         "source_archive_base64": base64.b64encode(archive_raw).decode("ascii"),
     }
@@ -1552,6 +1553,7 @@ def validate_executor_verdict(
             "execution_profile_digest",
             "measurement_config_digest",
             "vm_image_digest",
+            "execution_profile",
             "handoff",
             "source_archive_base64",
         },
@@ -1634,6 +1636,7 @@ def validate_executor_request(
             "execution_profile_digest",
             "measurement_config_digest",
             "vm_image_digest",
+            "execution_profile",
             "handoff",
             "source_archive_base64",
         },
@@ -1671,6 +1674,11 @@ def validate_executor_request(
         raise HistoricalReplayControllerError(
             "historical executor request differs from the started attempt"
         )
+    profile = validate_execution_profile(request["execution_profile"])
+    if profile != plan["execution_profile"] or config_digest(
+        "lean-eval-replay-execution-profile-v1", profile
+    ) != request["execution_profile_digest"]:
+        raise HistoricalReplayControllerError("historical executor full execution profile differs")
     handoff = _object(request["handoff"], "historical executor handoff")
     if (
         sha256_bytes(canonical_document_bytes(handoff))
