@@ -16,12 +16,12 @@ export function replaySandbox(
   // container now has to survive upload, unwrap and start rather than just the
   // single start request the five-minute default was sized for. Its filesystem
   // does not survive a sleep, and the assembled archive lives only there.
-  sleepAfter: "5m" | "15m" = "15m",
+  sleepAfter: "5m" | "15m" | null = "15m",
 ): Sandbox {
   return getSandbox(env.REPLAY_SANDBOX, replaySandboxId(runnerNonce), {
     enableDefaultSession: false,
     keepAlive: false,
-    sleepAfter,
+    ...(sleepAfter === null ? {} : { sleepAfter }),
     containerTimeouts: {
       instanceGetTimeoutMS: 120_000,
       portReadyTimeoutMS,

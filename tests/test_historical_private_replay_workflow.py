@@ -27,16 +27,18 @@ OWNERSHIP = (
 ).read_text(encoding="utf-8")
 
 
-def step(name: str, following_name: str) -> str:
-    return WORKFLOW.split(f"- name: {name}", 1)[1].split(
-        f"- name: {following_name}", 1
-    )[0]
+def step(name: str, following_name: str, *, job: str = "start-one") -> str:
+    section = WORKFLOW.split(f"  {job}:", 1)[1]
+    section = section.split("\n  observe-one:", 1)[0].split("\n  replenish-private-lane:", 1)[0]
+    if f"- name: {following_name}" not in section:
+        raise ValueError(f"following step missing from {job}: {following_name}")
+    return section.split(f"- name: {name}", 1)[1].split(f"- name: {following_name}", 1)[0]
 
 
 def executor_status_500_classifier() -> str:
     execute = step(
-        "Invoke and poll the exact blocked-network executor",
-        "Confirm exact sandbox destruction after every attempted start",
+        "Observe the exact blocked-network executor",
+        "Confirm exact sandbox destruction after every attempted start", job="observe-one",
     )
     start = execute.index("          classify_executor_status_500() {")
     end = execute.index("\n          }", start) + len("\n          }")
@@ -245,7 +247,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Append the exact replay.started candidate with CAS",
         )
         start = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn("--max-time 780", start)
@@ -256,8 +258,8 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("body=redacted", start)
         self.assertNotIn('cat "$RUNNER_TEMP/executor-start-response.json"', start)
         self.assertLess(
+            start.index("echo 'accepted=true'"),
             start.index('shred --remove "$RUNNER_TEMP/executor-request.json"'),
-            start.index('if [ "$start_transport" != ok ]'),
         )
         self.assertIn("refresh_readiness", start)
         self.assertIn("prewarm-request.json", start)
@@ -300,7 +302,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("portReadyTimeoutMS = 180_000", sandbox)
         self.assertIn(
-            'replaySandbox(runtime, runnerNonce, 600_000, "15m")',
+            'replaySandbox(runtime, runnerNonce, 600_000, starting ? null : "15m")',
             private_entry,
         )
         self.assertIn('sleepAfter: "15m"', private_entry)
@@ -375,7 +377,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("actions/checkout", replenish)
         self.assertNotIn("needs.replay-one.result == 'success'", replenish)
         self.assertIn(
-            "needs.replay-one.outputs.safe_to_replenish == 'true'", replenish
+            "needs.observe-one.outputs.safe_to_replenish == 'true'", replenish
         )
         self.assertIn(
             "safe_to_replenish: ${{ steps.continuation.outputs.safe }}", replay
@@ -385,8 +387,8 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("!cancelled()", replenish)
         self.assertIn("inputs.remaining_runs > 1", replenish)
         self.assertIn('test "$REMAINING_RUNS" -le 1024', replenish)
-        self.assertIn("needs.replay-one.outputs.preflight_kind != 'busy'", replenish)
-        self.assertIn("needs.replay-one.outputs.plan_kind != 'empty'", replenish)
+        self.assertIn("needs.start-one.outputs.preflight_kind != 'busy'", replenish)
+        self.assertIn("needs.start-one.outputs.plan_kind != 'empty'", replenish)
         self.assertIn("REVIEWED_IMPLEMENTATION_COMMIT", replenish)
         self.assertIn(".merge_base_commit.sha == $base", replenish)
         self.assertIn(".ahead_by == (.commits | length)", replenish)
@@ -439,13 +441,13 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(checked, 25)
 
     def test_private_state_publication_has_contention_headroom_and_jitter(self) -> None:
-        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 4)
+        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 5)
         self.assertNotIn("for cas_attempt in $(seq 1 4)", WORKFLOW)
         self.assertEqual(
             WORKFLOW.count(
                 "sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))"
             ),
-            4,
+            5,
         )
 
     def test_only_exact_protected_main_can_run(self) -> None:
@@ -491,15 +493,16 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(WORKFLOW.count("--expected-head"), 4)
         self.assertGreaterEqual(WORKFLOW.count("state_head=$(scripts/publish_replay_state_event"), 4)
         self.assertGreaterEqual(WORKFLOW.count("git clone --quiet --no-hardlinks state"), 4)
-        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 4)
+        self.assertEqual(WORKFLOW.count("for cas_attempt in $(seq 1 12)"), 5)
         self.assertGreaterEqual(WORKFLOW.count("refresh-prove-running"), 8)
         self.assertNotIn("EXPECTED_STATE_HEAD", WORKFLOW)
         self.assertNotIn("STARTED_STATE_HEAD", WORKFLOW)
 
     def test_static_output_paths_are_not_reused(self) -> None:
-        paths = re.findall(r'--output "\$RUNNER_TEMP/([^"$]+)"', WORKFLOW)
-        duplicates = sorted({path for path in paths if paths.count(path) > 1})
-        self.assertEqual(duplicates, [])
+        for job in WORKFLOW.split("  observe-one:"):
+            paths = re.findall(r'--output "\$RUNNER_TEMP/([^"$]+)"', job)
+            duplicates = sorted({path for path in paths if paths.count(path) > 1})
+            self.assertEqual(duplicates, [])
         for counter in (
             "recovery_proof_index",
             "queued_proof_index",
@@ -518,11 +521,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         )
         started = step(
             "Append the exact replay.started candidate with CAS",
-            "Use the exact one-use KMS unwrap capability",
+            "Prove the exact task is currently running before unwrap",
         )
         terminal = step(
             "Append the exact reported terminal outcome",
-            "Attempt an explicit failure terminal after safe cleanup",
+            "Attempt an explicit failure terminal after safe cleanup", job="observe-one",
         )
         failure = step(
             "Attempt an explicit failure terminal after safe cleanup",
@@ -725,12 +728,17 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertLess(reserve, start)
 
     def test_every_executor_boundary_is_surrounded_by_running_proofs(self) -> None:
-        execute = step(
-            "Invoke and poll the exact blocked-network executor",
+        start = step(
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
-        self.assertIn("prove_running\n          mint_oidc", execute)
-        self.assertIn('if [ "$start_status" != 202 ]', execute)
+        self.assertIn('if [ "$start_status" != 202 ]', start)
+        self.assertIn("prove_running", start)
+        execute = step(
+            "Observe the exact blocked-network executor",
+            "Confirm exact sandbox destruction after every attempted start", job="observe-one",
+        )
+        self.assertIn("prove_running\n            mint_oidc", execute)
         self.assertGreaterEqual(execute.count("prove_running"), 6)
         self.assertRegex(
             execute,
@@ -777,10 +785,10 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn('cat "$RUNNER_TEMP/executor-poll-response.json"', execute)
         cleanup = step(
             "Confirm exact sandbox destruction after every attempted start",
-            "Derive the exact terminal candidate after destruction",
+            "Derive the exact terminal candidate after destruction", job="observe-one",
         )
-        self.assertIn("running-before-cleanup.json", cleanup)
-        self.assertIn("running-after-cleanup.json", cleanup)
+        self.assertIn("prove_cleanup_identity before-token", cleanup)
+        self.assertIn("prove_cleanup_identity after-cleanup", cleanup)
 
     def test_executor_status_500_retry_is_exact_and_bounded(self) -> None:
         command_rpc = b'{"error":"executor_failed","reason":"command_rpc_failed"}'
@@ -834,12 +842,12 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("validate-reuse-failure", WORKFLOW)
         build = step(
             "Build the credential-free exact executor request",
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
         )
         for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
             self.assertIn(f'test -z "${{{name}:-}}"', build)
         execute = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertNotIn("secrets.AWS", execute)
@@ -853,7 +861,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         failure = WORKFLOW.index("Attempt an explicit failure terminal after safe cleanup")
         self.assertLess(cleanup, success)
         self.assertLess(cleanup, failure)
-        self.assertIn("if: always() && steps.started.outputs.appended == 'true'", WORKFLOW)
+        self.assertIn("if: always() && steps.identity.outputs.identity_ready == 'true'", WORKFLOW)
         failure_step = step(
             "Attempt an explicit failure terminal after safe cleanup",
             "Write one redacted source-free terminal artifact",
@@ -886,11 +894,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("test ! -e \"$RUNNER_TEMP/archive-plaintext.tar\"", cleanup)
         build = step(
             "Build the credential-free exact executor request",
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
         )
         self.assertGreaterEqual(build.count("shred --remove"), 2)
         execute = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn(

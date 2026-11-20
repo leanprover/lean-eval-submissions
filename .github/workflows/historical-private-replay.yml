@@ -47,7 +47,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  replay-one:
+  start-one:
     if: >-
       inputs.confirm_historical_private_replay == true &&
       vars.HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED == 'true'
@@ -57,15 +57,20 @@ jobs:
     outputs:
       preflight_kind: ${{ steps.preflight.outputs.kind }}
       plan_kind: ${{ steps.plan.outputs.kind }}
-      safe_to_replenish: ${{ steps.continuation.outputs.safe }}
+      accepted: ${{ steps.execute.outputs.accepted }}
+      accepted_epoch: ${{ steps.execute.outputs.accepted_epoch }}
+      accepted_elapsed: ${{ steps.execute.outputs.accepted_elapsed }}
+      handoff: ${{ steps.handoff.outputs.handoff }}
+      private_destroyed: ${{ steps.private_destroy.outputs.destroyed }}
     environment: replay-production
     env:
       PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}
       PRIVATE_REPLAY_LANE_COUNT: '4'
     runs-on: ubuntu-26.04
-    timeout-minutes: 360
+    timeout-minutes: 120
     steps:
       - name: Require exact protected main and the explicit dark gate
+        timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED }}
@@ -74,6 +79,9 @@ jobs:
           REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
         run: |
           set -euo pipefail
+          echo "REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "REPLAY_JOB_STARTED_MONOTONIC=$(python3 -c 'import time; print(int(time.monotonic()))')" >> "$GITHUB_ENV"
+          test "$GITHUB_RUN_ATTEMPT" = 1
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
@@ -107,7 +115,6 @@ jobs:
           fi
           test "$AWS_REPLAY_ROLE" = \
             arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-production
-          echo "REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -167,6 +174,7 @@ jobs:
           python-version: '3.11.18'
 
       - name: Install exact source-only controller dependencies
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           npm --prefix server ci
@@ -174,6 +182,7 @@ jobs:
             --require-hashes -r requirements-jsonschema-workflow.txt
 
       - name: Validate protected checkouts and identify one running attempt
+        timeout-minutes: 5
         id: preflight
         run: |
           set -euo pipefail
@@ -411,6 +420,7 @@ jobs:
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
       - name: Render and preflight only the exact qualified task executor
+        timeout-minutes: 8
         id: resource_preflight
         if: steps.plan.outputs.kind == 'historical_private_execution'
         env:
@@ -531,6 +541,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Deploy only the preflight-cleared exact task executor
+        timeout-minutes: 20
         id: deploy
         if: steps.resource_preflight.outputs.cleared == 'true'
         env:
@@ -592,6 +603,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Reserve cleanup before State can become running
+        timeout-minutes: 8
         id: reserve
         if: steps.deploy.outputs.deployed == 'true'
         env:
@@ -644,6 +656,7 @@ jobs:
           echo 'reserved=true' >> "$GITHUB_OUTPUT"
 
       - name: Prove exact container readiness without private material
+        timeout-minutes: 20
         id: prewarm
         if: steps.reserve.outputs.reserved == 'true'
         env:
@@ -659,6 +672,8 @@ jobs:
             --output "$RUNNER_TEMP/prewarm-request.json"
           test "$(jq -r '.. | objects | keys[]' "$RUNNER_TEMP/prewarm-request.json" \
             | grep -Eic 'source|archive|key|ciphertext|credential|token|session' || true)" = 0
+          echo "PRIVATE_PREWARM_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "PRIVATE_PREWARM_MONOTONIC=$(python3 -c 'import time; print(int(time.monotonic()))')" >> "$GITHUB_ENV"
           ready=false
           cleanup() {
             unset token
@@ -700,6 +715,7 @@ jobs:
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Append the exact replay.started candidate with CAS
+        timeout-minutes: 10
         id: started
         if: steps.prewarm.outputs.ready == 'true'
         env:
@@ -728,6 +744,7 @@ jobs:
             expected=$(jq -er .expected_head "$candidate")
             jq .event "$candidate" > "$event"
             git clone --quiet --no-hardlinks state "$publish_root"
+            python scripts/historical_private_phase.py admission
             if state_head=$(scripts/publish_replay_state_event \
               --environment production --root "$publish_root" --event "$event" \
               --expected-head "$expected" \
@@ -760,6 +777,7 @@ jobs:
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Prove the exact task is currently running before unwrap
+        timeout-minutes: 3
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
@@ -774,11 +792,13 @@ jobs:
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
 
       - name: Upload and assemble the exact private archive before unwrap
+        timeout-minutes: 15
         if: steps.started.outputs.appended == 'true'
         env:
           EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
         run: |
           set -euo pipefail
+          python scripts/historical_private_phase.py before-post
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
           archive_commit=$(jq -er .task.archive_commit "$RUNNER_TEMP/private-replay-plan.json")
@@ -897,9 +917,11 @@ jobs:
           trap - EXIT
 
       - name: Prepare the exact ten-minute one-use unwrap capability
+        timeout-minutes: 5
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
+          python scripts/historical_private_phase.py before-post
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
           python scripts/historical_private_replay_controller.py prepare-unwrap \
@@ -917,6 +939,7 @@ jobs:
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
 
       - name: Assume only the production replay Invoke role
+        timeout-minutes: 3
         if: steps.started.outputs.appended == 'true'
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
@@ -926,9 +949,11 @@ jobs:
           mask-aws-account-id: true
 
       - name: Consume unwrap once, prove reuse refusal, and drop AWS authority
+        timeout-minutes: 5
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
+          python scripts/historical_private_phase.py before-post
           umask 077
           cleanup() {
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
@@ -978,9 +1003,11 @@ jobs:
           trap - EXIT
 
       - name: Build the credential-free exact executor request
+        timeout-minutes: 5
         if: steps.started.outputs.appended == 'true'
         run: |
           set -euo pipefail
+          python scripts/historical_private_phase.py before-post
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${AWS_SECRET_ACCESS_KEY:-}"
@@ -1023,8 +1050,14 @@ jobs:
           done
           echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
 
-      - name: Invoke and poll the exact blocked-network executor
+      - name: Export only the closed observer binding
+        id: handoff
+        if: steps.started.outputs.appended == 'true'
+        run: python scripts/historical_private_phase.py export
+
+      - name: Start the exact blocked-network executor asynchronously
         id: execute
+        timeout-minutes: 35
         if: steps.started.outputs.appended == 'true'
         env:
           EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
@@ -1035,28 +1068,6 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           running_proof_index=0
-          executor_status_500_count=0
-          executor_status_500_reason=
-          classify_executor_status_500() {
-            local response=$1
-            local sanitized_failure
-            executor_status_500_reason=
-            if ! sanitized_failure=$(python scripts/sanitize_executor_failure.py \
-              "$response"); then
-              return 1
-            fi
-            case "$sanitized_failure" in
-              '{"error":"executor_failed","reason":"command_rpc_failed"}')
-                executor_status_500_reason=command_rpc_failed
-                ;;
-              '{"error":"executor_failed","reason":"sandbox_destroy_failed"}')
-                executor_status_500_reason=sandbox_destroy_failed
-                ;;
-              *) return 1 ;;
-            esac
-            executor_status_500_count=$((executor_status_500_count + 1))
-            test "$executor_status_500_count" -le 2
-          }
           prove_running() {
             running_proof_index=$((running_proof_index + 1))
             proof="$RUNNER_TEMP/current-running-executor-$running_proof_index.json"
@@ -1123,10 +1134,11 @@ jobs:
           mint_oidc
           prove_running
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
+          python scripts/historical_private_phase.py before-post
           touch "$RUNNER_TEMP/executor-start-attempted"
           start_status=000
           start_transport=failed
-          if start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+          if start_status=$(timeout --signal=TERM --kill-after=5s 780s curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 780 \
             --header "Authorization: Bearer $token" \
             --header 'Content-Type: application/json' --request POST \
@@ -1137,7 +1149,6 @@ jobs:
             start_transport=ok
           fi
           unset token
-          shred --remove "$RUNNER_TEMP/executor-request.json"
           if [ "$start_transport" != ok ]; then
             printf 'private executor start transport failed (http_status=%s)\n' \
               "$start_status" >&2
@@ -1169,65 +1180,20 @@ jobs:
             printf 'private executor start response binding invalid (body=redacted)\n' >&2
             exit 1
           fi
-          prove_running
-          deadline=$(( $(date +%s) + 20100 ))
-          job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 20880 ))
-          if [ "$job_deadline" -lt "$deadline" ]; then deadline=$job_deadline; fi
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            sleep 20
-            prove_running
-            mint_oidc
-            prove_running
-            status=000
-            if status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-              --max-time 90 --header "Authorization: Bearer $token" \
-              --header 'Content-Type: application/json' --request POST \
-              --data-binary "@$RUNNER_TEMP/executor-status-request.json" \
-              "$EXECUTOR_URL/api/v1/replay/status" \
-              --output "$RUNNER_TEMP/executor-poll-response.json" \
-              --write-out '%{http_code}'); then
-              unset token
-              prove_running
-              if [ "$status" = 202 ]; then
-                jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
-                  . == ($expected[0] + {status:"running"})
-                ' "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
-                continue
-              fi
-              if [ "$status" = 500 ]; then
-                if classify_executor_status_500 \
-                  "$RUNNER_TEMP/executor-poll-response.json"; then
-                  echo "::notice title=Private executor status retry::reason=$executor_status_500_reason retry=$executor_status_500_count/2"
-                  rm "$RUNNER_TEMP/executor-poll-response.json"
-                  continue
-                fi
-                if [ -n "$executor_status_500_reason" ]; then
-                  echo "::notice title=Private executor status retry exhausted::reason=$executor_status_500_reason failures=$executor_status_500_count"
-                fi
-              fi
-              mv "$RUNNER_TEMP/executor-poll-response.json" \
-                "$RUNNER_TEMP/executor-response.json"
-              test "$status" = 200
-              break
-            fi
-            unset token
-            rm -f "$RUNNER_TEMP/executor-poll-response.json"
-            prove_running
-          done
-          test -f "$RUNNER_TEMP/executor-response.json"
-          prove_running
-          echo verdict_invalid > "$RUNNER_TEMP/failure-reason"
-          python scripts/historical_private_replay_controller.py validate-response \
-            --plan "$RUNNER_TEMP/private-replay-plan.json" \
-            --response "$RUNNER_TEMP/executor-response.json" \
-            --verdict-output "$RUNNER_TEMP/replay-verdict.json"
+          # Transfer cleanup ownership before any further fallible proof.
+          {
+            echo 'accepted=true'
+            echo "accepted_epoch=$(date +%s)"
+            echo "accepted_elapsed=$(python3 -c 'import os,time; print(int(time.monotonic()) - int(os.environ["PRIVATE_PREWARM_MONOTONIC"]))')"
+          } >> "$GITHUB_OUTPUT"
+          shred --remove "$RUNNER_TEMP/executor-request.json"
           cleanup
           trap - EXIT
-          echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Confirm exact sandbox destruction after every attempted start
+        timeout-minutes: 4
         id: cleanup
-        if: always() && steps.started.outputs.appended == 'true'
+        if: always() && steps.execute.outputs.accepted != 'true' && steps.started.outputs.appended == 'true'
         env:
           EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
         run: |
@@ -1285,7 +1251,565 @@ jobs:
             "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           echo 'confirmed=true' >> "$GITHUB_OUTPUT"
 
+      - name: Attempt an explicit failure terminal after safe cleanup
+        timeout-minutes: 4
+        id: failure
+        if: >-
+          always() && steps.execute.outputs.accepted != 'true' && steps.started.outputs.appended == 'true' &&
+          steps.cleanup.outputs.confirmed == 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          sanitized_failure=$(
+            python scripts/sanitize_executor_failure.py \
+              "$RUNNER_TEMP/executor-response.json" || true
+          )
+          if [ -n "$sanitized_failure" ]; then
+            echo "::notice title=Sanitized private executor failure::$sanitized_failure"
+            echo "Sanitized private executor failure: \`$sanitized_failure\`" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+          reason=$(cat "$RUNNER_TEMP/failure-reason")
+          published=false
+          for cas_attempt in $(seq 1 12); do
+            candidate="$RUNNER_TEMP/failure-candidate.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/failure-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/failure-state-publish-$cas_attempt"
+            python scripts/historical_private_replay_controller.py \
+              refresh-prove-running \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --output "$RUNNER_TEMP/running-before-failure.cas-$cas_attempt.json"
+            python scripts/historical_private_replay_controller.py terminal-candidate \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --failure-reason "$reason" --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$candidate"
+            expected=$(jq -er .expected_head "$candidate")
+            jq .event "$candidate" > "$event"
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Record historical private replay failure"); then
+              mv "$candidate" "$RUNNER_TEMP/failure-candidate.json"
+              mv "$event" "$RUNNER_TEMP/failure-event.json"
+              python scripts/historical_private_replay_controller.py \
+                refresh-verify-terminal \
+                --plan "$RUNNER_TEMP/private-replay-plan.json" \
+                --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+                --terminal-candidate "$RUNNER_TEMP/failure-candidate.json" \
+                --state-root state \
+                --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+                --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+                --output "$RUNNER_TEMP/failure-committed-proof.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(jq -er .state_head "$RUNNER_TEMP/failure-committed-proof.json")"
+              published=true
+              break
+            fi
+            if [ "$cas_attempt" -lt 12 ]; then
+              sleep $((1 + (cas_attempt + PRIVATE_REPLAY_LANE_INDEX) % 4))
+            fi
+          done
+          test "$published" = true
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+          echo 'appended=true' >> "$GITHUB_OUTPUT"
+
+      - name: Write one redacted source-free terminal artifact
+        if: >-
+          always() && steps.execute.outputs.accepted != 'true' && steps.failure.outputs.appended == 'true'
+        env:
+          START_EVENT_COMMIT: ${{ steps.started.outputs.state_head }}
+          TERMINAL_APPENDED: 'false'
+          TERMINAL_STATE_HEAD: ''
+          FAILURE_APPENDED: ${{ steps.failure.outputs.appended }}
+          FAILURE_STATE_HEAD: ${{ steps.failure.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib
+          temporary = pathlib.Path(os.environ["RUNNER_TEMP"])
+          plan = json.loads((temporary / "private-replay-plan.json").read_text())
+          terminal_appended = os.environ["TERMINAL_APPENDED"] == "true"
+          failure_appended = os.environ["FAILURE_APPENDED"] == "true"
+          if terminal_appended == failure_appended:
+              raise SystemExit("exactly one terminal append must be committed")
+          if terminal_appended:
+              event_path = temporary / "terminal-event.json"
+              terminal_state_head = os.environ["TERMINAL_STATE_HEAD"]
+          else:
+              event_path = temporary / "failure-event.json"
+              terminal_state_head = os.environ["FAILURE_STATE_HEAD"]
+          if not terminal_state_head:
+              raise SystemExit("committed terminal State head is unavailable")
+          event = json.loads(event_path.read_text())
+          evidence = {
+              "schema_version": 1,
+              "kind": "historical_private_replay_redacted_terminal",
+              "controller_commit": os.environ["GITHUB_SHA"],
+              "replay_task_id": plan["task"]["replay_task_id"],
+              "result_id": plan["task"]["result_id"],
+              "attempt": plan["task"]["attempt"] + 1,
+              "queue_source_digest": plan["state"]["queue_source_digest"],
+              "execution_profile_digest": plan["task"]["execution_profile_digest"],
+              "measurement_config_digest": plan["task"]["measurement_config_digest"],
+              "vm_image_digest": plan["execution_plan"]["request"]["execution_profile"]["vm_image_digest"],
+              "archive_ciphertext_sha256": plan["task"]["archive_ciphertext_sha256"],
+              "started_event_id": json.loads((temporary / "started-event.json").read_text())["event_id"],
+              "terminal_event_id": event["event_id"],
+              "terminal_event_type": event["event_type"],
+              "started_state_commit": os.environ["START_EVENT_COMMIT"],
+              "terminal_state_commit": terminal_state_head,
+              "sandbox_destruction": "confirmed",
+              "network_policy": "blocked",
+              "checker": "nanoda",
+          }
+          pathlib.Path("historical-private-replay-redacted.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: >-
+          always() && steps.execute.outputs.accepted != 'true' && steps.failure.outputs.appended == 'true'
+        with:
+          name: historical-private-replay-start-failure-redacted
+          path: historical-private-replay-redacted.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Delete the terminal task's temporary executor
+        timeout-minutes: 2
+        id: resource_delete
+        if: >-
+          always() && steps.execute.outputs.accepted != 'true' && steps.failure.outputs.appended == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
+          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
+        run: |
+          set -euo pipefail
+          terminal_candidate="$RUNNER_TEMP/terminal-candidate.json"
+          if test ! -f "$terminal_candidate"; then
+            terminal_candidate="$RUNNER_TEMP/failure-candidate.json"
+          fi
+          terminal_proof_index=0
+          prove_terminal() {
+            terminal_proof_index=$((terminal_proof_index + 1))
+            proof="$RUNNER_TEMP/terminal-before-resource-delete-$terminal_proof_index.json"
+            python scripts/historical_private_replay_controller.py \
+              refresh-verify-terminal \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --terminal-candidate "$terminal_candidate" --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --output "$proof"
+          }
+          prove_terminal
+          scripts/delete_historical_private_executor \
+            "$WORKER_NAME" "$APPLICATION_NAME"
+          prove_terminal
+          echo 'deleted=true' >> "$GITHUB_OUTPUT"
+
+      - name: Delete an executor whose State start never committed
+        timeout-minutes: 2
+        if: >-
+          always() && steps.execute.outputs.accepted != 'true' && steps.resource_preflight.outputs.cleared == 'true' &&
+          steps.deploy.outcome != 'skipped' &&
+          steps.started.outputs.appended != 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
+          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
+        run: |
+          set -euo pipefail
+          if test ! -f "$RUNNER_TEMP/executor-deploy-attempted"; then
+            echo 'No executor deployment was attempted; preserving any unowned collision.'
+            exit 0
+          fi
+          scripts/delete_historical_private_executor \
+            "$WORKER_NAME" "$APPLICATION_NAME"
+
+      - name: Destroy all private material, credentials, and temporary refs
+        timeout-minutes: 1
+        id: private_destroy
+        if: always()
+        run: |
+          set -euo pipefail
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN token
+          for path in \
+            "$RUNNER_TEMP/archive.tar.age" \
+            "$RUNNER_TEMP/archive-file-key" \
+            "$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/unwrap-response.json" \
+            "$RUNNER_TEMP/unwrap-metadata.json" \
+            "$RUNNER_TEMP/executor-request.json"; do
+            if [ -f "$path" ]; then shred --remove "$path"; fi
+          done
+          if [ -d state ]; then
+            git -C state config --unset-all core.sshCommand || true
+          fi
+          for path in \
+            "$RUNNER_TEMP/historical-private-state-reader" \
+            "$RUNNER_TEMP/historical-private-state-known-hosts"; do
+            if [ -f "$path" ]; then shred --remove "$path"; fi
+          done
+          rm -rf audit state "$RUNNER_TEMP/state-views" \
+            "$RUNNER_TEMP/archive-parts" \
+            "$RUNNER_TEMP"/started-state-publish-* \
+            "$RUNNER_TEMP"/terminal-state-publish-* \
+            "$RUNNER_TEMP"/failure-state-publish-* \
+            "$RUNNER_TEMP"/recovery-state-publish-*
+          rm -f "$RUNNER_TEMP"/*oidc*.json \
+            "$RUNNER_TEMP"/*cleanup*.json \
+            "$RUNNER_TEMP"/*prewarm*.json \
+            "$RUNNER_TEMP"/*reservation*.json \
+            "$RUNNER_TEMP"/*executor*.json \
+            "$RUNNER_TEMP"/*running*.json \
+            "$RUNNER_TEMP"/*event.json \
+            "$RUNNER_TEMP"/*candidate.json \
+            "$RUNNER_TEMP"/*.cas-*.json \
+            "$RUNNER_TEMP"/private-replay-plan.json \
+            "$RUNNER_TEMP"/private-replay-plan.*.json \
+            "$RUNNER_TEMP"/refreshed-state*.json \
+            "$RUNNER_TEMP"/recovery-current-*.json \
+            "$RUNNER_TEMP"/terminal-before-resource-delete-*.json \
+            "$RUNNER_TEMP"/replay-verdict.json \
+            "$RUNNER_TEMP"/failure-reason \
+            "$RUNNER_TEMP"/executor-deploy-attempted \
+            "$RUNNER_TEMP"/verified-orphan-collision \
+            "$RUNNER_TEMP"/historical-private-wrangler.json \
+            "$RUNNER_TEMP"/worker-preflight.json \
+            "$RUNNER_TEMP"/worker-settings.json \
+            "$RUNNER_TEMP"/worker-deployments.json \
+            "$RUNNER_TEMP"/worker-version.json \
+            "$RUNNER_TEMP"/orphan-health.json \
+            "$RUNNER_TEMP"/container-applications-before.json \
+            historical-private-replay-redacted.json
+          test ! -e "$RUNNER_TEMP/archive-plaintext.tar"
+          echo 'destroyed=true' >> "$GITHUB_OUTPUT"
+
+
+  observe-one:
+    needs: start-one
+    if: >-
+      always() && !cancelled() && needs.start-one.outputs.accepted == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 360
+    environment: replay-production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PRIVATE_REPLAY_LANE_INDEX: ${{ inputs.private_lane_index }}
+      PRIVATE_REPLAY_LANE_COUNT: '4'
+    outputs:
+      safe_to_replenish: ${{ steps.continuation.outputs.safe }}
+    steps:
+      - name: Require the same first-attempt protected workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "REPLAY_JOB_STARTED_MONOTONIC=$(python3 -c 'import time; print(int(time.monotonic()))')" >> "$GITHUB_ENV"
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .protected)" = true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-submissions
+          ref: main
+          path: metadata
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: main
+          path: state
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - name: Install one temporary read-only State refresh identity
+        env:
+          STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          state_key="$RUNNER_TEMP/historical-private-state-reader"
+          state_hosts="$RUNNER_TEMP/historical-private-state-known-hosts"
+          test -n "$STATE_READ_KEY"
+          printf '%s\n' "$STATE_READ_KEY" > "$state_key"
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$state_hosts"
+          chmod 0600 "$state_key" "$state_hosts"
+          ssh_command="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$state_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+          git -C state config core.sshCommand "$ssh_command"
+          unset STATE_READ_KEY
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.18'
+
+      - name: Install exact source-only controller dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Prove the exact admitted cleanup identity and Worker health
+        id: identity
+        timeout-minutes: 5
+        env:
+          PRIVATE_HANDOFF: ${{ needs.start-one.outputs.handoff }}
+        run: |
+          set -euo pipefail
+          umask 077
+          git -C metadata merge-base --is-ancestor "$GITHUB_SHA" HEAD
+          python scripts/historical_private_replay_controller.py refresh-state \
+            --state-root state --output "$RUNNER_TEMP/identity-state.json"
+          python scripts/historical_private_phase.py identity --state-root state \
+            --repository-root metadata
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          filter: blob:limit=12m
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !**/*.tar.age.parts/
+          ref: main
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install exact disposable executor cleanup dependencies
+        run: npm --prefix server ci
+
+      - name: Reconstruct admitted State history without source or AWS
+        id: started
+        env:
+          PRIVATE_HANDOFF: ${{ needs.start-one.outputs.handoff }}
+          PRIVATE_ACCEPTED_EPOCH: ${{ needs.start-one.outputs.accepted_epoch }}
+          PRIVATE_ACCEPTED_ELAPSED: ${{ needs.start-one.outputs.accepted_elapsed }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+          git -C metadata merge-base --is-ancestor "$GITHUB_SHA" HEAD
+          python scripts/historical_private_replay_controller.py refresh-state \
+            --state-root state --output "$RUNNER_TEMP/observer-state.json"
+          python scripts/historical_private_phase.py resume --state-root state \
+            --repository-root metadata --audit-root audit
+          touch "$RUNNER_TEMP/executor-start-attempted"
+
+      - name: Observe the exact blocked-network executor
+        id: execute
+        if: steps.started.outputs.appended == 'true'
+        timeout-minutes: ${{ fromJSON(steps.started.outputs.poll_timeout_minutes || '1') }}
+        env:
+          EXECUTOR_URL: ${{ steps.identity.outputs.url }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          echo runner_lost > "$RUNNER_TEMP/failure-reason"
+          running_proof_index=0
+          executor_status_500_count=0
+          executor_status_500_reason=
+          classify_executor_status_500() {
+            local response=$1
+            local sanitized_failure
+            executor_status_500_reason=
+            if ! sanitized_failure=$(python scripts/sanitize_executor_failure.py \
+              "$response"); then
+              return 1
+            fi
+            case "$sanitized_failure" in
+              '{"error":"executor_failed","reason":"command_rpc_failed"}')
+                executor_status_500_reason=command_rpc_failed
+                ;;
+              '{"error":"executor_failed","reason":"sandbox_destroy_failed"}')
+                executor_status_500_reason=sandbox_destroy_failed
+                ;;
+              *) return 1 ;;
+            esac
+            executor_status_500_count=$((executor_status_500_count + 1))
+            test "$executor_status_500_count" -le 2
+          }
+          prove_running() {
+            running_proof_index=$((running_proof_index + 1))
+            proof="$RUNNER_TEMP/current-running-executor-$running_proof_index.json"
+            python scripts/historical_private_replay_controller.py refresh-prove-running \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --state-root state \
+              --lane-index "$PRIVATE_REPLAY_LANE_INDEX" \
+              --lane-count "$PRIVATE_REPLAY_LANE_COUNT" \
+              --output "$proof"
+            test "$(jq -er .started_event_id "$proof")" = \
+              "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
+          }
+          mint_oidc() {
+            rm -f "$RUNNER_TEMP/executor-oidc.json"
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
+              --output "$RUNNER_TEMP/executor-oidc.json"
+            token=$(jq -er .value "$RUNNER_TEMP/executor-oidc.json")
+            rm -f "$RUNNER_TEMP/executor-oidc.json"
+          }
+          cleanup() {
+            unset token
+            rm -f "$RUNNER_TEMP/executor-oidc.json" \
+              "$RUNNER_TEMP/readiness-refresh-response.json"
+          }
+          trap cleanup EXIT
+          prove_running
+          deadline=$PRIVATE_POLL_DEADLINE
+          job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 21600 - 1260 ))
+          test "$deadline" -le "$job_deadline"
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 20
+            prove_running
+            mint_oidc
+            prove_running
+            status=000
+            if status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 90 --header "Authorization: Bearer $token" \
+              --header 'Content-Type: application/json' --request POST \
+              --data-binary "@$RUNNER_TEMP/executor-status-request.json" \
+              "$EXECUTOR_URL/api/v1/replay/status" \
+              --output "$RUNNER_TEMP/executor-poll-response.json" \
+              --write-out '%{http_code}'); then
+              unset token
+              prove_running
+              if [ "$status" = 202 ]; then
+                jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
+                  . == ($expected[0] + {status:"running"})
+                ' "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
+                continue
+              fi
+              if [ "$status" = 500 ]; then
+                if classify_executor_status_500 \
+                  "$RUNNER_TEMP/executor-poll-response.json"; then
+                  echo "::notice title=Private executor status retry::reason=$executor_status_500_reason retry=$executor_status_500_count/2"
+                  rm "$RUNNER_TEMP/executor-poll-response.json"
+                  continue
+                fi
+                if [ -n "$executor_status_500_reason" ]; then
+                  echo "::notice title=Private executor status retry exhausted::reason=$executor_status_500_reason failures=$executor_status_500_count"
+                fi
+              fi
+              mv "$RUNNER_TEMP/executor-poll-response.json" \
+                "$RUNNER_TEMP/executor-response.json"
+              test "$status" = 200
+              break
+            fi
+            unset token
+            rm -f "$RUNNER_TEMP/executor-poll-response.json"
+            prove_running
+          done
+          test -f "$RUNNER_TEMP/executor-response.json"
+          prove_running
+          echo verdict_invalid > "$RUNNER_TEMP/failure-reason"
+          python scripts/historical_private_replay_controller.py validate-response \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" \
+            --response "$RUNNER_TEMP/executor-response.json" \
+            --verdict-output "$RUNNER_TEMP/replay-verdict.json"
+          cleanup
+          trap - EXIT
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Confirm exact sandbox destruction after every attempted start
+        timeout-minutes: 6
+        id: cleanup
+        if: always() && steps.identity.outputs.identity_ready == 'true'
+        env:
+          EXECUTOR_URL: ${{ steps.identity.outputs.url }}
+          PRIVATE_HANDOFF: ${{ needs.start-one.outputs.handoff }}
+        run: |
+          # Hard cap includes proofs, OIDC, retries and final readback. Never
+          # allow multiple 260s calls to consume an unbounded cleanup tail.
+          timeout --signal=TERM --kill-after=5s 335s bash <<'PRIVATE_CLEANUP'
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${STATE_WRITE_KEY:-}"
+          # This proof needs no Audit/full execution plan. A refused resume may
+          # clean only this exact admitted identity, never a newer lane task.
+          prove_cleanup_identity() {
+            python scripts/historical_private_replay_controller.py refresh-state \
+              --state-root state --output "$RUNNER_TEMP/cleanup-state-$1.json"
+            python scripts/historical_private_phase.py identity --state-root state \
+              --repository-root metadata
+          }
+          prove_cleanup_identity before-token
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
+            --output "$RUNNER_TEMP/cleanup-oidc.json"
+          token=$(jq -er .value "$RUNNER_TEMP/cleanup-oidc.json")
+          trap 'unset token; rm -f "$RUNNER_TEMP/cleanup-oidc.json"' EXIT
+          prove_cleanup_identity before-cleanup
+          status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 260 --retry 2 --retry-all-errors --retry-delay 2 \
+            --retry-max-time 310 --header "Authorization: Bearer $token" \
+            --header 'Content-Type: application/json' --request POST \
+            --data-binary "@$RUNNER_TEMP/cleanup-request.json" \
+            "$EXECUTOR_URL/api/v1/historical-private-replay/cleanup" \
+            --output "$RUNNER_TEMP/cleanup-confirmation.json" --write-out '%{http_code}')
+          unset token
+          rm -f "$RUNNER_TEMP/cleanup-oidc.json"
+          trap - EXIT
+          test "$status" = 200
+          jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
+            . == ($expected[0] + {destruction:"confirmed"})
+          ' "$RUNNER_TEMP/cleanup-confirmation.json" >/dev/null
+          prove_cleanup_identity after-cleanup
+          echo 'confirmed=true' >> "$GITHUB_OUTPUT"
+          PRIVATE_CLEANUP
+
       - name: Derive the exact terminal candidate after destruction
+        timeout-minutes: 1
         id: terminal_candidate
         if: steps.execute.outputs.ready == 'true' && steps.cleanup.outputs.confirmed == 'true'
         run: |
@@ -1303,6 +1827,7 @@ jobs:
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Append the exact reported terminal outcome
+        timeout-minutes: 3
         id: terminal
         if: steps.terminal_candidate.outputs.ready == 'true'
         env:
@@ -1362,6 +1887,7 @@ jobs:
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Attempt an explicit failure terminal after safe cleanup
+        timeout-minutes: 4
         id: failure
         if: >-
           always() && steps.started.outputs.appended == 'true' &&
@@ -1434,6 +1960,7 @@ jobs:
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Write one redacted source-free terminal artifact
+        timeout-minutes: 1
         if: >-
           always() && (steps.terminal.outputs.appended == 'true' ||
           steps.failure.outputs.appended == 'true')
@@ -1489,6 +2016,7 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        timeout-minutes: 1
         if: >-
           always() && (steps.terminal.outputs.appended == 'true' ||
           steps.failure.outputs.appended == 'true')
@@ -1499,6 +2027,7 @@ jobs:
           retention-days: 30
 
       - name: Delete the terminal task's temporary executor
+        timeout-minutes: 2
         id: resource_delete
         if: >-
           always() && (steps.terminal.outputs.appended == 'true' ||
@@ -1506,8 +2035,8 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
-          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
+          WORKER_NAME: ${{ steps.identity.outputs.worker }}
+          APPLICATION_NAME: ${{ steps.identity.outputs.application }}
         run: |
           set -euo pipefail
           terminal_candidate="$RUNNER_TEMP/terminal-candidate.json"
@@ -1533,26 +2062,8 @@ jobs:
           prove_terminal
           echo 'deleted=true' >> "$GITHUB_OUTPUT"
 
-      - name: Delete an executor whose State start never committed
-        if: >-
-          always() && steps.resource_preflight.outputs.cleared == 'true' &&
-          steps.deploy.outcome != 'skipped' &&
-          steps.started.outputs.appended != 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
-          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
-        run: |
-          set -euo pipefail
-          if test ! -f "$RUNNER_TEMP/executor-deploy-attempted"; then
-            echo 'No executor deployment was attempted; preserving any unowned collision.'
-            exit 0
-          fi
-          scripts/delete_historical_private_executor \
-            "$WORKER_NAME" "$APPLICATION_NAME"
-
       - name: Destroy all private material, credentials, and temporary refs
+        timeout-minutes: 1
         id: private_destroy
         if: always()
         run: |
@@ -1611,9 +2122,11 @@ jobs:
           echo 'destroyed=true' >> "$GITHUB_OUTPUT"
 
       - name: Authorize a successor only after durable terminal cleanup
+        timeout-minutes: 1
         id: continuation
         if: always()
         env:
+          START_PRIVATE_DESTROYED: ${{ needs.start-one.outputs.private_destroyed }}
           TERMINAL_APPENDED: ${{ steps.terminal.outputs.appended }}
           FAILURE_APPENDED: ${{ steps.failure.outputs.appended }}
           RESOURCE_DELETED: ${{ steps.resource_delete.outputs.deleted }}
@@ -1621,8 +2134,8 @@ jobs:
         run: |
           set -euo pipefail
           safe=false
-          if { [ "$TERMINAL_APPENDED" = true ] && [ "$FAILURE_APPENDED" != true ]; } || \
-             { [ "$TERMINAL_APPENDED" != true ] && [ "$FAILURE_APPENDED" = true ]; }; then
+          test "${START_PRIVATE_DESTROYED:-}" = true || exit 0
+          if [ "$TERMINAL_APPENDED" = true ] && [ "$FAILURE_APPENDED" != true ]; then
             if [ "$RESOURCE_DELETED" = true ] && [ "$PRIVATE_DESTROYED" = true ]; then
               safe=true
             fi
@@ -1630,14 +2143,15 @@ jobs:
           echo "safe=$safe" >> "$GITHUB_OUTPUT"
 
   replenish-private-lane:
-    needs: replay-one
+    needs: [start-one, observe-one]
     if: >-
       ${{
         always() && !cancelled() &&
-        needs.replay-one.outputs.safe_to_replenish == 'true' &&
+        needs.start-one.result == 'success' && needs.observe-one.result == 'success' &&
+        needs.observe-one.outputs.safe_to_replenish == 'true' &&
         inputs.replenish_lane == true && inputs.remaining_runs > 1 &&
-        needs.replay-one.outputs.preflight_kind != 'busy' &&
-        needs.replay-one.outputs.plan_kind != 'empty'
+        needs.start-one.outputs.preflight_kind != 'busy' &&
+        needs.start-one.outputs.plan_kind != 'empty'
       }}
     permissions:
       actions: write

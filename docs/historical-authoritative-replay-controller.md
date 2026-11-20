@@ -52,6 +52,13 @@ execution attempts: the initial execution and at most three retries. Attempt
 four is terminal, and an exhausted task remains in State without starving a
 later eligible task.
 
+Private historical execution uses separate admitted-start and source-free
+observation jobs under the same lane lock. The observer receives a fresh
+six-hour budget while rederiving the original task and event from protected
+State. Failed preparation/start stops the lane. See
+[private phase boundaries and runtime accounting](historical-private-phase-split.md)
+for the finite handoff lifetime, cleanup ownership and activation gates.
+
 ## Five bounded production lanes
 
 `.github/workflows/historical-authoritative-replay.yml` is manual, serialized
