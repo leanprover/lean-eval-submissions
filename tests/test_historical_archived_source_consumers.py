@@ -193,6 +193,20 @@ class ArchivedHistoricalConsumerTests(unittest.TestCase):
         with self.assertRaises(HistoricalReplayControllerError):
             _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
 
+    def test_unused_later_qualification_does_not_replace_enqueue_binding(self):
+        events = json.loads((pathlib.Path(__file__).parent / "fixtures/historical-public-archive-recovery-v2.json").read_text())
+        unused = copy.deepcopy(events[2])
+        unused.update(event_id="0198abcd-0000-7000-8000-000000000017", occurred_at="2026-10-20T06:08:23.000Z")
+        unused["payload"]["execution_profile_digest"] = "f" * 64
+        unused["payload"]["qualification_path"] = "evidence/public-replay/profiles/" + "f" * 64 + ".json"
+        events.insert(4, unused)
+        task_id = events[-1]["subject_id"]
+        states = _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
+        self.assertEqual(("queued", 0), (states[task_id]["status"], states[task_id]["attempt"]))
+        events[5]["payload"]["superseded_qualification_event_id"] = unused["event_id"]
+        with self.assertRaises(HistoricalReplayControllerError):
+            _historical_replay_states(events, {events[1]["subject_id"]}, authority_event_type=ARCHIVE_AUTHORITY)
+
     def test_recovered_source_cannot_use_an_old_profile_withdrawal(self):
         events = recovered_history()
         withdrawn = copy.deepcopy(events[4])

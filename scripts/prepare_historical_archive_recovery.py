@@ -8,6 +8,7 @@ still requires independent review, one atomic State Git commit and promotion.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import pathlib
 import subprocess
@@ -76,7 +77,10 @@ def recovery_events(originals: dict[str, dict[str, Any]], tasks: list[dict[str, 
     prior_id = max(task["event_id"] for task in originals.values())
     def event(kind, subject, cause, payload, cause_time):
         nonlocal prior_time, prior_id
-        instant = public._event_time(prior_time, cause_time)
+        instant = max(
+            public._event_time(prior_time, cause_time),
+            public._parse_timestamp(prior_time, "previous recovery event time") + dt.timedelta(milliseconds=1),
+        )
         identifier = public._causal_uuid7(instant, max(prior_id, cause))
         prior_time = instant.isoformat(timespec="milliseconds").replace("+00:00", "Z")
         prior_id = identifier
@@ -120,6 +124,52 @@ def recovery_events(originals: dict[str, dict[str, Any]], tasks: list[dict[str, 
     return events
 
 
+def _require_shared_artifacts(repository: pathlib.Path, tasks: list[dict[str, Any]]) -> None:
+    for prefix, root_field, count_field, identity_field, task_field in (
+        ("reconfiguration", "entries", "task_count", "replay_task_id", "replay_task_id"),
+        ("crosswalk", "entries", "result_count", "result_id", "result_id"),
+    ):
+        locators = {tuple(task[prefix + "_" + field] for field in ("repository", "commit", "path", "sha256")) for task in tasks}
+        if len(locators) != 1:
+            raise public.HistoricalReplayControllerError("finite recovery mixes reviewed artifact locators")
+        _, commit, path, digest = locators.pop()
+        raw = public._git_blob(repository, commit, path)
+        value = public._parse_canonical(raw, "finite recovery shared artifact")
+        if public.sha256_bytes(raw) != digest or value[count_field] != len(tasks) or {entry[identity_field] for entry in value[root_field]} != {task[task_field] for task in tasks}:
+            raise public.HistoricalReplayControllerError("finite recovery artifact selection differs")
+
+
+def _require_profile_lock_preserved(original: dict[str, Any], replacement: dict[str, Any]) -> None:
+    changed = {"schema_version", "vm_image_digest", "archive_capacity_class"}
+    if (
+        {key: value for key, value in original["execution_profile"].items() if key not in changed}
+        != {key: value for key, value in replacement["execution_profile"].items() if key not in changed}
+        or original["measurement_config"] != replacement["measurement_config"]
+    ):
+        raise public.HistoricalReplayControllerError("archive recovery changes original component/runtime/measurement locks")
+
+
+def _validate_prospective_consumers(repository: pathlib.Path, audit: pathlib.Path,
+                                    output: pathlib.Path, all_events: list[dict[str, Any]],
+                                    tasks: list[dict[str, Any]]) -> None:
+    private_queue, _ = public._load_state_canonical(output / "historical-private-replay-queue.json", "prospective archive queue")
+    public_queue, _ = public._load_state_canonical(output / "historical-public-replay-queue.json", "prospective public queue")
+    archive.validate_queue(private_queue)
+    public.validate_queue(public_queue)
+    authorities = {event["subject_id"] for event in all_events if event["event_type"] in {"historical_result.replay_authorized", archive.AUTHORITY_EVENT_TYPE}}
+    public._historical_replay_states(all_events, authorities)
+    public._historical_replay_states(all_events, authorities, authority_event_type=archive.AUTHORITY_EVENT_TYPE)
+    identifiers = {task["replay_task_id"] for task in tasks}
+    materialized = [task for task in private_queue["tasks"] if task["replay_task_id"] in identifiers]
+    if {task["replay_task_id"] for task in materialized} != identifiers or any(task["replay_task_id"] in identifiers for task in public_queue["tasks"]):
+        raise public.HistoricalReplayControllerError("prospective recovery did not move the exact task selection once")
+    for task in materialized:
+        _, _, profile, _, _, _ = archive._load_reviewed_input_context(repository, task)
+        entry = archive.load_reviewed_crosswalk_entry(repository, audit, task)
+        archive.load_archive_inputs(audit, task, entry)
+        archive._execution_plan(task, profile)
+
+
 def prepare_event_candidates(repository: pathlib.Path, audit: pathlib.Path, state: pathlib.Path,
                              tasks: list[dict[str, Any]], selection_commit: str, now: str) -> dict[str, Any]:
     queue, _, head = archive.load_state_queue(state)
@@ -138,6 +188,7 @@ def prepare_event_candidates(repository: pathlib.Path, audit: pathlib.Path, stat
     expected = {binding["original_authority_task"]["result_id"]: binding for binding in bindings}
     if len(tasks) != 5 or len(expected) != 5 or {task["result_id"] for task in tasks} != set(expected) or len({task["archive_submission_id"] for task in tasks}) != 4:
         raise public.HistoricalReplayControllerError("recovery differs from the reviewed five-Result/four-archive selection")
+    _require_shared_artifacts(repository, tasks)
     for task in tasks:
         bound = expected[task["result_id"]]
         if task["archive_submission_id"] != bound["archive_submission_id"] or any(task[key] != value for key, value in bound["original_authority_task"].items()):
@@ -151,15 +202,30 @@ def prepare_event_candidates(repository: pathlib.Path, audit: pathlib.Path, stat
         archive.load_archive_inputs(audit, task, crosswalk_entry)
     with tempfile.TemporaryDirectory() as directory:
         output = pathlib.Path(directory) / "materialized"
-        subprocess.run([sys.executable, str(state / "scripts/state.py"), "--root", str(state), "materialize", "--output", str(output)], check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([sys.executable, str(state / "scripts/state.py"), "--root", str(state), "materialize", "--output", str(output)], check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
         original_queue, _ = public._load_state_canonical(output / "historical-public-replay-queue.json", "protected original public queue")
         public.validate_queue(original_queue)
     originals = {task["replay_task_id"]: task for task in original_queue["tasks"]}
+    for task in tasks:
+        original = originals.get(task["replay_task_id"])
+        if original is None:
+            raise public.HistoricalReplayControllerError("original public task is no longer queueable")
+        original_raw = public._git_blob(repository, original["qualification_commit"], original["qualification_path"])
+        if public.sha256_bytes(original_raw) != original["qualification_sha256"]:
+            raise public.HistoricalReplayControllerError("original qualification Git bytes differ")
+        original_profile = public.validate_qualification(public._parse_canonical(original_raw, "superseded public qualification"), original_raw)
+        _, _, replacement, _, _, _ = archive._load_reviewed_input_context(repository, task)
+        _require_profile_lock_preserved(original_profile, replacement)
     candidates = recovery_events(originals, tasks, now)
     # Validate the entire prospective canonical graph using the exact reviewed
     # State program. Git atomicity is proved after the reviewed candidate commit.
-    probe = "import json,pathlib,sys;sys.path.insert(0,str(pathlib.Path(sys.argv[1])/'scripts'));from validate_state import validate_event_data,validate_semantics,validate_source_recovery_closures;v=json.load(sys.stdin);[validate_event_data(e) for e in v];validate_semantics(v,sys.argv[2]);validate_source_recovery_closures(v)"
-    subprocess.run([sys.executable, "-c", probe, str(state), environment], input=json.dumps(all_events + candidates).encode(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    probe = "import json,pathlib,sys;sys.path.insert(0,str(pathlib.Path(sys.argv[1])/'scripts'));from validate_state import validate_event_data,validate_semantics,validate_source_recovery_closures;from materialize_state import materialize,write_views;v=json.load(sys.stdin);[validate_event_data(e) for e in v];validate_semantics(v,sys.argv[2]);validate_source_recovery_closures(v);write_views(materialize(sys.argv[2],v),pathlib.Path(sys.argv[3]),False)"
+    with tempfile.TemporaryDirectory() as directory:
+        output = pathlib.Path(directory) / "prospective"
+        subprocess.run([sys.executable, "-c", probe, str(state), environment, str(output)], input=json.dumps(all_events + candidates).encode(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+        _validate_prospective_consumers(repository, audit, output, all_events + candidates, tasks)
+    if archive._verify_checkout(state, archive._state_repository(environment), minimum_commit=archive.STATE_MINIMUM_COMMITS[environment]) != head:
+        raise public.HistoricalReplayControllerError("protected State changed during recovery preparation")
     return {"schema_version": 1, "kind": "historical_public_archive_recovery_candidates", "state_repository": archive._state_repository(environment), "expected_head": head, "events": candidates}
 
 

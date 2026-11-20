@@ -1892,7 +1892,7 @@ def _historical_replay_states(
     states: dict[str, dict[str, Any]] = {}
     recoveries: dict[str, dict[str, Any]] = {}
     recovered_qualifications: dict[str, dict[str, Any]] = {}
-    current_qualifications: dict[tuple[str, str, str], str] = {}
+    current_qualifications: dict[tuple[str, str], str] = {}
     terminal_types = {
         "replay.accepted",
         "replay.rejected",
@@ -1932,7 +1932,7 @@ def _historical_replay_states(
             "historical_archive_result.replay_profile_qualified",
         }:
             payload = _object(payload_value, "historical replay qualification payload")
-            key = (subject, payload.get("measurement_config_digest"), payload.get("checker"))
+            key = (subject, payload.get("execution_profile_digest"))
             current_qualifications[key] = event["event_id"]
             continue
         if kind in {
@@ -1960,7 +1960,7 @@ def _historical_replay_states(
                     or subject != result_id
                     or payload.get("original_authority_event_id") != origin["event_id"]
                     or payload.get("superseded_enqueue_event_id") != cause["event_id"]
-                    or payload.get("superseded_qualification_event_id") != current_qualifications.get((result_id, payload.get("measurement_config_digest"), payload.get("checker")))
+                    or payload.get("superseded_qualification_event_id") != current_qualifications.get((result_id, cause["payload"].get("execution_profile_digest")))
                     or payload.get("reason_code") != "accepted_source_archive_recovery"
                     or payload.get("source_visibility") != "public"
                     or any(payload.get(field) != cause["payload"].get(field) for field in ("checker", "measurement_config_digest"))

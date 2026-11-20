@@ -70,7 +70,9 @@ negative probes and the official archive entrypoint offline probe. It does not
 create a Cloudflare executor. Runtime validation remains
 `deferred_to_first_historical_replay`: each changed image needs its first real
 State-admitted canary before its chain proceeds. Failure stops that image's
-chain for diagnosis; it does not imply permanent source loss.
+chain for diagnosis; it does not imply permanent source loss. Non-retryable
+failures remain terminal bounded-policy outcomes for that task. This contract
+does not reconfigure a recovered task or reset its attempt counter.
 
 No image was built or published by this source preparation. The workflow's
 publication confirmation and immutable dispatch/protected-main guards remain
