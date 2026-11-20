@@ -27,24 +27,18 @@ OWNERSHIP = (
 ).read_text(encoding="utf-8")
 
 
-def step(name: str, following_name: str) -> str:
-    if name == "Invoke and poll the exact blocked-network executor":
-        start = WORKFLOW.split("- name: Start the exact blocked-network executor asynchronously", 1)[1].split(
-            "- name: Confirm exact sandbox destruction after every attempted start", 1)[0]
-        observe = WORKFLOW.split("- name: Observe the exact blocked-network executor", 1)[1].split(
-            "- name: Confirm exact sandbox destruction after every attempted start", 1)[0]
-        return start + observe
-    if following_name == "Invoke and poll the exact blocked-network executor":
-        following_name = "Export only the closed observer binding"
-    return WORKFLOW.split(f"- name: {name}", 1)[1].split(
-        f"- name: {following_name}", 1
-    )[0]
+def step(name: str, following_name: str, *, job: str = "start-one") -> str:
+    section = WORKFLOW.split(f"  {job}:", 1)[1]
+    section = section.split("\n  observe-one:", 1)[0].split("\n  replenish-private-lane:", 1)[0]
+    if f"- name: {following_name}" not in section:
+        raise ValueError(f"following step missing from {job}: {following_name}")
+    return section.split(f"- name: {name}", 1)[1].split(f"- name: {following_name}", 1)[0]
 
 
 def executor_status_500_classifier() -> str:
     execute = step(
-        "Invoke and poll the exact blocked-network executor",
-        "Confirm exact sandbox destruction after every attempted start",
+        "Observe the exact blocked-network executor",
+        "Confirm exact sandbox destruction after every attempted start", job="observe-one",
     )
     start = execute.index("          classify_executor_status_500() {")
     end = execute.index("\n          }", start) + len("\n          }")
@@ -253,7 +247,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Append the exact replay.started candidate with CAS",
         )
         start = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn("--max-time 780", start)
@@ -527,11 +521,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         )
         started = step(
             "Append the exact replay.started candidate with CAS",
-            "Use the exact one-use KMS unwrap capability",
+            "Prove the exact task is currently running before unwrap",
         )
         terminal = step(
             "Append the exact reported terminal outcome",
-            "Attempt an explicit failure terminal after safe cleanup",
+            "Attempt an explicit failure terminal after safe cleanup", job="observe-one",
         )
         failure = step(
             "Attempt an explicit failure terminal after safe cleanup",
@@ -734,12 +728,17 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertLess(reserve, start)
 
     def test_every_executor_boundary_is_surrounded_by_running_proofs(self) -> None:
-        execute = step(
-            "Invoke and poll the exact blocked-network executor",
+        start = step(
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
-        self.assertIn("prove_running\n          mint_oidc", execute)
-        self.assertIn('if [ "$start_status" != 202 ]', execute)
+        self.assertIn('if [ "$start_status" != 202 ]', start)
+        self.assertIn("prove_running", start)
+        execute = step(
+            "Observe the exact blocked-network executor",
+            "Confirm exact sandbox destruction after every attempted start", job="observe-one",
+        )
+        self.assertIn("prove_running\n            mint_oidc", execute)
         self.assertGreaterEqual(execute.count("prove_running"), 6)
         self.assertRegex(
             execute,
@@ -786,10 +785,10 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn('cat "$RUNNER_TEMP/executor-poll-response.json"', execute)
         cleanup = step(
             "Confirm exact sandbox destruction after every attempted start",
-            "Derive the exact terminal candidate after destruction",
+            "Derive the exact terminal candidate after destruction", job="observe-one",
         )
-        self.assertIn("running-before-cleanup.json", cleanup)
-        self.assertIn("running-after-cleanup.json", cleanup)
+        self.assertIn("prove_cleanup_identity before-token", cleanup)
+        self.assertIn("prove_cleanup_identity after-cleanup", cleanup)
 
     def test_executor_status_500_retry_is_exact_and_bounded(self) -> None:
         command_rpc = b'{"error":"executor_failed","reason":"command_rpc_failed"}'
@@ -843,12 +842,12 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("validate-reuse-failure", WORKFLOW)
         build = step(
             "Build the credential-free exact executor request",
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
         )
         for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
             self.assertIn(f'test -z "${{{name}:-}}"', build)
         execute = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertNotIn("secrets.AWS", execute)
@@ -862,7 +861,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         failure = WORKFLOW.index("Attempt an explicit failure terminal after safe cleanup")
         self.assertLess(cleanup, success)
         self.assertLess(cleanup, failure)
-        self.assertIn("if: always() && steps.started.outputs.appended == 'true'", WORKFLOW)
+        self.assertIn("if: always() && steps.identity.outputs.identity_ready == 'true'", WORKFLOW)
         failure_step = step(
             "Attempt an explicit failure terminal after safe cleanup",
             "Write one redacted source-free terminal artifact",
@@ -895,11 +894,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("test ! -e \"$RUNNER_TEMP/archive-plaintext.tar\"", cleanup)
         build = step(
             "Build the credential-free exact executor request",
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
         )
         self.assertGreaterEqual(build.count("shred --remove"), 2)
         execute = step(
-            "Invoke and poll the exact blocked-network executor",
+            "Start the exact blocked-network executor asynchronously",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn(

@@ -83,7 +83,9 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
-> & Partial<ArchiveUploadStore>;
+> & Partial<ArchiveUploadStore> & {
+  destroyPrivateSandbox?: () => Promise<unknown>;
+};
 
 function requireArchiveUploadStore(store: TerminalReceiptStore): ArchiveUploadStore {
   if (
@@ -998,7 +1000,8 @@ async function confirmTerminalReceipt(
 ): Promise<AuthoritativeTerminalReceipt> {
   if (receipt.destruction_state === "confirmed") return receipt;
   try {
-    await sandbox.destroy();
+    if (store.destroyPrivateSandbox === undefined) await sandbox.destroy();
+    else await store.destroyPrivateSandbox();
   } catch {
     throw new ReplayExecutorError("sandbox_destroy_failed");
   }
@@ -2120,24 +2123,37 @@ export async function handleReplayRequest(
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         const afterStart = dependencies.afterAuthoritativeStart;
+        const checkPrivateBinding = async () => {
+          if (afterStart !== undefined) await claimActiveBinding(store, binding);
+        };
+        const writePrivateFile = async (path: string, content: string) => {
+          await checkPrivateBinding();
+          await writeSandboxFile(sandbox, path, content);
+          await checkPrivateBinding();
+        };
+        await checkPrivateBinding();
         await startAuthoritativeProcess(sandbox, async () => {
-          await writeSandboxFile(sandbox, "/workspace/replay-request.json", JSON.stringify(input.request));
-          await writeSandboxFile(
-            sandbox,
-            "/workspace/archive-expectation.json",
-            JSON.stringify(input.archive_expectation),
+          await writePrivateFile("/workspace/replay-request.json", JSON.stringify(input.request));
+          await writePrivateFile(
+            "/workspace/archive-expectation.json", JSON.stringify(input.archive_expectation),
           );
-          if (input.key_material_type === "age-identity-v1") {
-            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_key_material_base64);
-          } else {
-            await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
-          }
-        }, afterStart === undefined ? undefined : () => (
-          afterStart(sandbox, admitted.cleanup_after_epoch_ms)
-        ));
+          await writePrivateFile(
+            input.key_material_type === "age-identity-v1"
+              ? "/workspace/identity.age.b64" : "/workspace/key-material.b64",
+            input.plaintext_key_material_base64,
+          );
+          // The last write's post-check is also the pre-start boundary check.
+        }, afterStart === undefined ? undefined : async () => {
+          await checkPrivateBinding();
+          await afterStart(sandbox, admitted.cleanup_after_epoch_ms);
+          await checkPrivateBinding();
+        });
+        // Includes an existing-process duplicate and process-ID collision loser.
+        await checkPrivateBinding();
       } catch (error) {
         if (!(error instanceof ProcessStartConflictError)) {
-          await sandbox.destroy();
+          if (store.destroyPrivateSandbox === undefined) await sandbox.destroy();
+          else await store.destroyPrivateSandbox();
         }
         throw error;
       }

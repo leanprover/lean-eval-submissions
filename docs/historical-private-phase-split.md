@@ -9,9 +9,9 @@ nanoda, measurement limit, four-attempt cap, or blocked network policy.
 protected source/State/Audit provenance, disposable resource ownership,
 cleanup reservation, source-free prewarm, State CAS admission, ten-minute
 one-use unwrap and reuse refusal. AWS authority is dropped before the
-key-bearing executor request. Before every accepted State publication it
+key-bearing executor request. Before every replay.started State publication it
 reserves 45 minutes of remaining setup, 790 seconds for the 780-second POST, kill grace and rounding, and a
-12-minute cleanup tail. Every later private setup phase checks the absolute
+19-minute cleanup tail. Every later private setup phase checks the absolute
 monotonic clock; the final POST must begin within 45 minutes of the first prewarm and
 still reserve its whole transport timeout and cleanup tail. Per-stage timeouts
 bound stalls. Wall-clock timestamps bind remote receipt horizons; monotonic
@@ -45,7 +45,7 @@ truthful terminal outcome with CAS, and proves exact resource absence. Polling
 ends at accepted-202 time plus the server's 335-minute process window plus
 120 seconds for delivery of its timeout receipt. Queue time consumes this
 remote window instead of restarting it. The polling step is capped by its own
-job clock minus twelve minutes, rounded down, so even stalled State proofs
+job clock minus nineteen minutes, rounded down, so even stalled State proofs
 cannot consume the reserved tail. The existing seven-hour cleanup alarm and
 stale recovery remain the fail-closed backstop after cancellation, missing
 handoff or incomplete cleanup. No fabricated terminal/destruction events are
@@ -57,9 +57,9 @@ background, so start POSTs omit idle configuration entirely. Only this
 request's own successful new `startProcess` invokes an awaited private lifetime
 hook. Existing-process repeats and process-ID collision losers skip it. If
 setting the lifetime fails, the process is destroyed and no 202 is returned.
-The finite initial idle duration is at most six hours and cannot pass the
-original binding's claim time plus six hours (one hour before its fixed cleanup
-alarm). The first observer status call explicitly restores fifteen minutes;
+The initial relative idle duration is computed from the original claim plus
+six hours (one hour before its fixed cleanup alarm). SDK activity can renew a
+relative idle timer; that calculation alone is not an absolute retention fence. The first observer status call explicitly restores fifteen minutes;
 each subsequent poll maintains that policy. Prewarm and encrypted upload also
 retain fifteen minutes. No indefinite keepalive or new heartbeat protocol is
 used. The source job makes no status, prewarm or upload request after 202.
@@ -71,8 +71,9 @@ checker's immutable wall limit. A timely observer renews the normal short idle
 policy; an abandoned one returns to the existing cleanup/recovery path. With
 the 45-minute prewarm-to-POST bound and complete 13-minute POST, accepted 202
 arrives within 58 minutes and ten seconds of the original claim. The 337-minute observation
-horizon and 12-minute tail then end within 407 minutes and ten seconds, leaving over twelve
-minutes before the unchanged seven-hour durable alarm.
+horizon and 19-minute tail then end within 414 minutes and ten seconds, leaving over five
+minutes before the unchanged seven-hour durable alarm, before the permitted
+two-minute cross-host clock skew. The original DO alarm remains authoritative.
 
 Before a production pilot, independently review the exact source head, require
 all CI, repair and verify the dedicated AWS alias invocation authority, rerun
@@ -81,3 +82,44 @@ only canonical lane 2's first attempt with replenishment disabled. Source-free
 timing metrics and exact unwrap/reuse/destruction proofs must pass before a
 separately bounded campaign. Merely merging this implementation does not
 satisfy those activation gates.
+
+When full reconstruction refuses, an independent cleanup identity proof may
+confirm sandbox destruction only if the closed same workflow/run/event/task/
+attempt/nonce/profile binding matches the current protected lane admission and
+the exact derived Worker health, code, image and ownership tag. This proof
+needs no Audit checkout or archive plan. It never targets a newer lane attempt,
+writes no terminal State event and retains the Worker/receipt for existing
+stale recovery. An absent proof leaves the existing backstop untouched. All
+OIDC status/cleanup calls use only the identity-proved endpoint.
+
+The private receipt DO writes an identity-bound pending cleanup barrier in a
+transaction before its first physical destroy. Private reservation claims and
+archive admission/commit/finalize refuse that barrier. In-flight start handlers
+recheck the admitted binding before and after each source/key write, process
+start and lifetime change, and before 202. A refusal destroys through the same
+private barrier and never acknowledges a start. Both controller cleanup and
+status-driven terminal destruction use this private path. A failed or cancelled
+destroy retains pending state, original nonce and a bounded retry alarm; only a
+successful physical destroy acknowledgement permits confirmed cleanup.
+
+An early private cleanup confirmation retains the original nonce and original
+seven-hour alarm for one final exact destroy. The SDK can restart the same ID,
+and retains its stored idle duration, so that sweep also covers a known late
+RPC which recreated the container while the first destroy acknowledgement was
+in flight. Failed final sweeps retain the binding and retry; nonce-bearing
+state is purged only after the sweep succeeds and ordinary confirmation
+retention expires. Generic/public receipt behavior has no private discriminator
+and keeps its existing behavior. No new source/key-bearing DO state, lease,
+service or heartbeat is introduced.
+
+This is bounded operational protection, not a universal cancellation proof.
+SDK 0.12.7's 750-second retry calculation bounds connection startup, not every
+remote RPC acknowledgement. A provider operation delayed arbitrarily beyond
+the original final sweep could still recreate that same ID; client timeouts do
+not prove remote cancellation. Pending admission and boundary checks prevent a
+resuming handler from deliberately granting a new long idle policy or 202 once
+it observes cleanup. The normal controller's verified permanent deletion of
+the exact owned application and Worker is the strongest resource fence. The
+final sweep assumes ordinary finite provider completion and eventual alarm /
+destroy success; it must not be described as defeating infinitely late RPCs.
+That residual must be reviewed independently before merge.

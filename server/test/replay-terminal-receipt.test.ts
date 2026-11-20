@@ -363,3 +363,132 @@ describe("durable replay sandbox cleanup", () => {
     expect(destroyCalls).toBe(0);
   });
 });
+
+const PRIVATE_CLEANUP_KEY = "historical-private-cleanup:v1";
+
+describe("private pending cleanup barrier and fixed final sweep", () => {
+  async function admitted(destroy: () => Promise<void>) {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, destroy);
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+    await instance.reserveCleanupIdentity(identity);
+    await instance.claimReservedBinding(binding);
+    return { storage, instance, binding, identity };
+  }
+
+  it("closes admission before delayed C1 destroy ACK, then reaps late C2 at the original deadline", async () => {
+    let acknowledge: (() => void) | undefined;
+    let physicallyDestroyed: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => { physicallyDestroyed = resolve; });
+    let alive = true;
+    // SDK destroy does not delete its stored idle policy. Model an old RPC
+    // restarting the same ID while the first physical destroy ACK is delayed.
+    const inheritedIdleSeconds = 21600;
+    let calls = 0;
+    const { storage, instance, binding, identity } = await admitted(() => {
+      calls += 1;
+      alive = false;
+      if (calls > 1) return Promise.resolve();
+      physicallyDestroyed?.();
+      return new Promise<void>((resolve) => { acknowledge = resolve; });
+    });
+    const cleanup = instance.destroyPrivateBoundSandbox(identity);
+    await entered;
+    expect(alive).toBe(false);
+    expect(storage.values.get(PRIVATE_CLEANUP_KEY)).toMatchObject({ phase: "pending" });
+    expect(storage.values.has(CLEANUP_KEY)).toBe(false);
+    await expect(instance.claimReservedBinding(binding)).rejects.toThrow("already finalized");
+    await expect(instance.claimArchiveUpload({
+      schema_version: 1, upload_kind: "authoritative-archive", runner_nonce: "1".repeat(64),
+      archive_sha256: "6".repeat(64), archive_bytes: 1, part_count: 1,
+    })).rejects.toThrow("already been finalized");
+    const upload = {
+      schema_version: 1, upload_kind: "authoritative-archive", runner_nonce: "1".repeat(64),
+      archive_sha256: "6".repeat(64), archive_bytes: 1, part_count: 1,
+    };
+    await expect(instance.commitArchiveUploadPart(upload, {})).rejects.toThrow("already finalized");
+    await expect(instance.finalizeArchiveUpload(upload, "/assembled")).rejects.toThrow("already finalized");
+    alive = true; // A key write/start already dispatched before the barrier.
+    expect(inheritedIdleSeconds).toBe(21600);
+    acknowledge?.();
+    expect(await cleanup).toMatchObject({ destruction_state: "confirmed" });
+    expect(alive).toBe(true);
+    expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+    expect(storage.alarms.at(-1)).toBe(binding.cleanup_after_epoch_ms);
+    await instance.alarm();
+    expect(calls).toBe(1); // Early alarm cannot shift the original final sweep.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(binding.cleanup_after_epoch_ms as number);
+    try {
+      await instance.alarm();
+      expect(calls).toBe(2);
+      expect(alive).toBe(false);
+      expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+      expect(storage.values.get(CLEANUP_KEY)).toMatchObject({ destruction_state: "confirmed" });
+    } finally { clock.mockRestore(); }
+  });
+
+  it("retains a pending barrier on failed destroy and retries without reporting confirmation", async () => {
+    let fail = true;
+    const { storage, instance, identity } = await admitted(() => (
+      fail ? Promise.reject(new Error("cancelled RPC")) : Promise.resolve()
+    ));
+    await expect(instance.destroyPrivateBoundSandbox(identity)).rejects.toThrow("cancelled RPC");
+    expect(storage.values.get(PRIVATE_CLEANUP_KEY)).toMatchObject({ phase: "pending" });
+    expect(storage.values.has(CLEANUP_KEY)).toBe(false);
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(true);
+    fail = false;
+    await instance.alarm();
+    expect(storage.values.get(PRIVATE_CLEANUP_KEY)).toMatchObject({ phase: "confirmed" });
+    expect(storage.values.get(CLEANUP_KEY)).toMatchObject({ destruction_state: "confirmed" });
+  });
+
+  it("retains original nonce after a failed final sweep and retries before tombstone-only retention", async () => {
+    let fail = false;
+    const { storage, instance, binding, identity } = await admitted(() => (
+      fail ? Promise.reject(new Error("sweep unavailable")) : Promise.resolve()
+    ));
+    await instance.destroyPrivateBoundSandbox(identity);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(binding.cleanup_after_epoch_ms as number);
+    try {
+      fail = true;
+      await instance.alarm();
+      expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(true);
+      expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+      expect(storage.alarms.at(-1)).toBe(Date.now() + 5 * 60_000);
+      fail = false;
+      await instance.alarm();
+      expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+      clock.mockReturnValue(Date.now() + 25 * 3600_000);
+      await instance.alarm();
+      expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+      expect(storage.values.get(CLEANUP_KEY)).toEqual({ ...identity, destruction_state: "confirmed" });
+    } finally { clock.mockRestore(); }
+  });
+
+  it("starts the barrier even when only the original private reaper sees abandonment", async () => {
+    const destroy = vi.fn(() => Promise.resolve());
+    const { storage, instance, binding } = await admitted(destroy);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(binding.cleanup_after_epoch_ms as number);
+    try {
+      await instance.alarm();
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(storage.values.get(PRIVATE_CLEANUP_KEY)).toMatchObject({ phase: "confirmed" });
+      await instance.alarm();
+      expect(destroy).toHaveBeenCalledTimes(2);
+      expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+    } finally { clock.mockRestore(); }
+  });
+
+  it("refuses wrong identity before writing a barrier or destroying", async () => {
+    const destroy = vi.fn(() => Promise.resolve());
+    const { storage, instance, identity } = await admitted(destroy);
+    await expect(instance.destroyPrivateBoundSandbox({ ...identity, attempt: 2 })).rejects.toThrow("identity mismatch");
+    expect(storage.values.has(PRIVATE_CLEANUP_KEY)).toBe(false);
+    expect(destroy).not.toHaveBeenCalled();
+  });
+});

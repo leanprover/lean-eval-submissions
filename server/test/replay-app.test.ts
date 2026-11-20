@@ -2110,6 +2110,46 @@ describe("chunked archive upload routes", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it.each(["request-write", "key-write", "before-hook", "after-hook"])("refuses finalized private cleanup %s and destroys the late process", async (phase) => {
+    const body = await authoritativeInput();
+    const original = terminalReceiptStore(undefined, uploadForBody(body));
+    let finalized = false;
+    const hook = vi.fn(() => {
+      if (phase === "after-hook") finalized = true;
+      return Promise.resolve();
+    });
+    const destroy = vi.fn(() => Promise.resolve());
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST", body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path: string) => {
+          if ((phase === "request-write" && path.endsWith("replay-request.json"))
+            || (phase === "key-write" && /(?:identity.age|key-material).b64$/.test(path))) finalized = true;
+          return Promise.resolve({ success: true, path, timestamp: "fixture" });
+        },
+        exec: () => { throw new Error("blocking exec unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => {
+          if (phase === "before-hook") finalized = true;
+          return Promise.resolve({} as never);
+        }, destroy,
+      }),
+      receiptStore: () => ({
+        ...original,
+        claimBinding: (binding: unknown) => {
+          if (finalized) return Promise.reject(new Error("exact private reservation finalized"));
+          return original.claimBinding(binding);
+        },
+      }),
+      afterAuthoritativeStart: hook,
+    });
+    expect(response.status).toBe(500);
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(hook).toHaveBeenCalledTimes(phase === "after-hook" ? 1 : 0);
+  });
+
   it("destroys a newly started authoritative process if its awaited lifetime hook fails", async () => {
     const body = await authoritativeInput();
     const destroy = vi.fn(() => Promise.resolve());

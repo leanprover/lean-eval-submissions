@@ -6,6 +6,9 @@ const ACTIVE_BINDING_KEY = "authoritative-active-binding:v1";
 const RECEIPT_KEY = "authoritative-terminal-receipt:v1";
 const RESERVATION_KEY = "historical-cleanup-reservation:v1";
 const CLEANUP_KEY = "authoritative-sandbox-cleanup:v1";
+// Explicit private-only discriminator; never contains source or key material.
+const PRIVATE_MODE_KEY = "historical-private-mode:v1";
+const PRIVATE_CLEANUP_KEY = "historical-private-cleanup:v1";
 const ARCHIVE_UPLOAD_KEY = "authoritative-archive-upload:v1";
 const CLEANUP_RETRY_MS = 5 * 60 * 1000;
 // An archive upload precedes the key unwrap, so its Sandbox exists before any
@@ -49,6 +52,11 @@ function retainedUntil(value: unknown): number {
 
 function cleanupAfter(value: unknown): number {
   return safeInteger(record(value, "durable replay state").cleanup_after_epoch_ms, "durable replay cleanup deadline");
+}
+
+function privateRetryAt(binding: unknown, now = Date.now()): number {
+  const deadline = cleanupAfter(binding);
+  return deadline > now ? Math.min(deadline, now + CLEANUP_RETRY_MS) : now + CLEANUP_RETRY_MS;
 }
 
 function cleanupIdentity(value: unknown): CleanupIdentity {
@@ -280,7 +288,8 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       // A nonce that already reached a terminal outcome is spent. Reusing it
       // would attach a fresh archive to a destroyed or destroying Sandbox.
       if (
-        await transaction.get(CLEANUP_KEY) !== undefined
+        await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined
+        || await transaction.get(CLEANUP_KEY) !== undefined
         || await transaction.get(RECEIPT_KEY) !== undefined
       ) {
         throw new Error("runner nonce has already been finalized");
@@ -319,6 +328,9 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
     const wanted = archiveUploadIdentity(identity);
     const committed = record(part, "archive upload part");
     return this.ctx.storage.transaction(async (transaction) => {
+      if (await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined) {
+        throw new Error("historical private replay was already finalized");
+      }
       const existing = await transaction.get(ARCHIVE_UPLOAD_KEY);
       if (existing === undefined) throw new Error("archive upload was not claimed");
       const stored = archiveUploadRecord(existing);
@@ -349,6 +361,9 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
     const wanted = archiveUploadIdentity(identity);
     if (assembledPath.length === 0) throw new Error("assembled archive path is invalid");
     return this.ctx.storage.transaction(async (transaction) => {
+      if (await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined) {
+        throw new Error("historical private replay was already finalized");
+      }
       const existing = await transaction.get(ARCHIVE_UPLOAD_KEY);
       if (existing === undefined) throw new Error("archive upload was not claimed");
       const stored = archiveUploadRecord(existing);
@@ -382,13 +397,15 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       if (
         rejectFinalized
         && (
-          await transaction.get(CLEANUP_KEY) !== undefined
+          await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined
+          || await transaction.get(CLEANUP_KEY) !== undefined
           || await transaction.get(RECEIPT_KEY) !== undefined
         )
       ) {
         throw new Error("historical private replay was already finalized");
       }
       const existing = await transaction.get(ACTIVE_BINDING_KEY);
+      if (rejectFinalized) await transaction.put(PRIVATE_MODE_KEY, true);
       if (existing !== undefined) return existing;
       if (reservationRequired) {
         const reservation = await transaction.get(RESERVATION_KEY);
@@ -408,6 +425,9 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
   async reserveCleanupIdentity(expected: CleanupIdentity): Promise<unknown> {
     const identity = cleanupIdentity(expected);
     return this.ctx.storage.transaction(async (transaction) => {
+      if (await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined) {
+        throw new Error("historical cleanup identity was already finalized");
+      }
       const marker = await transaction.get(CLEANUP_KEY);
       if (marker !== undefined) {
         const confirmed = destructionMarker(marker);
@@ -474,7 +494,10 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       await transaction.put(RECEIPT_KEY, confirmed);
       await transaction.put(CLEANUP_KEY, marker);
       await transaction.delete(RESERVATION_KEY);
-      await transaction.setAlarm(marker.retained_until_epoch_ms);
+      const barrier = await transaction.get(PRIVATE_CLEANUP_KEY);
+      await transaction.setAlarm(barrier === undefined ? marker.retained_until_epoch_ms
+        : record(barrier, "private cleanup barrier").phase === "pending"
+          ? privateRetryAt(binding, now) : Math.max(now, cleanupAfter(binding)));
       return confirmed;
     });
   }
@@ -512,6 +535,45 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
     return destructionMarker(confirmed);
   }
 
+  /** Close private admission transactionally before the first physical destroy. */
+  async destroyPrivateBoundSandbox(expected: CleanupIdentity): Promise<unknown> {
+    const identity = cleanupIdentity(expected);
+    const binding = await this.ctx.storage.transaction(async (transaction) => {
+      const current = await transaction.get(ACTIVE_BINDING_KEY);
+      const reserved = await transaction.get(RESERVATION_KEY);
+      const confirmed = await transaction.get(CLEANUP_KEY);
+      const owner = current ?? reserved ?? confirmed;
+      if (owner === undefined) throw new Error("sandbox cleanup identity is unavailable");
+      if (!sameIdentity(cleanupIdentity(owner), identity)) {
+        throw new Error("sandbox cleanup identity mismatch");
+      }
+      // Retain the original binding/nonce for a final exact sweep. No caller
+      // may refresh its deadline. The barrier remains pending on RPC failure.
+      await transaction.put(PRIVATE_CLEANUP_KEY, { ...identity, phase: "pending" });
+      await transaction.setAlarm(current === undefined ? Date.now() + CLEANUP_RETRY_MS
+        : privateRetryAt(current));
+      return current;
+    });
+    try {
+      if (binding !== undefined) {
+        await this.destroyAndConfirm(binding);
+      } else {
+        const marker = await this.ctx.storage.get(CLEANUP_KEY);
+        if (marker === undefined) await this.confirmAbsentSandbox(identity);
+        // With no admitted binding, the barrier prevented any future private
+        // start from learning a nonce. No final nonce sweep is necessary.
+        await this.ctx.storage.delete(PRIVATE_CLEANUP_KEY);
+      }
+    } catch (error) {
+      await this.ctx.storage.setAlarm(binding === undefined ? Date.now() + CLEANUP_RETRY_MS
+        : privateRetryAt(binding));
+      throw error;
+    }
+    const marker = await this.ctx.storage.get(CLEANUP_KEY);
+    if (marker === undefined) throw new Error("sandbox cleanup confirmation is unavailable");
+    return destructionMarker(marker);
+  }
+
   private async destroyAndConfirm(binding: unknown): Promise<void> {
     await destroySandboxWithTimeout(replaySandbox(this.env, runnerNonce(binding)));
     const now = Date.now();
@@ -529,8 +591,17 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       const receipt = await transaction.get(RECEIPT_KEY);
       if (receipt !== undefined) await transaction.put(RECEIPT_KEY, confirmedReceipt(receipt));
       await transaction.put(CLEANUP_KEY, marker);
+      if (await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined) {
+        await transaction.put(PRIVATE_CLEANUP_KEY, {
+          ...cleanupIdentity(current), phase: "confirmed",
+        });
+      }
       await transaction.delete(RESERVATION_KEY);
-      await transaction.setAlarm(marker.retained_until_epoch_ms);
+      await transaction.setAlarm(
+        await transaction.get(PRIVATE_CLEANUP_KEY) !== undefined
+          ? Math.max(now, cleanupAfter(current))
+          : marker.retained_until_epoch_ms,
+      );
     });
   }
 
@@ -559,6 +630,46 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
   }
 
   override async alarm(): Promise<void> {
+    const privateBarrier = await this.ctx.storage.get(PRIVATE_CLEANUP_KEY);
+    if (privateBarrier !== undefined) {
+      const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);
+      const marker = await this.ctx.storage.get(CLEANUP_KEY);
+      if (binding !== undefined) {
+        if (!sameIdentity(cleanupIdentity(binding), cleanupIdentity(privateBarrier))) {
+          throw new Error("private cleanup binding mismatch");
+        }
+        if (marker !== undefined
+          && record(privateBarrier, "private cleanup barrier").phase === "confirmed"
+          && Date.now() < cleanupAfter(binding)) {
+          await this.ctx.storage.setAlarm(cleanupAfter(binding));
+          return;
+        }
+        try {
+          // Also destroy after an early confirmation: the SDK can restart the
+          // same ID, and an already-dispatched write may have recreated it.
+          await this.destroyAndConfirm(binding);
+        } catch {
+          await this.ctx.storage.setAlarm(privateRetryAt(binding));
+          return;
+        }
+        if (Date.now() < cleanupAfter(binding)) return;
+      }
+      await this.ctx.storage.delete(PRIVATE_CLEANUP_KEY);
+      // Continue through ordinary confirmed tombstone retention only after the
+      // original-deadline sweep succeeds. Failed sweeps retain nonce and retry.
+    }
+    if (privateBarrier === undefined && await this.ctx.storage.get(PRIVATE_MODE_KEY) === true
+      && await this.ctx.storage.get(CLEANUP_KEY) === undefined) {
+      const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);
+      if (binding !== undefined) {
+        try {
+          await this.destroyPrivateBoundSandbox(cleanupIdentity(binding));
+        } catch {
+          // The private helper retained its barrier and retry alarm.
+        }
+        return;
+      }
+    }
     const storedMarker = await this.ctx.storage.get(CLEANUP_KEY);
     if (storedMarker !== undefined) {
       const marker = destructionMarker(storedMarker);
@@ -580,6 +691,7 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
             RECEIPT_KEY,
             RESERVATION_KEY,
             ARCHIVE_UPLOAD_KEY,
+            PRIVATE_MODE_KEY,
           ]);
         });
       } else {

@@ -110,7 +110,7 @@ export default {
           return response({ ...identity, status: "reserved" });
         }
         const marker = exactMarker(
-          await Promise.resolve(store.destroyBoundSandbox(identity)),
+          await Promise.resolve(store.destroyPrivateBoundSandbox(identity)),
           identity,
         );
         if (marker.destruction_state !== "confirmed") {
@@ -178,6 +178,11 @@ export default {
           readReceipt: () => store.readReceipt(),
           prepareReceipt: (receipt: unknown) => store.prepareReceipt(receipt),
           confirmReceipt: () => store.confirmReceipt(),
+          destroyPrivateSandbox: () => store.destroyPrivateBoundSandbox({
+            schema_version: 1,
+            replay_task_id: replayTaskId,
+            attempt,
+          }),
           readArchiveUpload: () => store.readArchiveUpload(),
           claimArchiveUpload: (identity: unknown) => store.claimArchiveUpload(identity),
           commitArchiveUploadPart: (identity: unknown, part: unknown) => (

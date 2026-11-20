@@ -4,6 +4,7 @@ import copy
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 import historical_private_phase as phase
@@ -34,7 +35,7 @@ class PrivatePhaseTests(unittest.TestCase):
 
     def resume(self, envelope, **changes):
         args = dict(workflow=self.workflow, run_id=12, run_attempt=1,
-                    accepted_epoch=200, now=300, lane=self.lane,
+                    accepted_epoch=200, accepted_elapsed=100, now=300, lane=self.lane,
                     state=self.f.state, repository=self.f.repository, audit=self.f.audit)
         args.update(changes)
         return phase.resume(envelope, **args)
@@ -83,7 +84,7 @@ class PrivatePhaseTests(unittest.TestCase):
 
     def test_rerun_missing_or_extra_handoff_and_age_are_refused(self):
         _, _, envelope = self.start()
-        for kwargs in [{"run_attempt": 2}, {"accepted_epoch": 4000}, {"now": 199}]:
+        for kwargs in [{"run_attempt": 2}, {"accepted_epoch": 4000}, {"now": 79}]:
             with self.assertRaises(ValueError):
                 self.resume(envelope, **kwargs)
         for changed in [{}, {**envelope, "source": "forbidden"}]:
@@ -107,10 +108,35 @@ class PrivatePhaseTests(unittest.TestCase):
         return phase.plan_at_commit(self.f.state, self.f.repository, self.f.audit,
                                     envelope["prestart_state_commit"], self.lane)
 
-    def test_budget_preserves_post_and_cleanup_at_exact_boundaries(self):
-        phase.budget(100, 3090, 3090, admission=True)
+    def test_identity_cleanup_proof_needs_no_archive_or_full_plan(self):
+        plan, _, envelope = self.start()
+        arguments = dict(workflow=self.workflow, run_id=12, run_attempt=1,
+                         accepted_epoch=200, accepted_elapsed=100, now=300, lane=self.lane,
+                         state=self.f.state, repository=self.f.repository)
+        with mock.patch.object(phase, "plan_at_commit", side_effect=ValueError("Audit unavailable")):
+            identity = phase.prove_identity(envelope, **arguments)
+            with self.assertRaises(ValueError):
+                phase.resume(envelope, audit=self.f.audit, **arguments)
+        config = c.render_executor_config(plan, self.f.repository, "a" * 32, self.workflow)
+        self.assertEqual(identity["worker"], config["name"])
+        self.assertEqual(identity["application"], config["containers"][0]["name"])
+        self.assertEqual(identity["expected_health"]["executor_ownership_tag"],
+                         config["vars"]["EXECUTOR_OWNERSHIP_TAG"])
+        changed = copy.deepcopy(envelope)
+        changed["status"]["runner_nonce"] = "e" * 64
         with self.assertRaises(ValueError):
-            phase.budget(100, 3091, 3091, admission=True)
+            phase.prove_identity(changed, **arguments)
+
+    def test_wall_clock_skew_does_not_replace_source_monotonic_age(self):
+        _, _, envelope = self.start()
+        self.resume(envelope, accepted_epoch=360)  # Observer clock lags60s.
+        with self.assertRaises(ValueError):
+            self.resume(envelope, accepted_elapsed=4000)
+
+    def test_budget_preserves_post_and_cleanup_at_exact_boundaries(self):
+        phase.budget(100, 2670, 2670, admission=True)
+        with self.assertRaises(ValueError):
+            phase.budget(100, 2671, 2671, admission=True)
         phase.budget(100, 200, 2900)
         with self.assertRaises(ValueError):
             phase.budget(100, 200, 2901)

@@ -7,13 +7,14 @@ import json
 import os
 import pathlib
 import time
+import urllib.request
 from typing import Any
 
 import historical_private_replay_controller as c
 
 START_JOB_SECONDS = 120 * 60
 POST_SECONDS = 790  # 780s outer timeout + 5s forced kill + clock rounding
-CLEANUP_SECONDS = 720
+CLEANUP_SECONDS = 1140  # Eighteen timed tail minutes plus one orchestration minute.
 PREWARM_MAX_AGE_SECONDS = 45 * 60
 SERVER_PROCESS_SECONDS = 20100
 RECEIPT_GRACE_SECONDS = 120
@@ -72,9 +73,9 @@ def export(plan: dict[str, Any], candidate: dict[str, Any], status: dict[str, An
     }
 
 
-def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
-           accepted_epoch: int, now: int, lane: int, state: pathlib.Path,
-           repository: pathlib.Path, audit: pathlib.Path) -> dict[str, Any]:
+def prove_identity(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
+           accepted_epoch: int, accepted_elapsed: int, now: int, lane: int,
+           state: pathlib.Path, repository: pathlib.Path) -> dict[str, Any]:
     value = c._object(envelope, "private handoff")
     c._fields(value, {"schema_version", "kind", "workflow_sha", "run_id", "run_attempt",
         "lane_index", "lane_count", "prestart_state_commit", "started_event_id",
@@ -85,9 +86,10 @@ def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
         or value["run_attempt"] != run_attempt or run_attempt != 1
         or value["lane_index"] != lane or value["lane_count"] != 4
         or type(value["prewarm_epoch"]) is not int
-        or type(accepted_epoch) is not int
-        or not value["prewarm_epoch"] <= accepted_epoch <= now
-        or accepted_epoch - value["prewarm_epoch"] > PREWARM_MAX_AGE_SECONDS + POST_SECONDS):
+        or type(accepted_epoch) is not int or accepted_epoch < 1
+        or type(accepted_elapsed) is not int
+        or not 0 <= accepted_elapsed <= PREWARM_MAX_AGE_SECONDS + POST_SECONDS
+        or not accepted_epoch <= now + 120):
         raise ValueError("private handoff workflow or lifetime differs")
     c._match(c.COMMIT, workflow, "observer workflow SHA")
     c._verify_ancestor_of_upstream(repository, workflow, "observer workflow SHA")
@@ -109,8 +111,67 @@ def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
     prestart = parents[1]
     if prestart != value["prestart_state_commit"] or event_id != value["started_event_id"]:
         raise ValueError("private handoff differs from protected started history")
-    plan = plan_at_commit(state, repository, audit, prestart, lane)
+    queue, _, _ = c.load_state_queue_at_commit(state, prestart, "leanprover/lean-eval-state")
+    tasks = [t for t in queue["tasks"] if c._task_is_in_lane(t, lane, 4)]
+    if not tasks:
+        raise ValueError("admitted historical lane was empty")
+    task = tasks[0]
+    _, _, profile, _ = c.load_reviewed_inputs(repository, task)
+    status = value["status"]
+    c._fields(status, {"schema_version", "runner_nonce", "replay_task_id", "attempt",
+                       "execution_profile_digest", "measurement_config_digest", "vm_image_digest"},
+              "private cleanup status binding")
+    c._match(c.DIGEST, status["runner_nonce"], "private cleanup nonce")
+    expected = {"schema_version": 1, "runner_nonce": status["runner_nonce"],
+                "replay_task_id": task["replay_task_id"], "attempt": task["attempt"] + 1,
+                "execution_profile_digest": task["execution_profile_digest"],
+                "measurement_config_digest": task["measurement_config_digest"],
+                "vm_image_digest": profile["registry_manifest_digest"]}
+    if (status != expected or hash_value(status) != value["status_sha256"]
+        or event["subject_id"] != task["replay_task_id"]
+        or event["causation_event_id"] != task["event_id"]
+        or event["payload"] != {"attempt": status["attempt"],
+                                "runner_profile": profile["execution_profile"]["runner_profile"]}):
+        raise ValueError("cleanup identity differs from the exact State admission")
     candidate = c._state_append_candidate(event, "production", prestart)
+    if hash_value(candidate) != value["started_candidate_sha256"]:
+        raise ValueError("cleanup started candidate digest differs")
+    c._verify_state_event(state, event)
+    worker = f"hpr-{task['replay_task_id'][4:60]}-{status['attempt']}"
+    application = f"le-hpr-{task['replay_task_id'][4:26]}-{status['attempt']}"
+    ownership = c.sha256_bytes(c.canonical_bytes({
+        "schema_version": 1, "kind": "historical_private_executor_ownership",
+        "source_commit": workflow, "replay_task_id": task["replay_task_id"],
+        "attempt": status["attempt"], "execution_profile_digest": task["execution_profile_digest"],
+        "measurement_config_digest": task["measurement_config_digest"],
+        "registry_manifest_digest": profile["registry_manifest_digest"],
+    }))
+    health = {"status": "ok", "service": "lean-eval-replay-executor",
+              "environment": "historical-private-replay", "deployed_commit": workflow,
+              "replay_enabled": True, "historical_public_replay_enabled": False,
+              "staging_acceptance_enabled": False, "staging_memory_limit_bytes": 12884901888,
+              "production_memory_gate_bytes": 12884901888,
+              "reviewed_execution_profile_digest": task["execution_profile_digest"],
+              "reviewed_measurement_config_digest": task["measurement_config_digest"],
+              "reviewed_vm_image_digest": profile["registry_manifest_digest"],
+              "executor_ownership_tag": ownership,
+              "expected_replay_task_id": task["replay_task_id"],
+              "expected_replay_attempt": str(status["attempt"])}
+    return {"candidate": candidate, "status": status, "worker": worker,
+            "application": application, "expected_health": health,
+            "started_state_commit": commits[0]}
+
+
+def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
+           accepted_epoch: int, accepted_elapsed: int, now: int, lane: int, state: pathlib.Path,
+           repository: pathlib.Path, audit: pathlib.Path) -> dict[str, Any]:
+    identity = prove_identity(envelope, workflow=workflow, run_id=run_id, run_attempt=run_attempt,
+                              accepted_epoch=accepted_epoch, accepted_elapsed=accepted_elapsed,
+                              now=now, lane=lane, state=state, repository=repository)
+    value = envelope
+    prestart = identity["candidate"]["expected_head"]
+    plan = plan_at_commit(state, repository, audit, prestart, lane)
+    candidate = identity["candidate"]
     c.validate_started_history(plan, candidate, state, lane, 4)
     status = c.prepare_prewarm_request(plan, runner_nonce=value["status"]["runner_nonce"])
     if (value["status"] != status or hash_value(status) != value["status_sha256"]
@@ -122,12 +183,20 @@ def resume(envelope: Any, *, workflow: str, run_id: int, run_attempt: int,
     if max(0, deadline - now) + CLEANUP_SECONDS > OBSERVER_SECONDS:
         raise ValueError("observer cannot reserve full terminal cleanup tail")
     return {"plan": plan, "candidate": candidate, "status": status,
-            "started_state_commit": commits[0], "poll_deadline_epoch": deadline}
+            "started_state_commit": identity["started_state_commit"], "poll_deadline_epoch": deadline}
+
+
+def write_same(path: pathlib.Path, value: Any) -> None:
+    if path.exists():
+        if path.is_symlink() or path.read_bytes() != c.canonical_bytes(value):
+            raise ValueError("observer output identity changed")
+    else:
+        c._write(path, value)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("export", "resume", "admission", "before-post"))
+    parser.add_argument("command", choices=("export", "resume", "admission", "before-post", "identity"))
     parser.add_argument("--state-root", type=pathlib.Path)
     parser.add_argument("--repository-root", type=pathlib.Path)
     parser.add_argument("--audit-root", type=pathlib.Path)
@@ -155,12 +224,29 @@ def main() -> None:
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             output.write("handoff=" + json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
     else:
-        result = resume(json.loads(os.environ["PRIVATE_HANDOFF"]), workflow=os.environ["GITHUB_SHA"],
+        arguments = dict(workflow=os.environ["GITHUB_SHA"],
                         run_id=int(os.environ["GITHUB_RUN_ID"]),
                         run_attempt=int(os.environ["GITHUB_RUN_ATTEMPT"]),
-                        accepted_epoch=int(os.environ["PRIVATE_ACCEPTED_EPOCH"]), now=now,
+                        accepted_epoch=int(os.environ["PRIVATE_ACCEPTED_EPOCH"]),
+                        accepted_elapsed=int(os.environ["PRIVATE_ACCEPTED_ELAPSED"]), now=now,
                         lane=int(os.environ["PRIVATE_REPLAY_LANE_INDEX"]), state=args.state_root,
-                        repository=args.repository_root, audit=args.audit_root)
+                        repository=args.repository_root)
+        envelope = json.loads(os.environ["PRIVATE_HANDOFF"])
+        if args.command == "identity":
+            result = prove_identity(envelope, **arguments)
+            url = f"https://{result['worker']}.lean-eval.workers.dev"
+            request = urllib.request.Request(url + "/healthz", headers={
+                "User-Agent": "LeanEval private identity verification", "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status != 200 or json.load(response) != result["expected_health"]:
+                    raise ValueError("admitted Worker health differs")
+            write_same(temporary / "cleanup-request.json", {
+                "schema_version": 1, "replay_task_id": result["status"]["replay_task_id"],
+                "attempt": result["status"]["attempt"]})
+            with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                output.write(f"identity_ready=true\nworker={result['worker']}\napplication={result['application']}\nurl={url}\n")
+            return
+        result = resume(envelope, audit=args.audit_root, **arguments)
         for name, value in [("private-replay-plan.json", result["plan"]),
                             ("started-candidate.json", result["candidate"]),
                             ("started-event.json", result["candidate"]["event"]),
@@ -168,10 +254,10 @@ def main() -> None:
                             ("cleanup-request.json", {"schema_version": 1,
                              "replay_task_id": result["status"]["replay_task_id"],
                              "attempt": result["status"]["attempt"]})]:
-            c._write(temporary / name, value)
+            write_same(temporary / name, value)
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             # The step timeout is rounded DOWN so even stuck running proofs
-            # cannot consume the observer's separate twelve-minute tail.
+            # cannot consume the observer's separate nineteen-minute tail.
             remaining = int(os.environ["REPLAY_JOB_STARTED_MONOTONIC"]) + OBSERVER_SECONDS - CLEANUP_SECONDS - int(time.monotonic())
             minutes = min(338, remaining // 60)
             if minutes < 1:
