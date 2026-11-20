@@ -1,6 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { replaySandbox, type ReplaySandboxEnvironment } from "./replay-sandbox";
+import {
+  MARKER_PHASE_KEY, MarkerPhaseError, appendMarkerJournal, claimMarkerJournal,
+  finishMarkerJournal, newMarkerJournal, readMarkerScope, requireMarkerJournal,
+  validateMarkerBinding, type MarkerBinding, type MarkerEvent, type MarkerJournal,
+  type MarkerPhaseEnvironment,
+} from "./marker-phase-evidence";
 
 const ACTIVE_BINDING_KEY = "authoritative-active-binding:v1";
 const RECEIPT_KEY = "authoritative-terminal-receipt:v1";
@@ -254,6 +260,59 @@ async function destroySandboxWithTimeout(
 }
 
 export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironment> {
+  // These records use their own DO name. No marker RPC/alarm obtains a Sandbox.
+  private markerEnvironment(): MarkerPhaseEnvironment {
+    return this.env as ReplaySandboxEnvironment & MarkerPhaseEnvironment;
+  }
+
+  async prepareMarkerPhase(binding: MarkerBinding): Promise<MarkerJournal> {
+    const env = this.markerEnvironment();
+    await validateMarkerBinding(env, binding);
+    const scope = readMarkerScope(env);
+    return this.ctx.storage.transaction(async (transaction) => {
+      if (await transaction.get(MARKER_PHASE_KEY) !== undefined) throw new MarkerPhaseError();
+      const journal = newMarkerJournal(binding, scope);
+      await transaction.put(MARKER_PHASE_KEY, journal);
+      await transaction.setAlarm(journal.retain_until);
+      return journal;
+    });
+  }
+
+  async readMarkerPhase(binding: MarkerBinding): Promise<MarkerJournal> {
+    await validateMarkerBinding(this.markerEnvironment(), binding);
+    return requireMarkerJournal(await this.ctx.storage.get<MarkerJournal>(MARKER_PHASE_KEY), binding);
+  }
+
+  private async updateMarkerPhase(
+    binding: MarkerBinding, update: (journal: MarkerJournal) => MarkerJournal,
+  ): Promise<MarkerJournal> {
+    await validateMarkerBinding(this.markerEnvironment(), binding);
+    return this.ctx.storage.transaction(async (transaction) => {
+      const current = requireMarkerJournal(await transaction.get<MarkerJournal>(MARKER_PHASE_KEY), binding);
+      const next = update(current);
+      // Recheck at commit after awaited work; fences/expiry never reopen.
+      if (Date.now() >= current.retain_until) throw new MarkerPhaseError();
+      await transaction.put(MARKER_PHASE_KEY, next);
+      return next;
+    });
+  }
+
+  async claimMarkerPhase(binding: MarkerBinding): Promise<MarkerJournal> {
+    return this.updateMarkerPhase(binding, claimMarkerJournal);
+  }
+
+  async appendMarkerPhase(binding: MarkerBinding, event: MarkerEvent): Promise<MarkerJournal> {
+    return this.updateMarkerPhase(binding, (journal) => appendMarkerJournal(journal, event));
+  }
+
+  async finishMarkerPhase(binding: MarkerBinding): Promise<MarkerJournal> {
+    return this.updateMarkerPhase(binding, finishMarkerJournal);
+  }
+
+  async fenceMarkerPhase(binding: MarkerBinding): Promise<MarkerJournal> {
+    return this.updateMarkerPhase(binding, (journal) => ({ ...journal, state: "fenced" }));
+  }
+
   async readBinding(): Promise<unknown> {
     const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);
     return binding === undefined ? null : binding;
@@ -641,6 +700,15 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
   }
 
   override async alarm(): Promise<void> {
+    const markerJournal = await this.ctx.storage.get<MarkerJournal>(MARKER_PHASE_KEY);
+    if (markerJournal !== undefined) {
+      // Keep a spent tombstone. A late append/proof cannot recreate a record or
+      // fall through to the unrelated private/authoritative Sandbox machinery.
+      if (Date.now() >= markerJournal.retain_until) {
+        await this.ctx.storage.put(MARKER_PHASE_KEY, { ...markerJournal, state: "expired", events: [] });
+      } else await this.ctx.storage.setAlarm(markerJournal.retain_until);
+      return;
+    }
     const privateBarrier = await this.ctx.storage.get(PRIVATE_CLEANUP_KEY);
     if (privateBarrier !== undefined) {
       const binding = await this.ctx.storage.get(ACTIVE_BINDING_KEY);

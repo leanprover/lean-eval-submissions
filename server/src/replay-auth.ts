@@ -1,3 +1,5 @@
+import { MARKER_PHASE_ROUTES, MARKER_ROUTE, MARKER_WORKFLOW, readMarkerScope, type MarkerPhaseEnvironment } from "./marker-phase-evidence";
+
 const GITHUB_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_REPOSITORY = "leanprover/lean-eval-submissions";
 const GITHUB_REPOSITORY_ID = "1243533004";
@@ -221,7 +223,7 @@ async function verifyGithubOidcWithMode(
   env: ReplayAuthEnvironment,
   fetcher: typeof fetch = fetch,
   nowSeconds = Math.floor(Date.now() / 1000),
-): Promise<void> {
+): Promise<JwtClaims> {
   const authorization = request.headers.get("authorization");
   if (authorization === null || authorization.length > 8192 || !authorization.startsWith("Bearer ")) {
     throw new ReplayAuthError("bearer token is required");
@@ -250,6 +252,7 @@ async function verifyGithubOidcWithMode(
     new TextEncoder().encode(`${encodedHeader}.${encodedClaims}`),
   );
   if (!verified) throw new ReplayAuthError("token signature is invalid");
+  return claims;
 }
 
 export function verifyGithubOidc(
@@ -258,5 +261,26 @@ export function verifyGithubOidc(
   fetcher: typeof fetch = fetch,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<void> {
-  return verifyGithubOidcWithMode(request, env, fetcher, nowSeconds);
+  return verifyGithubOidcWithMode(request, env, fetcher, nowSeconds).then(() => undefined);
+}
+
+export async function verifyMarkerGithubOidc(
+  request: Request,
+  env: ReplayAuthEnvironment & MarkerPhaseEnvironment,
+  fetcher: typeof fetch = fetch,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<void> {
+  const claims = await verifyGithubOidcWithMode(request, env, fetcher, nowSeconds);
+  const scope = readMarkerScope(env, nowSeconds * 1000);
+  const ref = `refs/tags/lean-eval-dispatch/${scope.commit}`;
+  const route = new URL(request.url).pathname;
+  if (request.method !== "POST" || !(route === MARKER_ROUTE || MARKER_PHASE_ROUTES.has(route))
+    || env.GITHUB_OIDC_ENVIRONMENT !== "cloudflare-staging"
+    || env.GITHUB_OIDC_AUDIENCE !== "lean-eval-replay-staging"
+    || claims.ref !== ref || claims.sha !== scope.commit || claims.workflow_sha !== scope.commit
+    || claims.workflow_ref !== `${GITHUB_REPOSITORY}/${MARKER_WORKFLOW}@${ref}`
+    || claims.event_name !== "workflow_dispatch" || claims.run_id !== scope.run_id
+    || claims.run_attempt !== scope.run_attempt) {
+    throw new ReplayAuthError("marker caller is not the frozen workflow run");
+  }
 }
