@@ -63,7 +63,7 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
-  Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
+  Partial<Pick<Sandbox, "startProcess" | "getProcess" | "setSleepAfter">>;
 
 type ArchiveUploadStore = Pick<
   ReplayTerminalReceipt,
@@ -131,6 +131,7 @@ type Dependencies = {
     env: ReplayRuntimeEnv,
     runnerNonce: string,
   ): SandboxClient | Promise<SandboxClient>;
+  afterAuthoritativeStart?: (sandbox: SandboxClient, cleanupDeadline: number) => Promise<void>;
   receiptStore?(
     env: ReplayRuntimeEnv,
     runnerNonce: string,
@@ -377,6 +378,7 @@ async function startBackgroundProcess(
   processId: string,
   command: string,
   prepare: () => Promise<void>,
+  afterStart?: () => Promise<void>,
 ): Promise<void> {
   if (sandbox.getProcess === undefined || sandbox.startProcess === undefined) {
     throw new ReplayExecutorError("command_rpc_failed");
@@ -408,18 +410,23 @@ async function startBackgroundProcess(
     if (existing === null) {
       throw new ProcessStartConflictError();
     }
+    return;
   }
+  // Keep hook failure separate from the process-ID collision protocol.
+  await afterStart?.();
 }
 
 async function startAuthoritativeProcess(
   sandbox: SandboxClient,
   prepare: () => Promise<void>,
+  afterStart?: () => Promise<void>,
 ): Promise<void> {
   await startBackgroundProcess(
     sandbox,
     AUTHORITATIVE_PROCESS_ID,
     AUTHORITATIVE_COMMAND,
     prepare,
+    afterStart,
   );
 }
 
@@ -2088,7 +2095,7 @@ export async function handleReplayRequest(
       });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
-      await claimActiveBinding(store, binding);
+      const admitted = await claimActiveBinding(store, binding);
       const existingReceipt = await readTerminalReceipt(store, binding);
       if (existingReceipt !== null) {
         return json({
@@ -2112,6 +2119,7 @@ export async function handleReplayRequest(
       });
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
+        const afterStart = dependencies.afterAuthoritativeStart;
         await startAuthoritativeProcess(sandbox, async () => {
           await writeSandboxFile(sandbox, "/workspace/replay-request.json", JSON.stringify(input.request));
           await writeSandboxFile(
@@ -2124,7 +2132,9 @@ export async function handleReplayRequest(
           } else {
             await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
           }
-        });
+        }, afterStart === undefined ? undefined : () => (
+          afterStart(sandbox, admitted.cleanup_after_epoch_ms)
+        ));
       } catch (error) {
         if (!(error instanceof ProcessStartConflictError)) {
           await sandbox.destroy();
