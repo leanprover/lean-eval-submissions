@@ -190,21 +190,27 @@ class InventoryPreparationTests(unittest.TestCase):
                 lake.write_text('#!' + str(Path(sys.executable).resolve()) + '\n' + r'''import json,os,sys,time
 from pathlib import Path
 module=sys.argv[2];root=Path.cwd()
+# Deliberately delay the fourth body: Popen reservation is not body readiness.
+if module=='Delta' and os.getenv('ESCAPE'):time.sleep(.1)
 with(root/'launched').open('a')as stream:stream.write(module+'\n')
 if module=='Alpha':
  while not(root/'adopted').exists():time.sleep(.001)
  if os.getenv('ESCAPE'):
+  deadline=time.monotonic()+3
+  while len((root/'launched').read_text().split())<4:
+   assert time.monotonic()<deadline;time.sleep(.001)
   if os.fork()==0:
-   os.setsid();(root/'escape-pid').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
+   os.setsid();(root/'escape-identity').write_text(json.dumps({'pid':os.getpid(),'ticks':Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19]}));(root/'escape-pid').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
   while not(root/'escape-pid').exists():time.sleep(.001)
  else:time.sleep(.03)
 elif module=='Beta':
  middle=os.fork()
  if middle==0:
-  if os.fork()==0:(root/'adopted').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
+  if os.fork()==0:
+   (root/'adopted-identity').write_text(json.dumps({'pid':os.getpid(),'ticks':Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19]}));(root/'adopted').write_text(str(os.getpid()));time.sleep(3);os._exit(0)
   os._exit(0)
- os.waitpid(middle,0);time.sleep(.3)
-elif module in('Gamma','Delta'):time.sleep(.2)
+ os.waitpid(middle,0);time.sleep(10 if os.getenv('ESCAPE') else .3)
+elif module in('Gamma','Delta'):time.sleep(10 if os.getenv('ESCAPE') else .2)
 elif module=='Epsilon':
  # It starts while Beta is still running AND its orphan is still alive.
  pid=int((root/'adopted').read_text());assert Path('/proc/'+str(pid)).exists()
@@ -212,17 +218,36 @@ elif module=='Epsilon':
 p=root/'.lake/build/lib/lean'/(module+'.olean');p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'controlled artifact, not Lean qualification')
 ''')
                 env = prepare.environment(root)
-                if escape:
-                    env['ESCAPE'] = '1'
-                    with self.assertRaises(prepare.Invalid):
-                        prepare._build_inventory_pool(modules, source, env, lake,
+                launched = []
+                real_popen = subprocess.Popen
+                def launch(command, *args, **kwargs):
+                    child = real_popen(command, *args, **kwargs)
+                    ticks = Path(f'/proc/{child.pid}/stat').read_text().rsplit(')', 1)[1].split()[19]
+                    launched.append((command[2], child, ticks))
+                    return child
+                with mock.patch.object(prepare.subprocess, 'Popen', side_effect=launch):
+                    if escape:
+                        env['ESCAPE'] = '1'
+                        with self.assertRaises(prepare.Invalid):
+                            prepare._build_inventory_pool(modules, source, env, lake,
+                                time.monotonic_ns() + 4_000_000_000)
+                        self.assertEqual(set((source / 'launched').read_text().split()), set(modules[:4]))
+                    else:
+                        result = prepare._build_inventory_pool(modules, source, env, lake,
                             time.monotonic_ns() + 4_000_000_000)
-                    self.assertEqual(set((source / 'launched').read_text().split()), set(modules[:4]))
-                else:
-                    result = prepare._build_inventory_pool(modules, source, env, lake,
-                        time.monotonic_ns() + 4_000_000_000)
-                    self.assertEqual([row['module'] for row in result], list(modules))
-                    self.assertTrue((source / 'early-refill').exists())
+                        self.assertEqual([row['module'] for row in result], list(modules))
+                        self.assertTrue((source / 'early-refill').exists())
+                # Parent-observed actual Popen calls prove spawn order/no fifth;
+                # interpreter markers independently prove the private barrier.
+                self.assertEqual([module for module, _, _ in launched], list(modules[:4] if escape else modules))
+                for _module, child, ticks in launched:
+                    self.assertIsNotNone(child.returncode)
+                    path = Path(f'/proc/{child.pid}/stat')
+                    self.assertTrue(not path.exists() or path.read_text().rsplit(')', 1)[1].split()[19] != ticks)
+                for name in ('adopted-identity', *(['escape-identity'] if escape else [])):
+                    identity = json.loads((source / name).read_text())
+                    path = Path('/proc') / str(identity['pid']) / 'stat'
+                    self.assertTrue(not path.exists() or path.read_text().rsplit(')', 1)[1].split()[19] != identity['ticks'])
                 self.assertFalse(prepare._process_children()[1])
                 self.assertFalse((root / 'owned-generation-observation.json').exists())
                 self.assertFalse((root / 'validated-context-template.json').exists())
