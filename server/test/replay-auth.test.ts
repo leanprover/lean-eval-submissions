@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   verifyGithubOidc,
+  verifyMarkerGithubOidc,
 } from "../src/replay-auth";
+import { MARKER_SERVICE, MARKER_WORKFLOW, markerCanonical } from "../src/marker-phase-evidence";
 
 function base64Url(value: Uint8Array): string {
   let binary = "";
@@ -119,6 +121,43 @@ const HISTORICAL_PRIVATE_CLAIMS = {
 };
 
 describe("GitHub OIDC replay authentication", () => {
+  it("restricts finite marker proof/status/start/fence to the verified exact workflow run and attempt", async () => {
+    const now = 1_787_395_200;
+    const sha = "a".repeat(40);
+    const ref = `refs/tags/lean-eval-dispatch/${sha}`;
+    const markerEnv = {
+      ...ENV, DEPLOYED_COMMIT: sha, GITHUB_OIDC_ENVIRONMENT: "cloudflare-staging",
+      REPLAY_ENABLED: "false", HISTORICAL_PUBLIC_REPLAY_ENABLED: "false", STAGING_ACCEPTANCE_ENABLED: "true",
+      MARKER_PHASE_SCOPE: markerCanonical({
+        schema_version: 1, case: "a-match", service: MARKER_SERVICE, workflow: MARKER_WORKFLOW,
+        commit: sha, run_id: "44690000000", run_attempt: "1", start_before: now * 1000 + 900000,
+        retain_until: now * 1000 + 1800000, nonce_sha256: "b".repeat(64), sandbox_name_sha256: "c".repeat(64),
+        execution_profile_digest: "d".repeat(64), measurement_config_digest: "e".repeat(64), image_digest: `sha256:${"f".repeat(64)}`,
+      }),
+    };
+    const claims = {
+      sub: "repo:leanprover/lean-eval-submissions:environment:cloudflare-staging", environment: "cloudflare-staging",
+      workflow_ref: `leanprover/lean-eval-submissions/${MARKER_WORKFLOW}@${ref}`, workflow_sha: sha,
+      run_id: "44690000000", run_attempt: "1", event_name: "workflow_dispatch",
+    };
+    for (const path of ["", "/phase-proof", "/phase-status", "/phase-fence"]) {
+      const f = await signedRequest(claims, `/api/v1/staging-acceptance${path}`);
+      await expect(verifyMarkerGithubOidc(f.request, markerEnv, f.fetcher, now)).resolves.toBeUndefined();
+    }
+    for (const changed of [
+      { workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/other.yml@" + ref },
+      { workflow_sha: "b".repeat(40) }, { run_id: "44690000001" }, { run_attempt: "2" },
+      { event_name: "push" }, { sha: "b".repeat(40), ref: `refs/tags/lean-eval-dispatch/${"b".repeat(40)}` },
+      { ref: "refs/heads/main" }, { ref_protected: "false" }, { environment: "replay-staging" },
+      { aud: "other" }, { repository_id: "other" }, { exp: now - 60 },
+    ]) {
+      const f = await signedRequest({ ...claims, ...changed }, "/api/v1/staging-acceptance/phase-status");
+      await expect(verifyMarkerGithubOidc(f.request, markerEnv, f.fetcher, now)).rejects.toThrow();
+    }
+    const expired = await signedRequest(claims, "/api/v1/staging-acceptance/phase-status");
+    await expect(verifyMarkerGithubOidc(expired.request, markerEnv, expired.fetcher, now + 1800)).rejects.toThrow();
+  });
+
   it("binds historical private execution to its exact protected workflow", async () => {
     for (const path of [
       "/api/v1/replay",
