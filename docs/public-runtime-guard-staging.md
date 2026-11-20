@@ -10,15 +10,20 @@ Dispatch requires the CI-gated protected `lean-eval-dispatch/<exact SHA>` tag.
 The existing `cloudflare-staging` environment supplies its existing deployment
 token only to trusted deployment/cleanup steps. No token is copied or added.
 Execution receives staging OIDC, with no Cloudflare, State, AWS or private-source
-credentials. Root must verify actual token/account/subdomain and read scopes
-before activation. Account-level Worker and Container permissions are needed;
+credentials. Read-only operator preflight must verify account, subdomain, name
+absence and the actual namespace-list parser using an identified operator
+credential. The environment token is first exercised by the workflow's
+pre-creation reads; its delete and migration permissions are first exercised
+in the first case's cleanup. Account-level Worker and Container permissions are needed;
 this is not a claim of per-script token restriction.
 
 The environment currently permits protected branches, including main, but does
 not permit this tag. Before dispatch, the operator must snapshot its policy and
-rules, temporarily preserve known main access and permit only the exact approved
-immutable tag, then restore the original protected-branches-only policy after
-all cases or controlled recovery. No wildcard tag rule is allowed. This policy
+rules and all protected branch names, temporarily preserve those branches by
+exact name and permit only the exact approved immutable tag. Restore the
+original protected-branches-only policy as soon as the run terminates, including
+failure. Control-plane recovery uses the identified operator credential and
+does not keep the tag window open. No wildcard tag rule is allowed. This policy
 change requires its own bound operational packet and review; the workflow does
 not modify it. Existing production authentication and other environments stay
 outside this operation.
@@ -29,10 +34,13 @@ It does not restrict the workflow filename or compare caller SHA to deployed
 SHA. Any workflow admitted by that environment and immutable-ref policy has
 that staging authority. The fixed client independently checks complete endpoint
 health identity immediately before every POST. Temporary environment policy
-must remain bound to the approved tag until cleanup is complete. This admission
+must remain bound to the approved tag while the run performs cleanup. This admission
 also permits other matching workflows at that tag, including `set-staging-intake.yml`
 (which changes normal staging intake) and read-only `verify-state-writer.yml`;
-only this campaign is to be dispatched during the window.
+only this campaign is to be dispatched during the window. The image publisher
+can enter the environment but refuses a tag in its main-only check. The normal
+deployment's staging jobs also require main. Other main staging deployments
+and code merges must be held during the temporary policy operation.
 
 The two existing `two_plus_two` fixtures cover both remaining immutable PUBLIC
 image-source families. Each family runs with its qualified profile and with
@@ -108,8 +116,12 @@ instances. App absence is required before a fixed 503-only stub deletes exactly
 the recorded DO classes/bindings. Only then can namespace and Worker absence be
 proved. No exports, runtime implementation or scheduling policy is changed.
 
-Known propagation and transient failures have bounded retries, including every
-stub recheck, Worker re-delete and final namespace listing. Foreign identities
+Known propagation and transient failures have bounded retries, including the
+first cleanup ownership read, container inventories, every stub recheck, Worker
+re-delete and final namespace listing. App absence has ten bounded observations.
+Strict cleanup retries transient edge health failures but immediately refuses
+actual identity drift or an already-retired Worker. Deployment diagnostics remain
+bounded and credential-redacted before exact readback. Foreign identities
 are refused. Successful checkpoints record the disabled/stub version, allowing
 known intermediate recovery; unrecorded versions require controlled recovery.
 The whole cleanup has a shared nine-minute deadline inside its ten-minute step,

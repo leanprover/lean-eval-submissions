@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import copy
+import contextlib
+import io
 import pathlib
 import tempfile
+import types
 import unittest
 from unittest import mock
 import importlib.util
@@ -118,7 +121,7 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
     def test_retire_verify_delete_app_verify_delete_worker_then_absence(self): self.cleanup_order_fixture(False)
     def test_ambiguous_owned_fixture_uses_control_plane_fence_without_faking_http_proof(self): self.cleanup_order_fixture(True)
 
-    def cleanup_order_fixture(self, incomplete, resume=False):
+    def cleanup_order_fixture(self, incomplete, resume=False, ownership_faults=(), deployment_error=False, application_lag=0):
         with tempfile.TemporaryDirectory() as temp:
             directory=pathlib.Path(temp)
             _,_,receipt,_=self.fixture(directory)
@@ -140,6 +143,8 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                     else:
                         self.assertEqual(config['migrations'][-1]['tag'],'v2')
                         self.assertEqual(len(config['durable_objects']['bindings']),2)
+                    if deployment_error:
+                        raise stage.CommandFailure('Cloudflare cleanup deployment response lost; provider code 90000')
                 else:
                     self.assertEqual(args[-1],receipt['application_id'])
                     calls.append('delete-app')
@@ -153,12 +158,13 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 if method=='DELETE':return {'success':True}
                 reads+=1
                 return {'present':True} if reads==1 else None
-            with mock.patch.object(stage,'ROOT',directory), mock.patch.object(stage,'ownership',return_value=own) as original, mock.patch.object(stage,'command',side_effect=command), mock.patch.object(stage,'retired_identity',side_effect=identity), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'_verify_application',side_effect=[app,None,None,None]), mock.patch.object(stage,'cf',side_effect=cf), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage.time,'sleep'):
+            diagnostics=io.StringIO()
+            with contextlib.redirect_stderr(diagnostics), mock.patch.object(stage,'ROOT',directory), mock.patch.object(stage,'ownership',side_effect=[*ownership_faults,own]) as original, mock.patch.object(stage,'command',side_effect=command), mock.patch.object(stage,'retired_identity',side_effect=identity), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'_verify_application',side_effect=[app]*application_lag+[app,None,None,None]), mock.patch.object(stage,'cf',side_effect=cf), mock.patch.object(stage,'namespaces',return_value=[]), mock.patch.object(stage.time,'sleep'):
                 (directory/'server').mkdir()
                 stage.cleanup('a-match',directory)
                 if resume:original.assert_not_called()
                 else:
-                    original.assert_called_once()
+                    self.assertEqual(original.call_count,len(ownership_faults)+1)
                     self.assertEqual(calls[0],'deploy-disabled')
                 self.assertLess(calls.index('delete-app'),calls.index('deploy-final'))
                 self.assertLess(calls.index('deploy-final'),calls.index('delete-worker'))
@@ -166,12 +172,64 @@ class PublicRuntimeGuardStagingTests(unittest.TestCase):
                 self.assertEqual(calls[calls.index('delete-worker')-1],'verify-final')
                 final=stage.load(directory/'receipt.json')
                 self.assertEqual(final['control_plane_cleanup'],'confirmed')
+                self.assertEqual(calls.count('delete-app'),application_lag+1)
+                if deployment_error:
+                    self.assertIn('provider code 90000',diagnostics.getvalue())
                 if incomplete:
                     self.assertEqual(final['outcome'],'incomplete')
                     self.assertNotIn('observation_http_destruction',final)
                     self.assertNotIn('public_http_destruction',final)
 
     def test_known_disabled_checkpoint_can_resume_without_adopting_original_app(self):self.cleanup_order_fixture(True,True)
+
+    def test_first_cleanup_ownership_read_retries_transient_failure_before_fencing(self):
+        self.cleanup_order_fixture(True,ownership_faults=(stage.TransientRpcError('edge unavailable'),))
+
+    def test_cleanup_preserves_bounded_provider_diagnostics_after_ambiguous_deploy(self):
+        self.cleanup_order_fixture(False,deployment_error=True)
+
+    def test_cleanup_allows_ten_application_absence_observations(self):
+        self.cleanup_order_fixture(True,application_lag=5)
+
+    def test_container_listing_failure_and_timeout_are_retryable_reads(self):
+        for fault in (stage.CommandFailure('CLI unavailable'), stage.subprocess.TimeoutExpired('wrangler',1)):
+            with self.subTest(fault=type(fault).__name__), mock.patch.object(stage,'command',side_effect=fault):
+                with self.assertRaises(stage.TransientRpcError):stage.applications(timeout=1)
+        with mock.patch.object(stage,'applications',side_effect=[stage.TransientRpcError('edge unavailable'),[]]) as read, mock.patch.object(stage.time,'monotonic',return_value=100), mock.patch.object(stage.time,'sleep'):
+            self.assertEqual(stage.wait_applications(120),[])
+            self.assertEqual(read.call_args_list,[mock.call(timeout=20),mock.call(timeout=20)])
+
+    def test_cleanup_ownership_reuses_shared_deadline_and_rejects_identity_drift(self):
+        with mock.patch.object(stage,'ownership',side_effect=[stage.TransientRpcError('edge unavailable'),{}]) as read, mock.patch.object(stage.time,'monotonic',return_value=100), mock.patch.object(stage.time,'sleep'):
+            self.assertEqual(stage.wait_ownership({},120,allow_propagation=False),{})
+            self.assertEqual(read.call_args_list,[mock.call({},120),mock.call({},120)])
+        with mock.patch.object(stage,'ownership',side_effect=ValueError('foreign identity')) as read, mock.patch.object(stage.time,'sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'foreign identity'):stage.wait_ownership({},120,allow_propagation=False)
+            read.assert_called_once()
+            sleep.assert_not_called()
+
+    def test_real_ownership_retries_health_503_in_strict_cleanup_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config,_,receipt,_=self.fixture(pathlib.Path(temp))
+            app={k:receipt[k] for k in ('application_id','application_version','application_created_at')}
+            rows=[{'id':receipt['namespaces'][b['name']],'script':config['name'],'class':b['class_name']} for b in config['durable_objects']['bindings']]
+            with mock.patch.object(stage,'cf',return_value={}), mock.patch.object(stage,'_active_version',return_value=('old',{})), mock.patch.object(stage,'http',side_effect=[(503,{'error':'edge unavailable'}),(200,receipt['health'])]) as health, mock.patch.object(stage,'_verify_worker',return_value=('old',receipt['namespaces'])) as verify, mock.patch.object(stage,'namespaces',return_value=rows), mock.patch.object(stage,'applications',return_value=[]), mock.patch.object(stage,'_verify_application',return_value=app), mock.patch.object(stage.time,'sleep'):
+                result=stage.wait_ownership(config,stage.time.monotonic()+120,allow_propagation=False)
+                self.assertEqual(result['worker_version'],'old')
+                self.assertEqual(health.call_count,2)
+                verify.assert_called_once()
+            with mock.patch.object(stage,'cf',return_value={}), mock.patch.object(stage,'_active_version',return_value=('old',{})), mock.patch.object(stage,'http',return_value=(503,{'status':'retired'})) as health, mock.patch.object(stage.time,'sleep') as sleep:
+                with self.assertRaisesRegex(ValueError,'owned staging health unavailable'):
+                    stage.wait_ownership(config,stage.time.monotonic()+120,allow_propagation=False)
+                health.assert_called_once()
+                sleep.assert_not_called()
+
+    def test_health_html_429_and_500_remain_transient_without_inventing_identity(self):
+        for status in (429,500):
+            with self.subTest(status=status), mock.patch.object(stage,'request_http',return_value=types.SimpleNamespace(status=status,body=b'<html>unavailable</html>')):
+                code,body=stage.http('https://fixture.invalid/healthz')
+                self.assertEqual(code,status)
+                self.assertEqual(body,{'error':'transport_response_invalid'})
 
     def test_changed_container_id_after_retirement_is_not_deleted(self):
         with tempfile.TemporaryDirectory() as temp:

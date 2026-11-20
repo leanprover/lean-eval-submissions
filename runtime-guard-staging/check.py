@@ -129,7 +129,20 @@ def namespaces(deadline=None):
 
 
 def applications(timeout=180):
-    return json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "list", "--json", timeout=timeout))
+    try:
+        return json.loads(command("npx", "--prefix", "server", "wrangler", "containers", "list", "--json", timeout=timeout))
+    except (CommandFailure, subprocess.TimeoutExpired):
+        raise TransientRpcError("container inventory temporarily unavailable") from None
+
+
+def wait_applications(deadline):
+    for retry in range(10):
+        try:
+            return applications(timeout=remaining_timeout(deadline, 60))
+        except (TransientRpcError, TransportError):
+            if retry == 9:
+                raise ValueError("container inventory did not converge") from None
+            time.sleep(remaining_timeout(deadline, 3))
 
 
 def http(url, body=None, oidc=False, timeout_budget=None):
@@ -152,7 +165,7 @@ def http(url, body=None, oidc=False, timeout_budget=None):
     try:
         return r.status, json.loads(r.body)
     except (ValueError, UnicodeError):
-        if r.status in (502, 503, 504):
+        if r.status in (429, 500, 502, 503, 504):
             return r.status, {"error": "transport_response_invalid"}
         raise ValueError("executor response is not JSON") from None
 
@@ -232,6 +245,8 @@ def ownership(config, deadline=None):
     version, _ = _active_version(service, deployments, worker)
     version_data = read(f"workers/scripts/{worker}/versions/{version}")
     status, health = http(f"https://{worker}.lean-eval.workers.dev/healthz", timeout_budget=remaining_timeout(deadline, 30))
+    if status in (429, 500, 502, 503, 504) and not (isinstance(health, dict) and health.get("status") == "retired"):
+        raise TransientRpcError("owned staging health temporarily unavailable")
     if status != 200:
         raise ValueError("owned staging health unavailable")
     actual_version, ids = _verify_worker(config, service, settings, deployments, version_data, health)
@@ -248,15 +263,19 @@ def ownership(config, deadline=None):
     return {"worker_version": actual_version, "namespaces": ids, "health": health, **app}
 
 
-def wait_ownership(config):
-    deadline = time.monotonic() + 180
+def wait_ownership(config, deadline=None, *, allow_propagation=True):
+    deadline = time.monotonic() + 180 if deadline is None else deadline
     for retry in range(10):
         try:
             return ownership(config, deadline)
-        except (ValueError, KeyError, TransportError):
-            if retry == 9 or time.monotonic() >= deadline:
-                raise ValueError("created ownership readback did not converge; controlled recovery required") from None
-            time.sleep(min(5, remaining_timeout(deadline, 5)))
+        except (TransientRpcError, TransportError, CommandFailure, subprocess.TimeoutExpired, KeyError):
+            pass
+        except ValueError:
+            if not allow_propagation:
+                raise  # Established ownership drift must never be retried/adopted.
+        if retry == 9 or time.monotonic() >= deadline:
+            raise ValueError("created ownership readback did not converge; controlled recovery required") from None
+        time.sleep(min(5, remaining_timeout(deadline, 5)))
 
 
 def deploy(case, directory):
@@ -481,15 +500,17 @@ def cleanup(case, directory):
         command("npx", "wrangler", "deploy", "--config", path.name, "--env", "staging", cwd=ROOT / "server", timeout=remaining_timeout(deadline, 120))
     phase = receipt.get("retirement_phase", "original")
     if phase == "original":
-        current = ownership(config, deadline)
+        current = wait_ownership(config, deadline, allow_propagation=False)
         if any(current[k] != receipt[k] for k in current):
             raise ValueError("resource ownership changed; refuse deletion")
         receipt["retirement_phase"] = "disabling"
         save(directory / "receipt.json", receipt)
         try:
             deploy_config(disabled, "disabled")
-        except (CommandFailure, subprocess.TimeoutExpired):
-            pass  # Only exact readback can establish whether deployment applied.
+        except (CommandFailure, subprocess.TimeoutExpired) as error:
+            # CommandFailure is already bounded/redacted by command(). Only the
+            # subsequent exact readback can prove whether deployment applied.
+            print(str(error)[:4096], file=sys.stderr)
         receipt["disabled_worker_version"] = wait_retired(disabled, config, receipt, deadline)
         receipt["retirement_phase"] = "disabled"
         save(directory / "receipt.json", receipt)
@@ -501,13 +522,13 @@ def cleanup(case, directory):
         if wait_retired(disabled, None, receipt, deadline) != disabled_version:
             raise ValueError("disabled Worker changed before application deletion")
         # Official order: remove Container config, delete app/instances, THEN class.
-        for retry in range(4):
-            app = _verify_application(config, applications(timeout=remaining_timeout(deadline, 60)))
+        for retry in range(10):
+            app = _verify_application(config, wait_applications(deadline))
             if app is None:
                 break
             if app != {k: receipt[k] for k in app}:
                 raise ValueError("container identity changed before deletion")
-            if retry == 3:
+            if retry == 9:
                 raise ValueError("owned container remains after deletion")
             if wait_retired(disabled, None, receipt, deadline) != disabled_version:
                 raise ValueError("disabled Worker changed before application deletion")
@@ -526,14 +547,14 @@ def cleanup(case, directory):
         save(directory / "receipt.json", receipt)
         try:
             deploy_config(stub, "retired")
-        except (CommandFailure, subprocess.TimeoutExpired):
-            pass
+        except (CommandFailure, subprocess.TimeoutExpired) as error:
+            print(str(error)[:4096], file=sys.stderr)
         receipt["stub_version"] = wait_retired(stub, disabled, receipt, deadline)
         receipt["retirement_phase"] = "retired"
         save(directory / "receipt.json", receipt)
     if receipt.get("retirement_phase") != "retired":
         raise ValueError("unknown retirement checkpoint; controlled recovery required")
-    if _verify_application(config, applications(timeout=remaining_timeout(deadline, 60))) is not None:
+    if _verify_application(config, wait_applications(deadline)) is not None:
         raise ValueError("application absence changed before Worker deletion")
     worker, stub_version = config["name"], receipt["stub_version"]
     for retry in range(5):
@@ -558,7 +579,7 @@ def cleanup(case, directory):
         if retry == 9:
             raise ValueError("temporary namespace absence did not converge")
         time.sleep(remaining_timeout(deadline, 3))
-    if _verify_application(config, applications(timeout=remaining_timeout(deadline, 60))) is not None:
+    if _verify_application(config, wait_applications(deadline)) is not None:
         raise ValueError("temporary application reappeared; refuse adoption")
     receipt.update(cleanup="confirmed", control_plane_cleanup="confirmed")
     save(directory / "receipt.json", receipt)
