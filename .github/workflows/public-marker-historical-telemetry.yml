@@ -1,0 +1,49 @@
+name: Read fixed historical marker telemetry
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: public-marker-historical-telemetry-44675007747
+  cancel-in-progress: false
+
+jobs:
+  query:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'leanprover/lean-eval-submissions' &&
+      github.ref == 'refs/heads/main' && github.ref_protected == true
+    environment: cloudflare-staging
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.18'
+
+      - name: Query once and write only the safe projection
+        shell: python -I -B {0}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          import runpy
+          runpy.run_path("diagnostics/public_marker_historical_telemetry.py", run_name="__main__")
+
+      - name: Upload only the safe report after the query process exits
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-marker-44675007747-safe-report
+          path: ${{ runner.temp }}/public-marker-historical-telemetry.json
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 7
