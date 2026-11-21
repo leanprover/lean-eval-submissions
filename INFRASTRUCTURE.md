@@ -263,14 +263,17 @@ Both State repositories are private append-only ledgers.
 | Repository | `leanprover/lean-eval-state-staging` | `leanprover/lean-eval-state` |
 | Ruleset | `21094006` | `21094005` |
 | GitHub App | Lean Eval State Writer (staging) | Lean Eval State Writer |
-| Owner / key custodian | `leanprover` / Kim Morrison | `leanprover` / Kim Morrison |
+| Owner / key custodian | `kim-em` (installed on `leanprover`) / Kim Morrison | `kim-em` (installed on `leanprover`) / Kim Morrison |
 | Permission | Metadata read, Contents read/write | Metadata read, Contents read/write |
 | Installation | this repository only | this repository only |
 
 Each Worker mints a one-hour installation token from its App's key, restricted
 to its own State repository with Contents write and Metadata read, and renews
 it five minutes before expiry. Each App has no webhook and subscribes to no
-events. Installation tokens draw on the App installation's own REST
+events. Like the legacy workflow reader, both are temporarily owned by
+`kim-em` and installed on `leanprover` by an organization owner; recovery
+requires the `kim-em` account until they are transferred. Installation tokens
+draw on the App installation's own REST
 allowance, so State does not depend on any person's quota.
 
 Rulesets reject deletion and non-fast-forward history and require strict
