@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-11-21T15:43:33Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1fe90-05f1-73a5-a514-33615104a791"
+      },
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {},
+      "result_id": "r2_05600f4e1acc8ed84de310ba05b7fc923ef1a0d7b8af5a20f03b1ea515c30e11",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2e99821ff020664cbb14236a13eefa8b56207fc7",
+        "repo": "Fernadoo/lean-eval-private"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "fernadoo"
+}
