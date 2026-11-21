@@ -75,6 +75,25 @@
         "ref": "9d5f86c71ac1203b6a7385ea1ec86d47d749073a",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-21T23:58:18Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1fecb-51a1-7fe9-9ded-6e78dc016e08"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {},
+      "result_id": "r2_1d2a4a9908478b961b8be04147fc92efd81416e5a13e16b304d5f624d09e2b58",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c0918294cb7220bcfe5f23c20f9e4d5aa15789ac",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
