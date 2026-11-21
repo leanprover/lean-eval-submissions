@@ -1,0 +1,82 @@
+# Inactive installation candidate. No workflow publishes this recipe.
+# BuildKit is required for this Dockerfile's dedicated context allowlist.
+# The only supported benchmark is original208/4.35rc3; this is not a Task image.
+FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
+
+USER root
+
+# Stock Lake uses the release's own clang/compiler, comparator, exporter and
+# both kernels. No separately built comparator/NanoDa/Lean/Lake is installed.
+RUN /usr/bin/python3 -I -B -c 'import pathlib,sys; assert pathlib.Path(sys.executable).resolve() == pathlib.Path("/usr/local/bin/python3.11").resolve() == pathlib.Path("/usr/local/python/bin/python3.11"); assert sys.version_info[:3] == (3, 11, 14)' \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends \
+      ca-certificates curl git zstd xz-utils \
+      build-essential meson ninja-build pkg-config libcap-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --set python3 /usr/local/bin/python3.11 \
+    && /usr/bin/python3 -I -B -c 'import pathlib,sys; assert pathlib.Path(sys.executable).resolve() == pathlib.Path("/usr/local/bin/python3.11").resolve() == pathlib.Path("/usr/local/python/bin/python3.11"); assert sys.version_info[:3] == (3, 11, 14)'
+
+# Use the existing authenticated public artifact, staged by the operator only
+# after separate build authorization. A host/Nix-adapted prefix is not accepted.
+COPY .stock-image-inputs/lean-4.35.0-rc3-linux.tar.zst /tmp/stock-release.tar.zst
+RUN echo '1526de16c0496f16b46a168f26c990af4e3796505273c3342fec17d72d763997  /tmp/stock-release.tar.zst' \
+      | sha256sum --check --strict \
+    && test "$(stat -c %s /tmp/stock-release.tar.zst)" = 595611952 \
+    && mkdir -p /opt/lean-eval/toolchain \
+    && tar --extract --zstd --no-same-owner --file /tmp/stock-release.tar.zst --strip-components=1 \
+      --directory /opt/lean-eval/toolchain \
+    && rm /tmp/stock-release.tar.zst
+
+# Same release/source hash as install_bwrap.sh; do not load a host AppArmor
+# profile during an image build. Actual nested namespaces require a later real
+# runtime test on the intended host, with its original security policy intact.
+RUN curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+      https://github.com/containers/bubblewrap/releases/download/v0.12.0/bubblewrap-0.12.0.tar.xz \
+      --output /tmp/bubblewrap.tar.xz \
+    && echo '9760d007363e3abba7c747489910f9f82d9fca53ba3bd3282e396fa3c97a3314  /tmp/bubblewrap.tar.xz' \
+      | sha256sum --check --strict \
+    && tar --extract --xz --no-same-owner --file /tmp/bubblewrap.tar.xz --directory /tmp \
+    && /usr/bin/python3.10 -I -B /usr/bin/meson setup /tmp/bubblewrap-0.12.0/build /tmp/bubblewrap-0.12.0 \
+      -Dselinux=disabled -Dman=disabled -Dbash_completion=disabled \
+      -Dzsh_completion=disabled -Dtests=false \
+    && ninja -C /tmp/bubblewrap-0.12.0/build \
+    && install -m 0755 /tmp/bubblewrap-0.12.0/build/bwrap /usr/bin/bwrap \
+    && rm -rf /tmp/bubblewrap-0.12.0 /tmp/bubblewrap.tar.xz
+
+ENV PATH=/opt/lean-eval/toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY requirements-jsonschema-workflow.txt /tmp/stock-jsonschema.txt
+RUN /usr/bin/python3 -I -B -c 'import sysconfig; assert sysconfig.get_path("purelib") == sysconfig.get_path("platlib") == "/usr/local/python/lib/python3.11/site-packages"' \
+    && /usr/bin/python3 -I -B -m pip --isolated install --disable-pip-version-check \
+      --no-deps --no-compile --upgrade --only-binary=:all: --require-hashes \
+      --target /usr/local/python/lib/python3.11/site-packages -r /tmp/stock-jsonschema.txt \
+    && rm /tmp/stock-jsonschema.txt \
+    && /usr/bin/python3 -I -B -c 'import jsonschema,referencing,rpds'
+# --upgrade replaces only the named hash-locked distributions at the existing
+# native site directory; it neither upgrades pip nor resolves extra dependencies.
+
+COPY scripts/stock_image_208.py scripts/prepare_stock_workspace.py \
+     scripts/stock_replay_contract.py scripts/stock_replay_supervisor.py \
+     scripts/stock_replay_measurement.py scripts/replay_orchestrator.py \
+     scripts/results_schema.py scripts/evaluate_submission.py /opt/lean-eval/
+COPY configuration/stock-image-208-public-inputs-v1.json /opt/lean-eval/stock-image-208-public-inputs-v1.json
+COPY server/replay-image/replay-measure server/replay-image/replay-measure-stock \
+     server/replay-image/replay-supervise-stock server/replay-image/stock-supervisor-agent /opt/lean-eval/
+# stock_replay_contract's existing ROOT is parent.parent of its flat installed
+# module: /opt. Preserve that unchanged lookup rather than patching the module.
+COPY schemas/benchmark-configuration-lock-v1.schema.json \
+     schemas/replay-execution-profile-v3.schema.json \
+     schemas/replay-measurement-config-v2.schema.json \
+     schemas/replay-execution-request-v3.schema.json /opt/schemas/
+
+RUN chmod 0555 /opt/lean-eval/*.py /opt/lean-eval/replay-measure \
+      /opt/lean-eval/replay-measure-stock /opt/lean-eval/replay-supervise-stock \
+      /opt/lean-eval/stock-supervisor-agent \
+    && /usr/bin/python3 -I -B /opt/lean-eval/stock_image_208.py fetch-public-git \
+    && mkdir -p -m 0700 /run/lean-eval \
+    && /usr/bin/python3 -I -B /opt/lean-eval/stock_image_208.py check-installed \
+    && test -z "$(find /opt/lean-eval -type d -name __pycache__ -print -quit)"
+
+# Preserve the pinned base's Sandbox startup ENTRYPOINT/CMD. Installation CI
+# explicitly overrides the entrypoint for the finite check; no provider image
+# or request3 consumer is activated merely by constructing this source recipe.

@@ -1,0 +1,116 @@
+name: Build inactive stock208 replay image
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/stock-replay-image-208.yml'
+      - 'Dockerfile.stock-replay-208'
+      - 'Dockerfile.stock-replay-208.dockerignore'
+      - 'configuration/stock-image-208-public-inputs-v1.json'
+      - 'requirements-jsonschema-workflow.txt'
+      - 'scripts/stock_image_208.py'
+      - 'scripts/build_stock_image_208_evidence.py'
+      - 'scripts/prepare_stock_workspace.py'
+      - 'scripts/stock_replay_contract.py'
+      - 'scripts/stock_replay_supervisor.py'
+      - 'scripts/stock_replay_measurement.py'
+      - 'scripts/replay_orchestrator.py'
+      - 'scripts/results_schema.py'
+      - 'scripts/evaluate_submission.py'
+      - 'server/replay-image/replay-measure'
+      - 'server/replay-image/replay-measure-stock'
+      - 'server/replay-image/replay-supervise-stock'
+      - 'server/replay-image/stock-supervisor-agent'
+      - 'schemas/benchmark-configuration-lock-v1.schema.json'
+      - 'schemas/replay-execution-profile-v3.schema.json'
+      - 'schemas/replay-measurement-config-v2.schema.json'
+      - 'schemas/replay-execution-request-v3.schema.json'
+      - 'tests/test_stock_image_208.py'
+      - 'tests/test_stock_image_208_build_workflow.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stock208-image-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: >-
+      github.repository == 'leanprover/lean-eval-submissions' &&
+      ((github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    env:
+      DOCKER_BUILDKIT: '1'
+      IMAGE: lean-eval-stock208:${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # actions/checkout pinned to v7.0.1; build the exact reported source head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      # jlumbroso/free-disk-space pinned to v1.3.1, as in the existing image build.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Stage only the fixed public stock release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          mkdir -m 0700 .stock-image-inputs
+          archive=.stock-image-inputs/lean-4.35.0-rc3-linux.tar.zst
+          curl --fail --location --silent --show-error --proto '=https' \
+            --proto-redir '=https' --tlsv1.2 --max-redirs 5 \
+            --connect-timeout 20 --max-time 900 --max-filesize 595611952 \
+            https://github.com/leanprover/lean4/releases/download/v4.35.0-rc3/lean-4.35.0-rc3-linux.tar.zst \
+            --output "$archive.part"
+          test "$(stat -c %s "$archive.part")" = 595611952
+          echo "1526de16c0496f16b46a168f26c990af4e3796505273c3342fec17d72d763997  $archive.part" \
+            | sha256sum --check --strict
+          mv "$archive.part" "$archive"
+
+      - name: Build the inactive installation candidate
+        run: >-
+          docker build --progress=plain --file Dockerfile.stock-replay-208
+          --tag "$IMAGE" .
+
+      - name: Enforce image ceiling and run only the explicit offline check
+        run: |
+          set -euo pipefail
+          image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          test "$image_size" -gt 0
+          test "$image_size" -le 21474836480
+          timeout --signal=TERM --kill-after=10s 180s \
+            docker run --rm --network none --entrypoint /usr/bin/python3 "$IMAGE" \
+              -I -B /opt/lean-eval/stock_image_208.py check-installed > stock208-installation.private.json
+          image_id=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+          IMAGE_ID="$image_id" IMAGE_SIZE_BYTES="$image_size" \
+            python3 -B scripts/build_stock_image_208_evidence.py
+
+      # Only a validated <=16KiB source-free JSON receipt; never image/source/logs.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: stock208-nonpublishing-image-evidence
+          path: stock208-image-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove staged public archive and private installation output
+        if: always()
+        run: |
+          rm -rf .stock-image-inputs
+          rm -f stock208-installation.private.json
