@@ -18,6 +18,25 @@
         "ref": "2e99821ff020664cbb14236a13eefa8b56207fc7",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-21T17:14:56Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1fe91-8c91-7e1e-b5ca-e6ad9511bdbb"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {},
+      "result_id": "r2_51abe233c0f9a4e8740542455e5a75f32298bbd04d623e2a90b50a4073760c4e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "315f11465e5d17ea07b4850ec4da3b3b20899563",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
