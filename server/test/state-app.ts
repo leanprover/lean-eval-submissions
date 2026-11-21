@@ -30,6 +30,10 @@ export async function stateAppEnv(): Promise<{ STATE_APP_ID: string; STATE_APP_P
 export function stateAppTokenReplies(): Response[] {
   return [
     Response.json({ id: 77 }),
-    Response.json({ token: "ghs_state-installation-token", expires_at: new Date(Date.now() + 3_600_000).toISOString() }),
+    Response.json({
+      token: "ghs_state-installation-token",
+      expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      permissions: { contents: "write", metadata: "read" },
+    }),
   ];
 }

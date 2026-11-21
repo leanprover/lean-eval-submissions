@@ -1897,18 +1897,6 @@ export class GitHubStateRepository {
     this.#fetcher = fetcher;
   }
 
-  async #authorizedSnapshot(): Promise<BranchSnapshot> {
-    const repository = object(
-      await jsonCall(this.#config, this.#fetcher, ""),
-      "State repository",
-    );
-    const permissions = object(repository.permissions, "State repository permissions");
-    if (permissions.push !== true) {
-      throw new GitHubStateError(403, "State credential does not have push permission");
-    }
-    return branchSnapshot(this.#config, this.#fetcher);
-  }
-
   async #resultOwnerSnapshot(): Promise<BranchSnapshot> {
     const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     const proofKey = resultOwnerContractProofCacheKey(
@@ -2568,11 +2556,11 @@ export class GitHubStateRepository {
   }
 
   async assertAvailable(): Promise<void> {
-    await this.#authorizedSnapshot();
+    await branchSnapshot(this.#config, this.#fetcher);
   }
 
   async assertWritable(): Promise<string> {
-    const snapshot = await this.#authorizedSnapshot();
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }
@@ -2587,7 +2575,7 @@ export class GitHubStateRepository {
     if (this.#config.repository.toLowerCase() !== PRODUCTION_STATE_REPOSITORY) {
       throw new GitHubStateError(503, "production State qualification targeted the wrong repository");
     }
-    const snapshot = await this.#authorizedSnapshot();
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     const [, contract] = await Promise.all([
       assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha),
       assertResultOwnerContractAt(

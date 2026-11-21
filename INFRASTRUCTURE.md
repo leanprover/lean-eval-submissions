@@ -282,9 +282,11 @@ environment's State.
 
 Rotate a key by generating a replacement in the App's settings, replacing only
 the matching Worker's `STATE_APP_PRIVATE_KEY`, running the protected write
-preflight (`verify-state-writer.yml`), and then deleting the old key. Immediate
-revocation deletes the App key and keeps that environment's intake disabled
-until a replacement has passed the same preflight.
+preflight (`verify-state-writer.yml`), and then deleting the old key. Deleting
+a key stops new tokens but not ones already minted, which live up to an hour.
+For immediate containment suspend or uninstall the App on its State repository,
+and keep that environment's intake disabled until a replacement has passed the
+same preflight.
 
 ### Audit repository rulesets
 

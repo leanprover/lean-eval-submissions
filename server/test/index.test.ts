@@ -219,7 +219,6 @@ describe("Worker routing", () => {
   it("authenticates, checks write readiness, and caches the result", async () => {
     const replies = [
       ...stateAppTokenReplies(),
-      Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: "1".repeat(40) } }),
       Response.json({ tree: { sha: "2".repeat(40) } }),
     ];
@@ -243,7 +242,7 @@ describe("Worker routing", () => {
     await waitOnExecutionContext(firstContext);
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ status: "ready", environment: "staging" });
-    expect(upstream).toHaveBeenCalledTimes(5);
+    expect(upstream).toHaveBeenCalledTimes(4);
     const [, stateInit] = upstream.mock.calls[2] ?? [];
     expect(new Headers(stateInit?.headers).get("authorization")).toBe("Bearer ghs_state-installation-token");
 
@@ -252,14 +251,13 @@ describe("Worker routing", () => {
     await waitOnExecutionContext(secondContext);
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ status: "ready", environment: "staging" });
-    expect(upstream).toHaveBeenCalledTimes(5);
+    expect(upstream).toHaveBeenCalledTimes(4);
     upstream.mockRestore();
   });
 
   it("proves State write authority while intake remains disabled", async () => {
     const replies = [
       ...stateAppTokenReplies(),
-      Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: "1".repeat(40) } }),
       Response.json({ tree: { sha: "2".repeat(40) } }),
       Response.json({ ref: "refs/heads/main", object: { sha: "1".repeat(40) } }),
@@ -292,8 +290,8 @@ describe("Worker routing", () => {
       intake_lease_expires_at: null,
       state_commit: "1".repeat(40),
     });
-    expect(upstream).toHaveBeenCalledTimes(6);
-    const [, init] = upstream.mock.calls[5] ?? [];
+    expect(upstream).toHaveBeenCalledTimes(5);
+    const [, init] = upstream.mock.calls[4] ?? [];
     expect(init?.method).toBe("PATCH");
     upstream.mockRestore();
   });
@@ -304,7 +302,6 @@ describe("Worker routing", () => {
     const rootEntries = Object.entries(reviewed.root_entries).map(([path, entry]) => ({ path, ...entry }));
     const replies = [
       ...stateAppTokenReplies(),
-      Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: contract } }),
       Response.json({ tree: { sha: tree } }),
       Response.json({ name: "main", protected: true, commit: { sha: contract } }),
@@ -346,7 +343,7 @@ describe("Worker routing", () => {
       state_contract_verified: true,
       state_event_schema_sha256: reviewed.event_schema_sha256,
     });
-    expect(upstream).toHaveBeenCalledTimes(9);
+    expect(upstream).toHaveBeenCalledTimes(8);
     upstream.mockRestore();
   });
 
