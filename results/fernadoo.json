@@ -56,6 +56,25 @@
         "ref": "d74f55b2fcbe5d6651c014927314b2df429eea9f",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-21T20:16:52Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1febc-bb41-74e2-bb35-7a9c6995a023"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {},
+      "result_id": "r2_34311feed211efaf3867849ec9a921052b4284f95f4ec89c96a894bcc42ae493",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9d5f86c71ac1203b6a7385ea1ec86d47d749073a",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
