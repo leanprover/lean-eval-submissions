@@ -23,9 +23,10 @@ SECRET_BINDINGS = {
         "AUTH_TOKEN_SECRET",
         "GITHUB_OAUTH_CLIENT_ID",
         "GITHUB_OAUTH_CLIENT_SECRET",
-        "GITHUB_STATE_TOKEN",
         "LIFECYCLE_CALLBACK_TOKEN",
         "READINESS_TOKEN",
+        "STATE_APP_ID",
+        "STATE_APP_PRIVATE_KEY",
     },
     "broker": {
         "DISPATCH_APP_ID",
@@ -121,6 +122,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
+    "server/src/state-app-token.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
 ]
@@ -135,8 +137,10 @@ CONVERGENCE_RETRY_EXIT = 75
 # A disabled v1-only receiver still strands callbacks already dispatched by a
 # v2 producer. Admit only the independently reviewed receiver implementation;
 # later callback implementations need their own explicit compatibility review.
+# Receivers that read State with a personal token are retired: that secret no
+# longer exists, so none of them can serve a callback.
 EVALUATION_V2_CALLBACK_DIGESTS = frozenset({
-    "118a376bc3793c4c25e7f7507a647e68b901044ccfcb171026b805626802ae97",
+    "3d90e1264a5c0f4071a0414f3d32c99c3ce7e773b1eda7d60a762859dc898e7d",
 })
 STATE_CONTRACT_ROOT_KINDS = {
     "README.md": ("100644", "blob"),

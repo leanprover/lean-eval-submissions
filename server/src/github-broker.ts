@@ -51,7 +51,7 @@ export type BrokerRuntimeEnv = Omit<
   LEGACY_SOURCE_APP_PRIVATE_KEY?: string;
 }>;
 
-type GitHubApp = Readonly<{ appId: string; privateKey: string }>;
+export type GitHubApp = Readonly<{ appId: string; privateKey: string }>;
 type CachedToken = Readonly<{ token: string; expiresAt: number }>;
 
 class BrokerError extends Error {
@@ -443,7 +443,7 @@ function pemPrivateKey(pem: string): Uint8Array {
   return der(0x30, concat(version, rsaAlgorithm, der(0x04, decoded)));
 }
 
-async function appJwt(app: GitHubApp, nowMs: number): Promise<string> {
+export async function appJwt(app: GitHubApp, nowMs: number): Promise<string> {
   const issuedAt = Math.floor(nowMs / 1000) - 60;
   const unsigned = `${utf8Base64Url({ alg: "RS256", typ: "JWT" })}.${utf8Base64Url({
     iat: issuedAt,

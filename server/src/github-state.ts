@@ -202,7 +202,7 @@ const defaultGitHubFetch: GitHubFetch = (input, init) =>
 
 type GitHubStateConfig = Readonly<{
   repository: string;
-  token: string;
+  token: () => Promise<string>;
   userAgent: string;
 }>;
 
@@ -432,10 +432,10 @@ function rememberModelIdentityContractProof(key: string): void {
   modelIdentityContractProofCache.set(key, true);
 }
 
-function headers(config: GitHubStateConfig): Headers {
+async function headers(config: GitHubStateConfig): Promise<Headers> {
   return new Headers({
     accept: "application/vnd.github+json",
-    authorization: `Bearer ${config.token}`,
+    authorization: `Bearer ${await config.token()}`,
     "user-agent": config.userAgent,
     "x-github-api-version": "2022-11-28",
   });
@@ -455,7 +455,7 @@ async function jsonCall(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
-  const requestHeaders = headers(config);
+  const requestHeaders = await headers(config);
   new Headers(init.headers).forEach((value, key) => requestHeaders.set(key, value));
   const response = await fetcher(repoPath(config, path), {
     ...init,
@@ -1049,7 +1049,7 @@ async function updateReference(
   fetcher: GitHubFetch,
   commit: string,
 ): Promise<"applied" | "collision"> {
-  const requestHeaders = headers(config);
+  const requestHeaders = await headers(config);
   requestHeaders.set("content-type", "application/json");
   const request: RequestInit = {
     method: "PATCH",
@@ -1897,18 +1897,6 @@ export class GitHubStateRepository {
     this.#fetcher = fetcher;
   }
 
-  async #authorizedSnapshot(): Promise<BranchSnapshot> {
-    const repository = object(
-      await jsonCall(this.#config, this.#fetcher, ""),
-      "State repository",
-    );
-    const permissions = object(repository.permissions, "State repository permissions");
-    if (permissions.push !== true) {
-      throw new GitHubStateError(403, "State credential does not have push permission");
-    }
-    return branchSnapshot(this.#config, this.#fetcher);
-  }
-
   async #resultOwnerSnapshot(): Promise<BranchSnapshot> {
     const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     const proofKey = resultOwnerContractProofCacheKey(
@@ -2568,11 +2556,11 @@ export class GitHubStateRepository {
   }
 
   async assertAvailable(): Promise<void> {
-    await this.#authorizedSnapshot();
+    await branchSnapshot(this.#config, this.#fetcher);
   }
 
   async assertWritable(): Promise<string> {
-    const snapshot = await this.#authorizedSnapshot();
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }
@@ -2587,7 +2575,7 @@ export class GitHubStateRepository {
     if (this.#config.repository.toLowerCase() !== PRODUCTION_STATE_REPOSITORY) {
       throw new GitHubStateError(503, "production State qualification targeted the wrong repository");
     }
-    const snapshot = await this.#authorizedSnapshot();
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     const [, contract] = await Promise.all([
       assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha),
       assertResultOwnerContractAt(

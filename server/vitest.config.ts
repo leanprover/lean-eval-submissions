@@ -5,9 +5,10 @@ for (const name of [
   "AUTH_TOKEN_SECRET",
   "GITHUB_OAUTH_CLIENT_ID",
   "GITHUB_OAUTH_CLIENT_SECRET",
-  "GITHUB_STATE_TOKEN",
   "LIFECYCLE_CALLBACK_TOKEN",
   "READINESS_TOKEN",
+  "STATE_APP_ID",
+  "STATE_APP_PRIVATE_KEY",
 ]) {
   process.env[name] ??= `test-only-${name.toLowerCase()}`;
 }

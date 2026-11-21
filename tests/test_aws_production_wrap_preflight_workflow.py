@@ -86,7 +86,7 @@ class AwsProductionWrapPreflightWorkflowTests(unittest.TestCase):
             "actions/checkout",
             "upload-artifact",
             "download-artifact",
-            "GITHUB_STATE_TOKEN",
+            "STATE_APP_PRIVATE_KEY",
             "ARCHIVER_TOKEN",
             "LEADERBOARD_WRITE_TOKEN",
             "lean-eval-audit",

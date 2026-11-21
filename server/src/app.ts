@@ -113,6 +113,7 @@ import {
   resultOwnerStateContractCommit,
 } from "./result-owner";
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
+import { stateAppToken } from "./state-app-token";
 import {
   decodeModelAliasAssignment,
   decodeModelConsolidation,
@@ -138,7 +139,6 @@ export type RuntimeEnv = Omit<
   | "GITHUB_BROKER"
   | "GITHUB_OAUTH_CLIENT_ID"
   | "GITHUB_OAUTH_CLIENT_SECRET"
-  | "GITHUB_STATE_TOKEN"
   | "GITHUB_VERIFICATION_TOKEN"
   | "INTAKE_ENABLED"
   | "INTAKE_ENABLEMENT_MODE"
@@ -167,6 +167,8 @@ export type RuntimeEnv = Omit<
   | "MODEL_IDENTITY_STATE_CONTRACT_COMMIT"
   | "RELEASE_OPT_IN_API_ENABLED"
   | "RELEASE_OPT_OUT_API_ENABLED"
+  | "STATE_APP_ID"
+  | "STATE_APP_PRIVATE_KEY"
   | "STATE_REPOSITORY"
 > &
   Readonly<{
@@ -182,7 +184,6 @@ export type RuntimeEnv = Omit<
     GITHUB_BROKER?: Fetcher;
     GITHUB_OAUTH_CLIENT_ID?: string;
     GITHUB_OAUTH_CLIENT_SECRET?: string;
-    GITHUB_STATE_TOKEN?: string;
     GITHUB_VERIFICATION_TOKEN?: string;
     INTAKE_ENABLED: string;
     INTAKE_ENABLEMENT_MODE?: string;
@@ -211,6 +212,8 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
     RELEASE_OPT_IN_API_ENABLED?: string;
     RELEASE_OPT_OUT_API_ENABLED?: string;
+    STATE_APP_ID?: string;
+    STATE_APP_PRIVATE_KEY?: string;
     STATE_REPOSITORY: string;
   }>;
 
@@ -539,9 +542,14 @@ function stateRepository(
   env: RuntimeEnv,
   githubFetch: GitHubFetch = timedGitHubFetch,
 ): GitHubStateRepository {
-  if (!env.GITHUB_STATE_TOKEN) throw new GitHubStateError(503, "State credential missing");
+  if (!env.STATE_APP_ID || !env.STATE_APP_PRIVATE_KEY) throw new GitHubStateError(503, "State credential missing");
+  const app = { appId: env.STATE_APP_ID, privateKey: env.STATE_APP_PRIVATE_KEY };
   return new GitHubStateRepository(
-    { repository: env.STATE_REPOSITORY, token: env.GITHUB_STATE_TOKEN, userAgent: "lean-eval-submission-worker" },
+    {
+      repository: env.STATE_REPOSITORY,
+      token: stateAppToken(app, env.STATE_REPOSITORY, githubFetch),
+      userAgent: "lean-eval-submission-worker",
+    },
     githubFetch,
   );
 }
@@ -558,7 +566,9 @@ async function readiness(
   if (!verifyWrite && !intake.effective) {
     return json({ status: "not_ready", reason: "intake_disabled", environment: env.DEPLOYMENT_ENVIRONMENT }, 503);
   }
-  if (!env.GITHUB_STATE_TOKEN) return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
+  if (!env.STATE_APP_ID || !env.STATE_APP_PRIVATE_KEY) {
+    return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
+  }
   if (!verifyWrite) {
     const cached = await cachedReadiness(env);
     if (cached) return cached;

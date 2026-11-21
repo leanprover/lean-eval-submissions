@@ -132,7 +132,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("--jq '{content,encoding,path,sha,type,url}'", ROLLBACK)
         self.assertIn("base64.b64decode", ROLLBACK_VALIDATOR)
         self.assertIn("GH_TOKEN: ${{ github.token }}", ROLLBACK)
-        self.assertNotIn("GITHUB_STATE_TOKEN", ROLLBACK)
+        self.assertNotIn("STATE_APP_PRIVATE_KEY", ROLLBACK)
         self.assertIn("state_contract_verified", LEASE_SMOKE)
 
     def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
@@ -171,7 +171,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             STATE_WRITER_PREFLIGHT,
         )
         self.assertNotIn("requires intake to remain disabled", STATE_WRITER_PREFLIGHT)
-        self.assertNotIn("GITHUB_STATE_TOKEN", STATE_WRITER_PREFLIGHT)
+        self.assertNotIn("STATE_APP_PRIVATE_KEY", STATE_WRITER_PREFLIGHT)
 
     def test_infrastructure_only_merge_does_not_redeploy(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
@@ -642,7 +642,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("python-version: '3.11.18'", canary)
         self.assertIn("timeout-minutes: 12", canary)
         self.assertIn("--timeout-seconds 480", canary)
-        self.assertNotIn("GITHUB_STATE_TOKEN", canary)
+        self.assertNotIn("STATE_APP_PRIVATE_KEY", canary)
         self.assertNotIn("GITHUB_DISPATCH_TOKEN", canary)
         self.assertNotIn("upload-artifact", canary)
         production = DEPLOY.split("\n  deploy-production:", 1)[1]
@@ -1095,9 +1095,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "AUTH_TOKEN_SECRET",
             "GITHUB_OAUTH_CLIENT_ID",
             "GITHUB_OAUTH_CLIENT_SECRET",
-            "GITHUB_STATE_TOKEN",
             "LIFECYCLE_CALLBACK_TOKEN",
             "READINESS_TOKEN",
+            "STATE_APP_ID",
+            "STATE_APP_PRIVATE_KEY",
         }
         broker_secrets = {
             "DISPATCH_APP_ID",

@@ -820,21 +820,21 @@ function sequence(responses: readonly QueuedResponse[]) {
 
 function repository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }
 
 function productionRepository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }
 
 function stagingRepository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state-staging", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state-staging", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }
@@ -2168,13 +2168,12 @@ describe("atomic Git State append", () => {
 
   it("proves write authority with a non-forced same-commit ref update", async () => {
     const fetcher = sequence([
-      json({ permissions: { push: true } }),
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       json({ ref: "refs/heads/main", object: { sha: HEAD } }),
     ]);
     await expect(repository(fetcher).assertWritable()).resolves.toBe(HEAD);
-    const [, init] = fetcher.mock.calls[3] ?? [];
+    const [, init] = fetcher.mock.calls[2] ?? [];
     expect(init?.method).toBe("PATCH");
     if (typeof init?.body !== "string") throw new TypeError("write probe body must be JSON");
     expect(JSON.parse(init.body)).toEqual({ force: false, sha: HEAD });
@@ -2182,7 +2181,6 @@ describe("atomic Git State append", () => {
 
   it("binds production write authority to protected main and exact contract subtrees", async () => {
     const fetcher = sequence([
-      json({ permissions: { push: true } }),
       json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
       json({ tree: { sha: TREE } }),
       json({
@@ -2211,7 +2209,6 @@ describe("atomic Git State append", () => {
   it("returns the actual protected old or archive source proof without adding requests", async () => {
     for (const [anchor, contract] of Object.entries(rollbackQualification.supported_state_contracts)) {
       const fetcher = sequence([
-        json({ permissions: { push: true } }),
         json({ object: { sha: anchor } }),
         json({ tree: { sha: TREE } }),
         json({ name: "main", protected: true, commit: { sha: anchor } }),
@@ -2224,7 +2221,7 @@ describe("atomic Git State append", () => {
         contractCommit: anchor,
         eventSchemaSha256: contract.event_schema_sha256,
       });
-      expect(fetcher).toHaveBeenCalledTimes(7);
+      expect(fetcher).toHaveBeenCalledTimes(6);
       const mutations = fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
       expect(mutations).toHaveLength(1);
       const body = mutations[0]?.[1]?.body;
@@ -2269,7 +2266,6 @@ describe("atomic Git State append", () => {
 
   it("rejects protection or head drift after the production write probe", async () => {
     const fetcher = sequence([
-      json({ permissions: { push: true } }),
       json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
       json({ tree: { sha: TREE } }),
       json({
@@ -2296,7 +2292,6 @@ describe("atomic Git State append", () => {
 
   it("refuses unprotected, stale, or wrong-repository production proofs", async () => {
     const unprotected = sequence([
-      json({ permissions: { push: true } }),
       json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
       json({ tree: { sha: TREE } }),
       json({
@@ -2311,7 +2306,6 @@ describe("atomic Git State append", () => {
     ).rejects.toMatchObject({ status: 503 });
 
     const stale = sequence([
-      json({ permissions: { push: true } }),
       json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
       json({ tree: { sha: TREE } }),
       json({

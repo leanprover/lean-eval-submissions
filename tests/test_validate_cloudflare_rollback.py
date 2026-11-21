@@ -745,7 +745,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             changed.append((name, version))
         missing_secret = copy.deepcopy(original)
         missing_secret["resources"]["bindings"] = [
-            b for b in missing_secret["resources"]["bindings"] if b["name"] != "GITHUB_STATE_TOKEN"
+            b for b in missing_secret["resources"]["bindings"] if b["name"] != "STATE_APP_PRIVATE_KEY"
         ]
         changed.append(("missing secret", missing_secret))
         for label, version in changed:

@@ -125,7 +125,8 @@ These GitHub environment copies support deployment and protected verification;
 they are not the complete Worker runtime secret set. Each deployed intake
 Worker separately has environment-specific Wrangler secrets for:
 
-- `GITHUB_STATE_TOKEN`, scoped only to its matching private State repository;
+- `STATE_APP_ID` and `STATE_APP_PRIVATE_KEY`, for the environment's State
+  Writer App, installed only on its matching private State repository;
 - `READINESS_TOKEN`;
 - `AUTH_TOKEN_SECRET`;
 - `LIFECYCLE_CALLBACK_TOKEN`; and
@@ -261,36 +262,34 @@ Both State repositories are private append-only ledgers.
 | --- | --- | --- |
 | Repository | `leanprover/lean-eval-state-staging` | `leanprover/lean-eval-state` |
 | Ruleset | `21094006` | `21094005` |
-| Fine-grained PAT | `lean-eval-state-writer-staging` (`18528992`) | `lean-eval-state-writer-production` (`18529041`) |
-| Issuer / custodian | Issuer not independently recorded / Kim Morrison | Issuer not independently recorded / Kim Morrison |
-| Scope | Metadata read, Contents read/write on this repository only | Metadata read, Contents read/write on this repository only |
-| Created / expires | 2026-08-21 / 2026-11-19 | 2026-08-21 / 2026-11-19 |
-| Rotation owner / deadline | Kim Morrison / 2026-11-05 | Kim Morrison / 2026-11-05 |
+| GitHub App | Lean Eval State Writer (staging) | Lean Eval State Writer |
+| Owner / key custodian | `kim-em` (installed on `leanprover`) / Kim Morrison | `kim-em` (installed on `leanprover`) / Kim Morrison |
+| Permission | Metadata read, Contents read/write | Metadata read, Contents read/write |
+| Installation | this repository only | this repository only |
+
+Each Worker mints a one-hour installation token from its App's key, restricted
+to its own State repository with Contents write and Metadata read, and renews
+it five minutes before expiry. Each App has no webhook and subscribes to no
+events. Like the legacy workflow reader, both are temporarily owned by
+`kim-em` and installed on `leanprover` by an organization owner; recovery
+requires the `kim-em` account until they are transferred. Installation tokens
+draw on the App installation's own REST
+allowance, so State does not depend on any person's quota.
 
 Rulesets reject deletion and non-fast-forward history and require strict
-`validate`. The recorded `kim-em` user bypass supports the two bootstrap PATs;
-remove it when those credentials retire. The internet-facing Worker must not
-write workflows, repository settings, the submissions repository, or the other
+`validate`. Each ruleset's bypass list names its environment's State Writer
+App. The internet-facing Worker must not write workflows, repository
+settings, the submissions repository, or the other environment's State; a
+separate App per environment keeps one Worker's key from reaching the other
 environment's State.
 
-Each fine-grained PAT consumes the issuing user's shared GitHub REST core
-allowance; its one-repository permission scope does not create an independent
-rate bucket. GitHub quota exhaustion therefore makes the matching Worker's
-readiness and State-dependent routes fail closed with `503` until capacity
-returns. While either Worker is in operational use, reserve the issuing
-principal's allowance by avoiding unrelated high-volume authenticated API work
-from that principal and treat a sustained readiness failure as a reason to
-pause intake. This is a current availability limitation, not permission to
-bypass State or weaken its fail-closed behavior.
-
-Rotate each token separately before its deadline: create a replacement with
-the same one-repository scope under the packet-bound principal, replace only the
-matching Worker's `GITHUB_STATE_TOKEN`, run the protected write preflight with
-intake disabled, and then revoke the old token in its issuing account. If the
-principal changes, update the matching State ruleset bypass only as a separate
-reviewed ruleset change. Immediate revocation removes the token in its issuing
-account and keeps that environment's intake disabled until a replacement has
-passed the same preflight.
+Rotate a key by generating a replacement in the App's settings, replacing only
+the matching Worker's `STATE_APP_PRIVATE_KEY`, running the protected write
+preflight (`verify-state-writer.yml`), and then deleting the old key. Deleting
+a key stops new tokens but not ones already minted, which live up to an hour.
+For immediate containment suspend or uninstall the App on its State repository,
+and keep that environment's intake disabled until a replacement has passed the
+same preflight.
 
 ### Audit repository rulesets
 
