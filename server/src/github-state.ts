@@ -202,7 +202,7 @@ const defaultGitHubFetch: GitHubFetch = (input, init) =>
 
 type GitHubStateConfig = Readonly<{
   repository: string;
-  token: string;
+  token: () => Promise<string>;
   userAgent: string;
 }>;
 
@@ -432,10 +432,10 @@ function rememberModelIdentityContractProof(key: string): void {
   modelIdentityContractProofCache.set(key, true);
 }
 
-function headers(config: GitHubStateConfig): Headers {
+async function headers(config: GitHubStateConfig): Promise<Headers> {
   return new Headers({
     accept: "application/vnd.github+json",
-    authorization: `Bearer ${config.token}`,
+    authorization: `Bearer ${await config.token()}`,
     "user-agent": config.userAgent,
     "x-github-api-version": "2022-11-28",
   });
@@ -455,7 +455,7 @@ async function jsonCall(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
-  const requestHeaders = headers(config);
+  const requestHeaders = await headers(config);
   new Headers(init.headers).forEach((value, key) => requestHeaders.set(key, value));
   const response = await fetcher(repoPath(config, path), {
     ...init,
@@ -1049,7 +1049,7 @@ async function updateReference(
   fetcher: GitHubFetch,
   commit: string,
 ): Promise<"applied" | "collision"> {
-  const requestHeaders = headers(config);
+  const requestHeaders = await headers(config);
   requestHeaders.set("content-type", "application/json");
   const request: RequestInit = {
     method: "PATCH",

@@ -88,7 +88,7 @@ class AwsKeyAdapterStagingWorkflowTests(unittest.TestCase):
 
     def test_smoke_cannot_write_project_state(self) -> None:
         for forbidden in (
-            "GITHUB_STATE_TOKEN",
+            "STATE_APP_PRIVATE_KEY",
             "ARCHIVER_TOKEN",
             "LEADERBOARD_WRITE_TOKEN",
             "append-event",

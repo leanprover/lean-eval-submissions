@@ -15,10 +15,11 @@
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
+    "server/src/state-app-token.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "118a376bc3793c4c25e7f7507a647e68b901044ccfcb171026b805626802ae97",
+  "lifecycle_callback_contract_sha256": "28e7f579765070bda642d28bbe5c56c31739a1d4253ea3c2823747df2b55abde",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"

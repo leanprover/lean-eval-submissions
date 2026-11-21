@@ -28,6 +28,7 @@ import {
   type SubmissionGrant,
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
+import { stateAppEnv, stateAppTokenReplies } from "./state-app";
 import {
   buildDispatchRequest,
   buildPromotionCanaryDispatchRequest,
@@ -2168,6 +2169,7 @@ describe("agent intake in workerd", () => {
 describe("scheduled dispatch reconciliation in workerd", () => {
   it("routes the real scheduled State adapter through the shared budget", async () => {
     const responses = [
+      ...stateAppTokenReplies(),
       Response.json({ object: { sha: "1".repeat(40) } }),
       Response.json({ tree: { sha: "2".repeat(40) } }),
     ];
@@ -2176,10 +2178,10 @@ describe("scheduled dispatch reconciliation in workerd", () => {
       if (response === undefined) throw new Error("unexpected State request");
       return Promise.resolve(response);
     });
-    const budget = new ScheduledSubrequestBudget(2);
+    const budget = new ScheduledSubrequestBudget(4);
 
     await expect(handleScheduled(
-      { ...ENV, GITHUB_STATE_TOKEN: "state-token" },
+      { ...ENV, ...(await stateAppEnv()) },
       NOW_MS,
       {
         stateFetch,
@@ -2188,7 +2190,7 @@ describe("scheduled dispatch reconciliation in workerd", () => {
       },
     )).rejects.toBeInstanceOf(ScheduledSubrequestBudgetError);
 
-    expect(stateFetch).toHaveBeenCalledTimes(2);
+    expect(stateFetch).toHaveBeenCalledTimes(4);
     expect(budget.remaining).toBe(0);
   });
 

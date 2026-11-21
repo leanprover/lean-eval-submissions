@@ -25,7 +25,7 @@ class PublicReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("replay-production", self.text)
         self.assertRegex(self.text, r"(?m)^permissions:\n  contents: read$")
         self.assertNotIn("secrets.", self.text)
-        self.assertNotIn("GITHUB_STATE_TOKEN", self.text)
+        self.assertNotIn("STATE_APP_PRIVATE_KEY", self.text)
         self.assertNotIn("LEADERBOARD_WRITE_TOKEN", self.text)
         self.assertNotIn("ARCHIVER_TOKEN", self.text)
 

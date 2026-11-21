@@ -4,6 +4,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { describe, expect, it, vi } from "vitest";
 
 import { handleRequest, type RuntimeEnv } from "../src/app";
+import { stateAppEnv, stateAppTokenReplies } from "./state-app";
 
 const ENV = {
   API_RATE_LIMITER: { limit: () => Promise.resolve({ success: true }) },
@@ -217,6 +218,7 @@ describe("Worker routing", () => {
 
   it("authenticates, checks write readiness, and caches the result", async () => {
     const replies = [
+      ...stateAppTokenReplies(),
       Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: "1".repeat(40) } }),
       Response.json({ tree: { sha: "2".repeat(40) } }),
@@ -228,7 +230,7 @@ describe("Worker routing", () => {
     });
     const readyEnv = {
       ...ENV,
-      GITHUB_STATE_TOKEN: "state-secret",
+      ...(await stateAppEnv()),
       INTAKE_ENABLED: "true",
       INTAKE_ENABLEMENT_MODE: "durable",
       READINESS_TOKEN: "readiness-secret",
@@ -241,19 +243,22 @@ describe("Worker routing", () => {
     await waitOnExecutionContext(firstContext);
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ status: "ready", environment: "staging" });
-    expect(upstream).toHaveBeenCalledTimes(3);
+    expect(upstream).toHaveBeenCalledTimes(5);
+    const [, stateInit] = upstream.mock.calls[2] ?? [];
+    expect(new Headers(stateInit?.headers).get("authorization")).toBe("Bearer ghs_state-installation-token");
 
     const secondContext = createExecutionContext();
     const second = await handleRequest(request, readyEnv, secondContext);
     await waitOnExecutionContext(secondContext);
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ status: "ready", environment: "staging" });
-    expect(upstream).toHaveBeenCalledTimes(3);
+    expect(upstream).toHaveBeenCalledTimes(5);
     upstream.mockRestore();
   });
 
   it("proves State write authority while intake remains disabled", async () => {
     const replies = [
+      ...stateAppTokenReplies(),
       Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: "1".repeat(40) } }),
       Response.json({ tree: { sha: "2".repeat(40) } }),
@@ -271,7 +276,7 @@ describe("Worker routing", () => {
       }),
       {
         ...ENV,
-        GITHUB_STATE_TOKEN: "state-secret",
+        ...(await stateAppEnv()),
         READINESS_TOKEN: "readiness-secret",
       },
       LIFECYCLE,
@@ -287,8 +292,8 @@ describe("Worker routing", () => {
       intake_lease_expires_at: null,
       state_commit: "1".repeat(40),
     });
-    expect(upstream).toHaveBeenCalledTimes(4);
-    const [, init] = upstream.mock.calls[3] ?? [];
+    expect(upstream).toHaveBeenCalledTimes(6);
+    const [, init] = upstream.mock.calls[5] ?? [];
     expect(init?.method).toBe("PATCH");
     upstream.mockRestore();
   });
@@ -298,6 +303,7 @@ describe("Worker routing", () => {
     const tree = "2".repeat(40);
     const rootEntries = Object.entries(reviewed.root_entries).map(([path, entry]) => ({ path, ...entry }));
     const replies = [
+      ...stateAppTokenReplies(),
       Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: contract } }),
       Response.json({ tree: { sha: tree } }),
@@ -320,7 +326,7 @@ describe("Worker routing", () => {
         ...ENV,
         DEPLOYMENT_ENVIRONMENT: "production",
         STATE_REPOSITORY: "leanprover/lean-eval-state",
-        GITHUB_STATE_TOKEN: "state-secret",
+        ...(await stateAppEnv()),
         READINESS_TOKEN: "readiness-secret",
       },
       LIFECYCLE,
@@ -340,7 +346,7 @@ describe("Worker routing", () => {
       state_contract_verified: true,
       state_event_schema_sha256: reviewed.event_schema_sha256,
     });
-    expect(upstream).toHaveBeenCalledTimes(7);
+    expect(upstream).toHaveBeenCalledTimes(9);
     upstream.mockRestore();
   });
 

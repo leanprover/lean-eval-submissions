@@ -820,21 +820,21 @@ function sequence(responses: readonly QueuedResponse[]) {
 
 function repository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }
 
 function productionRepository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }
 
 function stagingRepository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/lean-eval-state-staging", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state-staging", token: () => Promise.resolve("secret"), userAgent: "test" },
     fetcher,
   );
 }

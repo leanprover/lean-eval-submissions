@@ -23,9 +23,10 @@ SECRET_BINDINGS = {
         "AUTH_TOKEN_SECRET",
         "GITHUB_OAUTH_CLIENT_ID",
         "GITHUB_OAUTH_CLIENT_SECRET",
-        "GITHUB_STATE_TOKEN",
         "LIFECYCLE_CALLBACK_TOKEN",
         "READINESS_TOKEN",
+        "STATE_APP_ID",
+        "STATE_APP_PRIVATE_KEY",
     },
     "broker": {
         "DISPATCH_APP_ID",
@@ -121,6 +122,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
+    "server/src/state-app-token.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
 ]
@@ -137,6 +139,7 @@ CONVERGENCE_RETRY_EXIT = 75
 # later callback implementations need their own explicit compatibility review.
 EVALUATION_V2_CALLBACK_DIGESTS = frozenset({
     "118a376bc3793c4c25e7f7507a647e68b901044ccfcb171026b805626802ae97",
+    "28e7f579765070bda642d28bbe5c56c31739a1d4253ea3c2823747df2b55abde",
 })
 STATE_CONTRACT_ROOT_KINDS = {
     "README.md": ("100644", "blob"),
