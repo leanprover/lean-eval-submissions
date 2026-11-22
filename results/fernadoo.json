@@ -930,6 +930,25 @@
         "ref": "d7771b5dd31bd413ff9449884e34206d2fc32e16",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T12:45:37Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2031d-3ae9-757f-a392-df9e6798018a"
+      },
+      "problem_id": "annals_fractal_uncertainty",
+      "production_metadata": {},
+      "result_id": "r2_6fdcb5409980492b3f5a3b9eaf68fdc5ec8719190cdd864fd757e10899f0b7ba",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "702acea34169e943d48bd4cf6ed18fdce550c48f",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
