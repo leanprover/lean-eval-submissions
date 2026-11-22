@@ -911,6 +911,25 @@
         "ref": "7498f70c3df282aa8c4ef1b3f1d701c655b303f1",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T12:07:33Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a202ef-e189-75b0-8713-848cd7fa088f"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {},
+      "result_id": "r2_6ad9df9856c0efd3d2b61be2865cff7322c0161dced72fd82a49fb8e5a830e09",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d7771b5dd31bd413ff9449884e34206d2fc32e16",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
