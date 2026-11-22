@@ -1044,6 +1044,25 @@
         "ref": "9179415c0258acd355e473dafb9c61d59bcae176",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T14:48:31Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2038b-5a51-7dbb-a8b6-a876719199d1"
+      },
+      "problem_id": "annals_erdos_faber_lovasz_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_1fef5b9672c1de9342302414d553a47835bcb0095c8c594dc099d01a1049c85a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ff3d11fae0f238c92b9fb355949600d65f123e0c",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
