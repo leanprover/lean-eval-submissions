@@ -1139,6 +1139,25 @@
         "ref": "6e2e60f520535d2991c97a887188ae94de6f03ff",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T17:31:47Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20412-d5e9-7c42-961a-9ef0417bb25d"
+      },
+      "problem_id": "annals_finite_time_singularity",
+      "production_metadata": {},
+      "result_id": "r2_59bf415546656d757b936e3a3cdfdae4648d2ce9e1580635cabcbf626aaff0c0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "032b61169fdd795deba6f26a7d62d188b5c608aa",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
