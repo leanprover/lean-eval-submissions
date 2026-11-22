@@ -1063,6 +1063,25 @@
         "ref": "ff3d11fae0f238c92b9fb355949600d65f123e0c",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T15:41:08Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a203b3-8f49-77d6-90a9-fa0481dd5086"
+      },
+      "problem_id": "bourgain_polynomial_ergodic",
+      "production_metadata": {},
+      "result_id": "r2_7b1f851c906532e2f1a1133f826b908a13ca9cb8ec35b214614a22e031961e28",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0e9e55fa3fc97fc88ba42a57f90b42eee16890c4",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
