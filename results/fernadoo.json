@@ -1348,6 +1348,25 @@
         "ref": "3cf00ebe6648c8cd623a5ebcf15419312961765b",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T23:40:59Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20568-e839-723a-b14e-ee18c3f72ff4"
+      },
+      "problem_id": "ckmrv_fourier_interpolation",
+      "production_metadata": {},
+      "result_id": "r2_86a7418e290a3e9e089b6f441999f36c8b5f5e439a0780bc92cd76e182fea194",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "88dc77c5722cec108371d9235f1670967bbc9d52",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
