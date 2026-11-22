@@ -455,6 +455,25 @@
         "ref": "2be189360bf32b0bc253e86a0b2294bc91dc1388",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T06:06:31Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a201aa-9819-7fe5-80f5-ee334805dd44"
+      },
+      "problem_id": "bender_suzuki",
+      "production_metadata": {},
+      "result_id": "r2_9c5c1734d47a71cfec5d6a24059dc58f7e36e3f65e5f2f3f5a1e6b3a3d1fe40c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9639c2149e2c2227f8cb12262717adfd01267064",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
