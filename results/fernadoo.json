@@ -94,6 +94,25 @@
         "ref": "c0918294cb7220bcfe5f23c20f9e4d5aa15789ac",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T00:01:13Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a1ff1f-8c21-7b52-ae85-3eca774b4746"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {},
+      "result_id": "r2_3150ad36643eae71c754d772d57f05b03f36bb07b4055a8e410423240f798239",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "39823ecb39abf26fa2862df1f6c7fb5472412816",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
