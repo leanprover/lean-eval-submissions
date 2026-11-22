@@ -303,6 +303,25 @@
         "ref": "a7e6c03176bee7f89b35890baf748484593252d7",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T03:41:28Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a200ec-1e61-7c92-811a-d0979153989f"
+      },
+      "problem_id": "linnik",
+      "production_metadata": {},
+      "result_id": "r2_dd6da4d783593da7bd077c74e4b80d7beea6421ae302c096204c6bdf9c44dd90",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f460a3923e552359c070d65117ac22de90a34369",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
