@@ -1101,6 +1101,25 @@
         "ref": "cef3fe970dcd17cebc2dfa82e71f069ad9b13a6c",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T16:36:08Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a203e3-9ff9-754e-a1a9-c984ca71263b"
+      },
+      "problem_id": "hopf_s6_complex_structure",
+      "production_metadata": {},
+      "result_id": "r2_9f676358ef1ab9e83e33cf53b5cea2a6fb6ae61db9c66768cb91b3e384440932",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f9755a095dca467c0dee1e168a2946c75ee3f337",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
