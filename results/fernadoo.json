@@ -208,6 +208,25 @@
         "ref": "d9d1241c21acd5544023c35ab01a60deb41488da",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T01:40:24Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a200bf-cea1-7120-9e71-c29378c8eca6"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {},
+      "result_id": "r2_8922434c55fdde6ffd53fd5f6ba54e7076da897063eb07ed031f2a268306bae5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e009fa5ecb867175e6fedfc7108030c865dba0fd",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
