@@ -949,6 +949,25 @@
         "ref": "702acea34169e943d48bd4cf6ed18fdce550c48f",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T12:51:47Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20322-4fb1-7c8f-8b34-2c0a771d9ced"
+      },
+      "problem_id": "annals_van_der_waerden_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_15fe1ccfd373f02fc4395e01cfd3a67c7f96d76aa2229697031af0feb76d30e7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "86342074e39f9c34f6a79ea2f644a800af547b07",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
