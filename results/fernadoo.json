@@ -588,6 +588,25 @@
         "ref": "933a45653ad01a651f1b71805632c7d970a9f5ca",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T07:41:02Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a201e1-6b41-73fa-8d4d-3a46186d6879"
+      },
+      "problem_id": "erdos_unit_distance_conjecture_false",
+      "production_metadata": {},
+      "result_id": "r2_6593b1b69b2d428b83fb4440c7733c01ac505c05e7e01d3f8edc68bb969794cc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b49013b59fbc8269cb81754602bd40e967788040",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
