@@ -246,6 +246,25 @@
         "ref": "e448ef421c3ecc2789c74569ba39a84312b7e91a",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T02:19:54Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a200d3-1821-73ec-9ec3-c1fe3d4cebc6"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {},
+      "result_id": "r2_d1428d4a8713ff50f524db06ca400f57d9c9535a63dc4c4f4c3b7d8ae80d68fe",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9605c8cfcce446e87a813211e908428ba27c2f05",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
