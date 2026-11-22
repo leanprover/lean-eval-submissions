@@ -398,6 +398,25 @@
         "ref": "0eae99cc756465b91d96849ea9b86d9d3db7c361",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T05:09:54Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2017e-4471-7ac8-8db8-37a650a50ce7"
+      },
+      "problem_id": "uniformization",
+      "production_metadata": {},
+      "result_id": "r2_f49ed5ea1f5c83d4fdbca6a029db4bfc60eb78068f998aee6bce6a057568d80a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5cee158590c75892711e372c96d8100e858796e3",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
