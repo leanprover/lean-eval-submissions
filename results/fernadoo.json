@@ -265,6 +265,25 @@
         "ref": "9605c8cfcce446e87a813211e908428ba27c2f05",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T02:47:04Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a200eb-3fb9-7843-a0d8-1a72b0586051"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_73740085034f7b0a84f1f7edefbccd3fddad0f3d5b904d8558ecca3c9bb980f3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c380c842510cc8bf3363e62060c6ba56b0d8b876",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
