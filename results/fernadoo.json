@@ -854,6 +854,25 @@
         "ref": "bb87d7d212e983d05a375727bb4000e10499ef1c",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T11:50:03Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a202d6-5a61-74f0-8529-e25210ac6eca"
+      },
+      "problem_id": "neukirch_uchida",
+      "production_metadata": {},
+      "result_id": "r2_6dbce2065c81e883ab901d55e0267792262eb246f8b77d92fd44a0c6f607cd2c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c5bf837dee811317cc080b375e77cf4e7f100b9b",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
