@@ -759,6 +759,25 @@
         "ref": "1696e85c5e69c4d0253a9020ac16bcb223fca969",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T10:11:48Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20289-3461-7e8c-a6c1-f905dca2e729"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {},
+      "result_id": "r2_e35a0b3755fae85b5a9ea514bb7eed0afc014a21d6576b57e8a09e90c7fdfe5e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6819f0e22f5b32451a244f97d8d02240eb441ab8",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
