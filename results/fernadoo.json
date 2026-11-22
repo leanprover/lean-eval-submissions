@@ -721,6 +721,25 @@
         "ref": "c28fef8dd28e6abae975d58cd5091805e04c0988",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T09:57:04Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20274-1621-711b-b73d-f41316c8cbe1"
+      },
+      "problem_id": "green_tao",
+      "production_metadata": {},
+      "result_id": "r2_66b687f32689aa6079557f98ae47597c28728620b39a89db948bf9457efee742",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8cd0610c0d4f937f672f5ea3ccfe28ef6d3ff9f1",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
