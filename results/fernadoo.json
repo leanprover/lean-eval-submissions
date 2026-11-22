@@ -1310,6 +1310,25 @@
         "ref": "136d09c11a5f744a69f3a54b3b540d5f0007eec0",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T23:14:04Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2048d-7489-78cc-a6ab-0222677554d5"
+      },
+      "problem_id": "poincare_3d_smooth",
+      "production_metadata": {},
+      "result_id": "r2_e7c8774709b911e0ded967341ceffca21d51859355cbe07434699801be1097b2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "226702644b07f02adc0b0816b2af2869145c0884",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
