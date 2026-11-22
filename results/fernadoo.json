@@ -1234,6 +1234,25 @@
         "ref": "c1aaf2ba70f46a57756ad23605a8dff73bdcb085",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T20:35:04Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a204b0-bbc9-708d-8b98-74d24305384f"
+      },
+      "problem_id": "bakerWustholz_linearForms_logs",
+      "production_metadata": {},
+      "result_id": "r2_933c3a8a9cc6ef2105c36bcec6a9aa53f7840527b33e68fd8f3d5da99093061a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b7a919a7461a9a17e34a75203250c87d74be2f8e",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
