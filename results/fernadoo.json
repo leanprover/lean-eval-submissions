@@ -493,6 +493,25 @@
         "ref": "9226e5686e15dde6dcc09a7c1a36faf4190c0f14",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T06:23:00Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2019c-1d11-773e-ad66-2bbb3c233e0d"
+      },
+      "problem_id": "martinet_totally_real_towers",
+      "production_metadata": {},
+      "result_id": "r2_efc93b0007643ada708503b64eee56b75144b718dbe87f190beef31c29bc130d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "36d254541677bc6492e39177817f27e6691163c6",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
