@@ -436,6 +436,25 @@
         "ref": "2e45be9b242654f4872c7b1c88480b7c971d24f0",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T05:40:44Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20188-2f81-74d3-a7bc-13781e3db438"
+      },
+      "problem_id": "riemann_hypothesis_iff_lagarias_elementary_criterion",
+      "production_metadata": {},
+      "result_id": "r2_7f35e5425b9ae6fe605b7317cf139b000793099f081771f1e1a9835b69c7594e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2be189360bf32b0bc253e86a0b2294bc91dc1388",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
