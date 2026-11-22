@@ -892,6 +892,25 @@
         "ref": "8ccf6ff0cafd63d99ad0f42d30e2b70231f9f63f",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T12:00:32Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a202ea-8e41-7171-80ad-489b0cf78745"
+      },
+      "problem_id": "pi6_sphere_three_mulEquiv_zmod_twelve",
+      "production_metadata": {},
+      "result_id": "r2_93d130749268d07ad1698e4a6385345ebec635eec045fe8adbfb359af1f16374",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7498f70c3df282aa8c4ef1b3f1d701c655b303f1",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
