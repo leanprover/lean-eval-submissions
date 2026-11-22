@@ -987,6 +987,25 @@
         "ref": "a0cc6c16f4f637333640f719fb97fc90cc35afd4",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T13:10:17Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20318-4179-7f08-8f66-3086cba236f1"
+      },
+      "problem_id": "wang_zahl_kakeya_dimH",
+      "production_metadata": {},
+      "result_id": "r2_9d7ed9471d980b28839c54a35d66ffbc6cc321ee370d9c17c7f6b50671b19a5c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9a9de6a6c98511e900f71ce6b74c5991851f443c",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
