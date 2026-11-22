@@ -1253,6 +1253,25 @@
         "ref": "b7a919a7461a9a17e34a75203250c87d74be2f8e",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T21:09:22Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a204e0-8241-7e17-b146-29b7b1d2a915"
+      },
+      "problem_id": "newlander_nirenberg",
+      "production_metadata": {},
+      "result_id": "r2_5c62f7f2247524f1a4fe4cc24c78954c7870a354dcf96dbd41daa01533771799",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0025d8832f1f1797f7b23155740f46d579550a7e",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
