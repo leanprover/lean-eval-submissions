@@ -417,6 +417,25 @@
         "ref": "5cee158590c75892711e372c96d8100e858796e3",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T05:19:22Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20183-3611-7692-aec4-8945aa83a749"
+      },
+      "problem_id": "annals_good_lt_codes",
+      "production_metadata": {},
+      "result_id": "r2_5c6995e0d5a19aaccc2612c175c54bebab2534e26705d6bdc2b3e025cc40d1f7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2e45be9b242654f4872c7b1c88480b7c971d24f0",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
