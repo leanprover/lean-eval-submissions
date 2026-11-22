@@ -1177,6 +1177,25 @@
         "ref": "9c044f0ecc78b38ffaa27b7d756f6e76664b01ae",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T19:06:03Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20473-7449-757c-85e3-e771242d182e"
+      },
+      "problem_id": "annals_hasse_principle_random_fano",
+      "production_metadata": {},
+      "result_id": "r2_3c4b42d4f7254c3bf3580491c477fc7b2a1cda10e17ebb0a05d0c75d16cdf113",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "815a110c4aaaf773b853691932a0d526aec305d1",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
