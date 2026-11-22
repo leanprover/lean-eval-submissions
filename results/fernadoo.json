@@ -702,6 +702,25 @@
         "ref": "30f06f288f240964afdd38c7198a39cbae44e050",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T09:34:24Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20256-e191-7775-a60f-90f36e55f86c"
+      },
+      "problem_id": "gorenstein_walter",
+      "production_metadata": {},
+      "result_id": "r2_f1e6eff14cb29b13ba183b1b305fce29134a0de62e4c0255d9d3b61695cbb4ed",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c28fef8dd28e6abae975d58cd5091805e04c0988",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
