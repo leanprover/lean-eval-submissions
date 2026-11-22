@@ -1215,6 +1215,25 @@
         "ref": "43e9508d89e1a0a6a00bbd22fb166c93f78f49a0",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T20:03:24Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a204ab-83d9-742d-8b22-f7f521786494"
+      },
+      "problem_id": "smooth_knot_has_quadrisecant",
+      "production_metadata": {},
+      "result_id": "r2_5879c9b7a1f1993e4882be3ce1e5e0d7b21af52317fbc88ad4729328eee204b3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1aaf2ba70f46a57756ad23605a8dff73bdcb085",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
