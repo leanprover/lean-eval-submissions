@@ -1329,6 +1329,25 @@
         "ref": "226702644b07f02adc0b0816b2af2869145c0884",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T23:15:30Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20550-95a9-7da6-8c77-4f4dfa743d69"
+      },
+      "problem_id": "einsiedler_katok_lindenstrauss",
+      "production_metadata": {},
+      "result_id": "r2_d9d4a37aa39ef49fc1b4b0992f8a620415f4fb7db5f6a44dd08c4f4631c069cf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3cf00ebe6648c8cd623a5ebcf15419312961765b",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
