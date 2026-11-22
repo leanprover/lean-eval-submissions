@@ -1158,6 +1158,25 @@
         "ref": "032b61169fdd795deba6f26a7d62d188b5c608aa",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T18:29:59Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20406-df69-7df9-9dcd-939f37576a5e"
+      },
+      "problem_id": "jacobian_challenge_alggeo",
+      "production_metadata": {},
+      "result_id": "r2_4c114816b350d4eece305ddda7bc579268f8918ac8293f1401b0ce1f13dbcf0c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9c044f0ecc78b38ffaa27b7d756f6e76664b01ae",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
