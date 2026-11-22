@@ -512,6 +512,25 @@
         "ref": "36d254541677bc6492e39177817f27e6691163c6",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T06:28:40Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a201c8-ab51-702c-9837-47006de9f96f"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {},
+      "result_id": "r2_d84c9f626f618deb651f527ea6e617b9610c1a6b70bb4d55afd8c74b4ef45900",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "549a2448a0de7b180c364dd81e110e16f996fa9d",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
