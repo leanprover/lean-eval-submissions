@@ -626,6 +626,25 @@
         "ref": "552b61e149a97be1885ce83edf99dc9d3ffabadf",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T08:19:02Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2022a-e3d9-7787-8738-0e099c91c13f"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {},
+      "result_id": "r2_2814f8f1cec5edc0ea305563e26bb9e310a53bb1d3c9532e4d08d004fd97e02b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ffb2aec6b300cece241d35cf9bf85f6e0f6bff6f",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
