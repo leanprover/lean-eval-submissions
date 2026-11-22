@@ -816,6 +816,25 @@
         "ref": "52a99229b4875118f1c42b1c350d34213e6da6f8",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T10:59:02Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a202ba-3741-7587-b436-29f6e24ef340"
+      },
+      "problem_id": "hilbert_smith_padic_dimension_three",
+      "production_metadata": {},
+      "result_id": "r2_0685b1456ef07776ff78f007ac9f51bf0deccb4b4ca51a1ec0adad2b0b8c2b7c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0c9ac44c6d9cbcf3673b4c7324efecdec7861047",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
