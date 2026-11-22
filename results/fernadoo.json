@@ -873,6 +873,25 @@
         "ref": "c5bf837dee811317cc080b375e77cf4e7f100b9b",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T11:51:12Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a202ea-3081-7cb9-b4c0-78a2df7cef70"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {},
+      "result_id": "r2_15f3f23c8c501672771ffd1d9fe11a36285047c008fca4587019423898b17641",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8ccf6ff0cafd63d99ad0f42d30e2b70231f9f63f",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
