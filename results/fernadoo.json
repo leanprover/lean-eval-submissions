@@ -1196,6 +1196,25 @@
         "ref": "815a110c4aaaf773b853691932a0d526aec305d1",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T19:12:26Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20473-a711-767b-be79-2cc7c294a11d"
+      },
+      "problem_id": "hSpace_sphere_iff",
+      "production_metadata": {},
+      "result_id": "r2_9e7f8f9c0c1256d8e44880c67a25090c57402d1dd8d046d75c67b3052c6419d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "43e9508d89e1a0a6a00bbd22fb166c93f78f49a0",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
