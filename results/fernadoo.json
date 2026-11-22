@@ -170,6 +170,25 @@
         "ref": "769679b614eb34868fa60551efe2fe03f17f1bce",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T01:11:44Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20093-a209-7040-98fc-421e7b7d7588"
+      },
+      "problem_id": "poincare_high_dim_topological",
+      "production_metadata": {},
+      "result_id": "r2_d330622d91499e847e171ee033cdf245f0e7f4092ec1d1595f3c30922e0a86ee",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "875798e3563076e955fa9679c60667615360cb97",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
