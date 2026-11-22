@@ -474,6 +474,25 @@
         "ref": "9639c2149e2c2227f8cb12262717adfd01267064",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T06:06:54Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a201b4-5831-7423-88fa-75c0ebda86db"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {},
+      "result_id": "r2_517e0eecbe368e2bf86d710a8811d6888c333c6180675caaa91bd8300aaacb4f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9226e5686e15dde6dcc09a7c1a36faf4190c0f14",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
