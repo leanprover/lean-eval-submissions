@@ -645,6 +645,25 @@
         "ref": "ffb2aec6b300cece241d35cf9bf85f6e0f6bff6f",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T08:35:42Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20225-ea69-7fa0-88c4-a852545b7bd1"
+      },
+      "problem_id": "zhang_bounded_prime_gaps",
+      "production_metadata": {},
+      "result_id": "r2_ade7a190c524bcc9092ee1930f5a77f95856f77a20f1e60181d737a0dbc91dd3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "01246690feb90b48f4106ca0df3e296b5b440c7e",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
