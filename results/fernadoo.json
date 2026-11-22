@@ -284,6 +284,25 @@
         "ref": "c380c842510cc8bf3363e62060c6ba56b0d8b876",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-22T03:39:00Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a200fb-0ab1-7ddb-9bd3-20a8530c2c65"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_5c6d59b21bb85e4c683385773a600959704879f2c3956b09a979bc4dc1662ddf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a7e6c03176bee7f89b35890baf748484593252d7",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
