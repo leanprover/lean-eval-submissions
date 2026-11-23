@@ -1246,6 +1246,27 @@
         "ref": "af9ff85674276182600d5334a526f16e95edab50",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T10:39:43Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2078f-5661-7f9d-83f9-9bbb16dd62f4"
+      },
+      "problem_id": "zhang_bounded_prime_gaps",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_a765b410c9ffcef6187c113584922ed0e94a6ba936b91faf00411d384d57e358",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d91af1eda370ef6ee3e9ac35bfacf0494e3d77e8",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
