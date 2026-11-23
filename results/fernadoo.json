@@ -1557,6 +1557,25 @@
         "ref": "119a2e97498cf994a57c9871bab5d33fea298ade",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T15:11:48Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a208a8-8e91-7ad3-8811-0f7e5cf5ae0e"
+      },
+      "problem_id": "mostow_rigidity",
+      "production_metadata": {},
+      "result_id": "r2_f6a682104f21d923258612a62921fcc9ca1c4c8b1babbf5be7dcffb8ae15263b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8af3a7ce1f8c7ac5cea7b58fa3f9f2d376a281d6",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
