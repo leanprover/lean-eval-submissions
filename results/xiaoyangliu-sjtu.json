@@ -1044,6 +1044,27 @@
         "ref": "ac5b5381b5896698e53e2e3360d364d5c9d79382",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T07:44:40Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20724-1d29-7359-be1f-62ee0aed5db8"
+      },
+      "problem_id": "bourgain_polynomial_ergodic",
+      "production_metadata": {
+        "notes": "Forge is an agentic workflow primarily powered by DeepSeek-V4-Flash."
+      },
+      "result_id": "r2_19e787c45dda6d3cf83d3c94ed1ef38d3df5a1ebdfae6e26c1d84e1a7c56400d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7ccf5ecd05b0bffbde875b5b62c6a968db121117",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
