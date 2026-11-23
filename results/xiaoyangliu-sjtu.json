@@ -1227,6 +1227,25 @@
         "ref": "c495ee5700f81b38761493c9943c5b29d669b874",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T10:39:10Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a207b8-6a01-7448-9845-39df85f0c0c4"
+      },
+      "problem_id": "newlander_nirenberg",
+      "production_metadata": {},
+      "result_id": "r2_5daaf0f5bfdf0cb5d16fbd13e6e35841f2bf88358142875c95320feb6a96c02c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "af9ff85674276182600d5334a526f16e95edab50",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
