@@ -1519,6 +1519,25 @@
         "ref": "457141b2ced54d0845604911db3aa8e57fa8a01c",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T05:59:23Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20667-6c79-71c8-9053-fb5828a77818"
+      },
+      "problem_id": "sphere_theorem_differentiable",
+      "production_metadata": {},
+      "result_id": "r2_9200b4367d7e6147816b97b8d8b928e74b8c74036026c071b7a84b0e0e871643",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "420ff324a2897e6692bd9250c5d9f62239e263cb",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
