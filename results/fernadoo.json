@@ -1443,6 +1443,25 @@
         "ref": "c9009753d6a602fa8b5f58be5f7cdd49ff2f920e",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T03:34:47Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20642-d549-7317-bdb1-8ca5bd28fdd9"
+      },
+      "problem_id": "whitney_embedding",
+      "production_metadata": {},
+      "result_id": "r2_c5e071993e8613871c4b69582e703c35cd3ab97fd5a3dd81f54a9216dd9cfdbf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b4c71b3f5d7d555e64a939bf8a1fd523a9c52b62",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
