@@ -1424,6 +1424,25 @@
         "ref": "f7c273c645ccf9b1db3d77c3bd61da854193f71e",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T02:35:22Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a205f0-4c61-711f-8703-04350cf1e1cc"
+      },
+      "problem_id": "shafarevich_solvable_galois",
+      "production_metadata": {},
+      "result_id": "r2_519e3e0e19e7184f5acfa4e05d1f3024a1e3d43a2cdacc45d7e59cad999c07ae",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c9009753d6a602fa8b5f58be5f7cdd49ff2f920e",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
