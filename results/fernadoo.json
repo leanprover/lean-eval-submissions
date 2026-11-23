@@ -1538,6 +1538,25 @@
         "ref": "420ff324a2897e6692bd9250c5d9f62239e263cb",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T07:24:53Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20714-5231-7e82-b392-687a9a0ae4ea"
+      },
+      "problem_id": "annals_on_coherence_of_one_relator_groups",
+      "production_metadata": {},
+      "result_id": "r2_902267f71fd67c625cb2829b3d6600341c44a33a4805e1507d52291128b41312",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "119a2e97498cf994a57c9871bab5d33fea298ade",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
