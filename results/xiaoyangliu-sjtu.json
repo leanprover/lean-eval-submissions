@@ -1208,6 +1208,25 @@
         "ref": "ca4df9ae938eb912cfabc75baf2d326d94766b58",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T10:19:21Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a207ad-f639-76fe-af36-be83f13ef9d7"
+      },
+      "problem_id": "shafarevich_relation_rank_bound",
+      "production_metadata": {},
+      "result_id": "r2_868e1154c27ff2efdb27ee19b9fac596c4bd7abe8635d71a08db4dc96085c74d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c495ee5700f81b38761493c9943c5b29d669b874",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
