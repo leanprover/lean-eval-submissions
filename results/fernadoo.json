@@ -1481,6 +1481,25 @@
         "ref": "c8745844b80d1186b70bd3c03bf32821934e0e2f",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T04:56:50Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20688-0ff1-7307-8b6e-493780e1cf08"
+      },
+      "problem_id": "mandelbrot_boundary_dimh",
+      "production_metadata": {},
+      "result_id": "r2_aed8146addabd3abc0dd73245107caadcc8f81cb7e836f8cbea4bd9edb9b4efa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "09b38be898d3c866a3535c0e902f1cf1f6295656",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
