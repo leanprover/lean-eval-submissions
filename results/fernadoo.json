@@ -1500,6 +1500,25 @@
         "ref": "09b38be898d3c866a3535c0e902f1cf1f6295656",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T05:43:59Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a206a7-c139-7901-a8d3-27b35f41bbb4"
+      },
+      "problem_id": "aspherical_integer_homology_four_sphere",
+      "production_metadata": {},
+      "result_id": "r2_2b45b2841fc172b025b8715fa7a466ccaf46439760fddf265e34d26c47251a91",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "457141b2ced54d0845604911db3aa8e57fa8a01c",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
