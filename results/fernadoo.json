@@ -1386,6 +1386,25 @@
         "ref": "a7f6524595c027fb2e52ac21a85df67c04519e8e",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T00:35:26Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20590-0009-7adb-8c37-9dfd39ca2c07"
+      },
+      "problem_id": "sphere_theorem_topological",
+      "production_metadata": {},
+      "result_id": "r2_bc221104023e1c193ec7f1f54dcbd2df7852ae09125b297b778706c655960a43",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "caeffb1ce6afad105a7b41e8eb8f7e0b28cd3b92",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
