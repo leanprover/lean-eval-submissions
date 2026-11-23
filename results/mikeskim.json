@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-11-23T09:29:22Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Antigravity + Claude + Codex",
+      "intake": {
+        "issue_number": 2240,
+        "kind": "issue"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {
+        "production_description": "Original Lean 4 proof of all six theorems of `coc_strong_normalization` (`typing_polyId`, `typing_polyId_app`, `step_polyId_app`, `subject_reduction`, `strong_normalization`, `consistency`) for CCω with impredicative `Prop` and predicative `Type 0, Type 1, ...` universes. Built in pure Lean 4 core (`ChallengeDeps` only, zero Mathlib imports) via Tait–Martin-Löf parallel reduction (`church_rosser`), Girard's reducibility candidates, and a `Type 0` Melliès–Werner finite-stage universe hierarchy with heterogeneous stage-equivalence relations. Verified across Lean default, Lean paranoid, lean4lean, con-leche, con-ron, and nanoda kernels with standard Lean axioms (`propext`, `Classical.choice`, `Quot.sound`) only.",
+        "solution_publication_date": "2026-11-23",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_187d28b412412a815c68dde9dcc8278a3efc4cb1d95bf693551a9db1e3a91650",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ed5f21b471627e98b1010db72803b0297ef1fa56",
+        "repo": "mikeskim/lean-eval-coc-sn"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "mikeskim"
+}
