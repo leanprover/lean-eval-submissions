@@ -1576,6 +1576,25 @@
         "ref": "8af3a7ce1f8c7ac5cea7b58fa3f9f2d376a281d6",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T15:35:26Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a208bb-8609-7e0f-8b9f-b1f0ee67cef9"
+      },
+      "problem_id": "annals_pointwise_ergodic_theorems",
+      "production_metadata": {},
+      "result_id": "r2_20ae55f7e155011e4340c2cfa3a49aecd3a45decd8c44a2f69d7546623868dfb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6ff5d1c4ad75a68092f2fca520cb2d7249b56d83",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
