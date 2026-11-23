@@ -252,6 +252,28 @@
         "ref": "bbf626fb603e5ff59f8bd4d2378df872cdc95250",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T08:36:25Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 2239,
+        "kind": "issue"
+      },
+      "problem_id": "derived_solidification_free_CW_homology",
+      "production_metadata": {
+        "production_description": "Models: GPT-6.1 sol (through Codex) and Claude Opus 5.5.\n\nThis is the proof of #2181 ported to the supported `stable` setup (Lean v4.36.0, Mathlib fc4f59e5); #2181 was rejected only because its toolchain (v4.35.0-rc3) is no longer supported. The port was made mechanically by Claude Opus 5.5, outside the orchestrator: 9 edits in 7 files (3 case names `h` -> `ind` for Mathlib's `Nat.strong_induction_on`, 3 explicit arguments where v4.36.0 elaborates differently, 3 `set_option linter.concreteInstances false in` where Mathlib's new linter times out); no proof was restructured. `NOTICE` records the edits.\n\nNote on the Model field: \"Humanifa + GPT 5.6 sol\" is the public label our team (Humanfia) has used for its earlier lean-eval submissions, kept here for consistency. It is a team identity, not the list of models used.\n\nProduced by Humanfia's LOT (Lean Option Tree) orchestrator: agent sessions recursively split the statement into frozen sub-obligations, prove them in parallel, and every step is checked. The proof is machine-written; humans built the orchestrator and the seed package and operated the infrastructure. The run took 1.9 h of wall-clock time.\n\nThe run started from a seed package of ours that contains code by others, with attribution (see `NOTICE` and `LICENSES/` in the submitted workspace):\n- LeanCondensed by Dagur Asgeirsson et al. (https://github.com/dagurtomas/LeanCondensed, commit 339ecc99, Apache-2.0), the repository this problem is extracted from: 34 files under `Submission/Seed/LeanCondensed/`, ported to the benchmark's Lean and Mathlib, rebased onto the challenge's `ChallengeDeps`, with every declaration that used `sorry` removed. The first three holes (`solidification`, its additivity and `solidificationAdjunction`) are LeanCondensed's solidification functor and adjunction.\n- Part of the singular homology (barycentric subdivision, small chains, excision, Mayer-Vietoris) of a Lean library of differential geometry built by members of our team, Apache-2.0; authors (its CITATION.cff): Yuan Liao, Ziyang Qin, Jui-Hui Chung, Ayush Khaitan, Zhengyang Zhang, Hongzhou Lin, Zijian Zhang, Ligeng Zhu, Peng Lu, Bennett Chow. 15 files under `Submission/Seed/dglib/`.\nEverything else under `Submission/` (about 11.9k lines) was written by the run: the derived solidification functor as the left adjoint of the derived inclusion and its identification with the total left derived functor, and the comparison of the derived solidification of ℤ[X] with singular chains for Hausdorff CW complexes.\n\nHole 8 (`derivedSolidificationFreeCWFunctor`) is universe polymorphic as in the challenge; holes 9-12 force universe 0, where it is the real composite. For a universe `u > 0` it is a constant functor: universe-0 light condensed abelian groups have no ℤ[X] for such X, and no other hole constrains it (comment in `Submission/Obl/Root.lean`).\n\nChecked before submission (this port, exact submitted bytes): Lean-Eval's own evaluator, the toolchain's `lake test` with `lake comparator` (bubblewrap 0.12.0; NanoDa and the Lean kernel; permitted axioms propext, Quot.sound, Classical.choice), in a 16-CPU / 32 GB sandbox with the setup's pinned packages read-only: \"Your solution is okay!\", 1564 s, memory peak 13.4 GB; an independent rerun gave the same verdict.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_43c975fad8d4912962e8be65669e839df46d1774634bcaa985f7cb31499132cf",
+      "statement_revision": 2,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0349b243602df3c3b49b0979cc41b049a191ab1c",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
