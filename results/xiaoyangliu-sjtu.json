@@ -1170,6 +1170,25 @@
         "ref": "1ee959f639b7148c6a7ff204bc4360fce30322b3",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-23T09:22:58Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20785-f021-79c6-9536-a1c81e215119"
+      },
+      "problem_id": "annals_erdos_faber_lovasz_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_24ed10227779fb9020f27ef00bcafa7c146cd8920d68c276c0669c6b017993da",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "968b6660b4b539324dec496eb8fed94d0bfc4cac",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
