@@ -274,6 +274,28 @@
         "ref": "0349b243602df3c3b49b0979cc41b049a191ab1c",
         "repo": "antoinegg1/lean-eval-lot-solutions"
       }
+    },
+    {
+      "accepted_at": "2026-11-24T04:09:14Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "AxiomMath CFSG (imported; no model)",
+      "intake": {
+        "issue_number": 2241,
+        "kind": "issue"
+      },
+      "problem_id": "gorenstein_walter",
+      "production_metadata": {
+        "production_description": "Problem `gorenstein_walter`, on Lean-Eval's previous-stable configuration (Lean v4.35.0).\n\nThis proof is not our work, and no model produced any of its content. It is the public theorem `CFSG.GorensteinWalter.gorenstein_walter` of AxiomMath/CFSG (https://github.com/AxiomMath/CFSG, commit 965a0775, Apache-2.0). AxiomMath's Gorenstein-Walter proof originally comes from Qiuzhen-CFSG (https://github.com/Qiuzhen-CFSG/CFSG, Apache-2.0), which is vendored in that repository, and it builds on Mathlib and TauCeti. The theorem is imported through the `cfsg` dependency that the previous-stable configuration provides for solution imports (lean-eval #720); no CFSG file is copied or changed. All credit belongs to their authors.\n\nOur only content is in `Submission.lean`: one `import CFSG.Dihedral.GorensteinWalter` and one `exact CFSG.GorensteinWalter.gorenstein_walter G hnonab P _hdih`, plus an attribution comment. The theorem's statement is the Lean-Eval statement (alpha-equivalent, same universe parameters; axioms propext, Classical.choice, Quot.sound). All other files are Lean-Eval's own previous-stable render of the problem (lean-eval bcc14246). `NOTICE` and `LICENSES/AxiomMath-CFSG/LICENSE` (Apache-2.0) carry the attribution.\n\nThere was no proof search. Our infrastructure agent (Claude Opus 5.5) prepared the workspace and wrote the one-line bridge as an operations task. The Model field says this: the proof comes from AxiomMath CFSG, not from a model.\n\nChecked before submission on the exact submitted bytes with Lean-Eval's own evaluator (`lake test` -> `lake comparator`; NanoDa and the Lean kernel; bubblewrap, no network, 16 CPUs / 32 GB): \"Your solution is okay!\" in 1,098 s, memory peak 10.4 GB.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_5e2220d09d2740eb05eb416e1bd193cdc9fc35a988b3d827b31ea93d14e75b7b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c6219cfdb7e0d0140162f146bbf69a4d51c316fc",
+        "repo": "antoinegg1/lean-eval-lot-solutions"
+      }
     }
   ],
   "schema_version": 2,
