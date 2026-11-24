@@ -1671,6 +1671,25 @@
         "ref": "951af4df9947d6a70f5c930a14cd3fb929c6c2d8",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-24T13:50:23Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20d69-cbd9-7c63-90ca-cb321043366f"
+      },
+      "problem_id": "annals_wilkies_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_add59ee943a45472036a207ef547232dc914203d86cdfe6fab5711ef83ef7ad4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "381b0cd486f58b2dd2423d12cafa9f6404e299fd",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
