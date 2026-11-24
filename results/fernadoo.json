@@ -1633,6 +1633,25 @@
         "ref": "4c99e241d5aa88326eb79dfa71a97699d35faae1",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-24T10:48:01Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20cc1-27f9-7754-938b-521ca1c55f27"
+      },
+      "problem_id": "annals_motivic_invariants",
+      "production_metadata": {},
+      "result_id": "r2_c3ea272a5cac2a434b6c588f4dafaa23e23b4b94179be23af4ab9393efd41e14",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "02fd84f766522ec64d066201119fa0ab861f4530",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
