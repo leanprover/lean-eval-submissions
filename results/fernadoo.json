@@ -1595,6 +1595,25 @@
         "ref": "6ff5d1c4ad75a68092f2fca520cb2d7249b56d83",
         "repo": "Fernadoo/lean-eval-private"
       }
+    },
+    {
+      "accepted_at": "2026-11-24T05:09:22Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Infinigence AI",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a20ba0-f2b9-7611-9a36-b918d1c5c66f"
+      },
+      "problem_id": "annals_bose_gases",
+      "production_metadata": {},
+      "result_id": "r2_b74bbb6bb5c39ba785de1d55c0be401383ee9ffffae594acd16bdc671ebf5a33",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "76e7bc73301954127029dfb7423e925263cb6aef",
+        "repo": "Fernadoo/lean-eval-private"
+      }
     }
   ],
   "schema_version": 2,
