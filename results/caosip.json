@@ -18,6 +18,25 @@
         "ref": "404915ee221df6ac6be9f14b33f9041e3a7573e3",
         "repo": "project-numina/numina-fuse-leaneval"
       }
+    },
+    {
+      "accepted_at": "2026-11-25T06:34:00Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Numina Fuse",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a21132-fd21-7bea-bc67-47a0309e381f"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {},
+      "result_id": "r2_6f1e3bc4eade5240f546885eb245161c21c2fd7091cadec6aaad4d9fc3cdeb1e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4c9c97d471dc39dbc3ca766754e26652307b8511",
+        "repo": "project-numina/numina-fuse-leaneval"
+      }
     }
   ],
   "schema_version": 2,
