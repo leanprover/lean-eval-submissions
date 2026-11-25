@@ -56,6 +56,25 @@
         "ref": "bbc5b2adb07b2da593706240f43ba4057ea3d2f3",
         "repo": "project-numina/numina-fuse-leaneval"
       }
+    },
+    {
+      "accepted_at": "2026-11-25T07:37:14Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Numina Fuse",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a21133-6699-7e9f-b369-a6009f99e15f"
+      },
+      "problem_id": "annals_large_value_estimates",
+      "production_metadata": {},
+      "result_id": "r2_c1f12cf55f0b3b68f03bf25d73be402b9b214b8a0cce368a863ae802e944f548",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "61c5970bf5347e6ac71b517f4ab8857931ca6f0f",
+        "repo": "project-numina/numina-fuse-leaneval"
+      }
     }
   ],
   "schema_version": 2,
