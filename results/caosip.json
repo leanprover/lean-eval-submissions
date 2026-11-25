@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-11-25T06:24:38Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Numina Fuse",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a21132-64c9-76a4-b3c5-a018d99a660b"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {},
+      "result_id": "r2_41084d95b2c10f16aa5179c1d41bea9d3dec241c2550fc4720d909eb75ef21ae",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "404915ee221df6ac6be9f14b33f9041e3a7573e3",
+        "repo": "project-numina/numina-fuse-leaneval"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "caosip"
+}
