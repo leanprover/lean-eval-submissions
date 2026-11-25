@@ -1391,6 +1391,25 @@
         "ref": "7306f61a8becee943be41f5e90a68a3bf1cf8347",
         "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
       }
+    },
+    {
+      "accepted_at": "2026-11-25T04:59:49Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Forge",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a2109c-f6e1-7634-85de-6c2dd33976a3"
+      },
+      "problem_id": "einsiedler_katok_lindenstrauss",
+      "production_metadata": {},
+      "result_id": "r2_c2346fcbff2ff8a9d06a97378dd98a00bec2626d847a60243a17b88aad8324c3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0a641e0e7612313a6d42fe3371a7020c3e493fd9",
+        "repo": "XiaoyangLiu-sjtu/forge-leaneval-submissions"
+      }
     }
   ],
   "schema_version": 2,
