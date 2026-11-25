@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "fixed_stock208_public_release_inputs",
+  "release": {
+    "url": "https://github.com/leanprover/lean4/releases/download/v4.35.0-rc3/lean-4.35.0-rc3-linux.tar.zst",
+    "sha256": "1526de16c0496f16b46a168f26c990af4e3796505273c3342fec17d72d763997",
+    "bytes": 595611952,
+    "original_download_receipt_sha256": "9051df30341f8f6e3c5dcd2d994548a2ea39231e765b3e50c7ee4c2a6bf10f47"
+  },
+  "tool_sha256": {
+    "lean": "bf8d54e4714cc4b03d3f6bb34c83b7202b87e49c8bfcbff6895c085bb90ceb38",
+    "lake": "8ba83c98f76562d03b8dbc33f1057151ba6cbb121679dde76b2260ccc90495e1",
+    "leanexport": "c5bc1a10a21e22cbb3671d65987cdef2076833b14182d823ccb2153adf2fa954",
+    "leanchecker": "9e36e955a251b1313c8eb5b7fa101282d51df109d34d8bb7c1cfdf51985aba29",
+    "nanoda_bin": "8241c5e6baa29490aa118d382f97961b208ae730fdb96545c2abed74c9ece5a8"
+  },
+  "lean": {
+    "commit": "470d5ce1400764999581fd26d5d72b00d990b0f4",
+    "tree": "062f40e3b5e68d7dfda6c43ea26784e0e7850f43",
+    "check_lean_git_path": "src/lake/Lake/CLI/Check.lean"
+  }
+}
