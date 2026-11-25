@@ -94,6 +94,25 @@
         "ref": "5f1edef869690bcced603e952e4b9695d38e4967",
         "repo": "project-numina/numina-fuse-leaneval"
       }
+    },
+    {
+      "accepted_at": "2026-11-25T11:57:52Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Numina Fuse",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a21190-01a1-7db5-8469-4060d785eda0"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_42b52426e8be07adb7b7a9fd1926d2c4a50bf7c06b919fe63b0f517c61a66dd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "181becb78704e112d7568adb43111adacde19d51",
+        "repo": "project-numina/numina-fuse-leaneval"
+      }
     }
   ],
   "schema_version": 2,
