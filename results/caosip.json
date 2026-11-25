@@ -37,6 +37,25 @@
         "ref": "4c9c97d471dc39dbc3ca766754e26652307b8511",
         "repo": "project-numina/numina-fuse-leaneval"
       }
+    },
+    {
+      "accepted_at": "2026-11-25T07:12:01Z",
+      "benchmark_commit": "bcc142463a0530038f12e8f1c1e9cce78e129f0a",
+      "declared_model": "Numina Fuse",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a21132-b6d1-753b-809c-89a29a1cb6e2"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {},
+      "result_id": "r2_1d9d47519e25d80bafd6bc4037738184ed3000c47fc140d6f56cd95382166577",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bbc5b2adb07b2da593706240f43ba4057ea3d2f3",
+        "repo": "project-numina/numina-fuse-leaneval"
+      }
     }
   ],
   "schema_version": 2,
